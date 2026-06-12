@@ -1,10 +1,10 @@
 'use strict';
 /* =====================================================
    Muscu — suivi d'entraînement
-   Architecture : vanilla JS, stockage localStorage,
-   PWA (service worker + manifest), aucune dépendance.
+   v1.1.0 : récupération musculaire, séance recommandée,
+   cibles automatiques par série, carte corporelle.
    ===================================================== */
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.1.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -18,14 +18,49 @@ function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMo
 function fmtN(n){return String(n).replace('.',',')}
 function fmtKg(n){return n.toLocaleString('fr-FR')}
 function fmtDateShort(iso){const[y,m,d]=iso.split('-');return new Date(+y,m-1,+d).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}
-function daysAgo(iso){
+function diffDays(iso){
   const[y,m,d]=iso.split('-');
-  const diff=Math.round((new Date().setHours(0,0,0,0)-new Date(+y,m-1,+d).getTime())/86400000);
+  return Math.round((new Date().setHours(0,0,0,0)-new Date(+y,m-1,+d).getTime())/86400000);
+}
+function daysAgo(iso){
+  const diff=diffDays(iso);
   if(diff<=0)return 'aujourd’hui';if(diff===1)return 'hier';if(diff<7)return 'il y a '+diff+' j';
   if(diff<30)return 'il y a '+Math.round(diff/7)+' sem';return fmtDateShort(iso);
 }
 function fmtDur(sec){if(sec==null)return null;const m=Math.round(sec/60);return m<60?m+' min':Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')}
 function fmtT(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+
+/* ================== MUSCLES ================== */
+const MUSCLES=[
+ {id:'pecs',label:'Pectoraux',rec:72},
+ {id:'dos',label:'Dos',rec:72},
+ {id:'delt_ant',label:'Deltoïde antérieur',rec:48},
+ {id:'delt_lat',label:'Deltoïde latéral',rec:48},
+ {id:'delt_post',label:'Deltoïde postérieur',rec:48},
+ {id:'biceps',label:'Biceps',rec:48},
+ {id:'triceps',label:'Triceps',rec:48},
+ {id:'avant_bras',label:'Avant-bras',rec:48},
+ {id:'quadriceps',label:'Quadriceps',rec:72},
+ {id:'ischios',label:'Ischio-jambiers',rec:72},
+ {id:'fessiers',label:'Fessiers',rec:72},
+ {id:'mollets',label:'Mollets',rec:48}
+];
+const MUSCLE_BY_ID={};MUSCLES.forEach(m=>MUSCLE_BY_ID[m.id]=m);
+function normMuscle(tok){
+  const t=String(tok||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[\s-]+/g,'_');
+  if(MUSCLE_BY_ID[t])return t;
+  const alias={pectoraux:'pecs',poitrine:'pecs',dorsaux:'dos',lats:'dos',
+    epaules:'delt_lat',deltoide_anterieur:'delt_ant',deltoide_lateral:'delt_lat',
+    deltoide_posterieur:'delt_post',arriere_epaule:'delt_post',
+    quadri:'quadriceps',quads:'quadriceps',ischio:'ischios',ischio_jambiers:'ischios',
+    fessier:'fessiers',mollet:'mollets',avant_bras:'avant_bras',forearms:'avant_bras'};
+  return alias[t]||null;
+}
+function parseMuscles(str){
+  return String(str||'').split(',').map(normMuscle).filter(Boolean)
+    .filter((v,i,a)=>a.indexOf(v)===i);
+}
 
 /* ================== PROGRAMME PAR DÉFAUT ================== */
 const PROFILE={sexe:'homme',taille_cm:186,poids_kg:96,age:25,niveau:'avancé',salle:'Basic Fit',
@@ -35,108 +70,139 @@ const DEFAULT_PROGRAM=[
 {id:'j1',tab:'J1',title:'Dos épaisseur + postérieur',sub:'Dos · Postérieur',
  warn:'Latéraux / postérieur / face pull : élan = trop lourd. La tension fait le muscle.',ex:[
  {id:'j1e1',name:'Row appui poitrine unilatéral (neutre)',sets:3,reps:'8–10/bras',ref:77.6,unit:'kg/bras',
+  musP:['dos'],musS:['biceps','delt_post'],
   yt:'chest supported row unilatéral machine technique',
   notes:'Prise neutre (paumes face à face), coude vers l’arrière et le haut, rétraction complète, pause 1s. Commencer par le bras GAUCHE, aligner le droit dessus. RIR 1 · négative 3s.'},
  {id:'j1e2',name:'Tirage triangle serré',sets:3,reps:'8–10',ref:86,unit:'kg',
+  musP:['dos'],musS:['biceps'],
   yt:'tirage horizontal prise serrée triangle technique',
   notes:'Prise neutre serrée (triangle/V). Tirer vers le nombril, serrer les omoplates en fin, hold 1s. Charge de travail : 86, pas 92.'},
  {id:'j1e3',name:'Diverging seated row unilatéral',sets:3,reps:'8–10/bras',ref:107,unit:'kg',
+  musP:['dos'],musS:['biceps'],
   yt:'diverging seated row machine unilatéral technique',
   notes:'PRISE NEUTRE (pouces face à face). Rotation du buste pour dégager le pad (cage profonde, pad gênant). Coude vers l’arrière, serrer l’omoplate, hold 1s. Rest-pause au plateau.'},
  {id:'j1e4',name:'Face pull corde',sets:3,reps:'10–12',ref:40,unit:'kg',
+  musP:['delt_post'],musS:['dos'],
   yt:'face pull corde technique épaule',
   notes:'Mains vers le BAS. Coudes abaissés qui partent vers l’arrière, rotation des poignets en fin. Sortir le trapèze du mouvement.'},
  {id:'j1e5',name:'Rear delt fly câble poulies croisées',sets:3,reps:'10–12',ref:null,unit:'léger',
+  musP:['delt_post'],musS:[],
   yt:'rear delt fly câble poulies croisées technique',
   notes:'Penché 70°, bras croisés quasi-tendus, arc vers l’arrière-extérieur, contraction 1s, épaules basses. Pas encore de référence : caler la charge.'}]},
 
 {id:'j2',tab:'J2',title:'Pectoraux',sub:'Pectoraux',
  warn:'Au plafond matériel sur haltères (50) et Matrix (~123) : progresser via rest-pause / tempo.',ex:[
  {id:'j2e1',name:'Développé couché haltères',sets:3,reps:'8–10',ref:50,unit:'kg/bras',ceiling:'PLAFOND HALTÈRES',
+  musP:['pecs'],musS:['triceps','delt_ant'],
   yt:'développé couché haltères technique',
   notes:'Réf : 10/8/7. Coudes à 70°, descendre à l’étirement, pousser sans verrouiller. Plafond haltères : progression en reps, puis tempo / rest-pause à 3×10. RIR 1 · négative 3s.'},
  {id:'j2e2',name:'Press Matrix',sets:3,reps:'8–10',ref:113,unit:'kg',ceiling:'PLAFOND ~123',
+  musP:['pecs'],musS:['triceps','delt_ant'],
   yt:'chest press machine technique',
   notes:'Position n°2, complément du développé haltères. Dégressive sur la dernière série. Marge restante avant plafond (~123).'},
  {id:'j2e3',name:'Press incliné machine',sets:3,reps:'8–10',ref:50,unit:'kg',
+  musP:['pecs'],musS:['delt_ant','triceps'],
   yt:'développé incliné machine technique',
   notes:'Haut des pecs. Incliné 30° max, ne pas verrouiller, étirement en bas.'},
  {id:'j2e4',name:'Pec fly câble allongé sur banc',sets:3,reps:'9–10',ref:15.8,unit:'kg/côté',
+  musP:['pecs'],musS:[],
   yt:'pec fly câble allongé banc technique',
   notes:'Allongé entre les poulies : tension constante + étirement max. Flexion de coude fixe, refermer sans croiser.'},
  {id:'j2e5',name:'Câble croisé poulie haute',sets:3,reps:'10–12',ref:13.5,unit:'kg/côté',
+  musP:['pecs'],musS:[],
   yt:'cable crossover poulie haute pectoraux technique',
   notes:'Mouvement d’arc, coudes fixes. Croiser les mains en bas, pic de contraction 1s. Bas/externe des pecs.'}]},
 
 {id:'j3',tab:'J3',title:'Épaules + triceps',sub:'Latéral prioritaire',
  warn:'Latéraux : léger et strict. Press épaules : surveiller le tendon GAUCHE, stop si douleur tendineuse.',ex:[
  {id:'j3e1',name:'Élévation latérale unilatérale câble (poulie bassin)',sets:3,reps:'10–12',ref:11.3,unit:'kg',
+  musP:['delt_lat'],musS:[],
   yt:'élévation latérale câble unilatéral technique',
   notes:'EXERCICE CLÉ. Poulie au bassin, penché léger côté opposé. Buste stable, pas d’élan, iso 2s. Léger et strict. Commencer par le gauche.'},
  {id:'j3e2',name:'Élévation latérale haltère lean-away',sets:3,reps:'10–12',ref:null,unit:'très léger',
+  musP:['delt_lat'],musS:[],
   yt:'lean away lateral raise haltère technique',
   notes:'Résistance max en haut. Anti-trapèze : épaule basse, initier au coude, stop à l’horizontale. Si le trapèze domine, repasser au câble.'},
  {id:'j3e3',name:'Press épaules machine',sets:3,reps:'8–10',ref:101,unit:'kg',ceiling:'REPS UNIQUEMENT',
+  musP:['delt_ant','delt_lat'],musS:['triceps'],
   yt:'développé épaules machine technique',
   notes:'Tendon gauche surveillé : progresser en REPS uniquement (viser 8) avant toute montée de charge. Fait avant les triceps. RIR 2.'},
  {id:'j3e4',name:'Pushdown barre',sets:3,reps:'8–10',ref:41,unit:'kg',
+  musP:['triceps'],musS:[],
   yt:'pushdown triceps barre technique',
   notes:'Coudes fixes au corps, verrouillage complet. Dégressive sur la DERNIÈRE série uniquement.'},
  {id:'j3e5',name:'Overhead triceps corde',sets:3,reps:'10–12',ref:22.6,unit:'kg',
+  musP:['triceps'],musS:[],
   yt:'extension triceps overhead corde technique',
   notes:'Tête longue. Corde au-dessus de la tête, coudes au plafond et fixes, extension vers le haut, étirement en bas.'}]},
 
 {id:'j4',tab:'J4',title:'Dos largeur + biceps',sub:'Dos · Biceps',
  warn:'Unilatéral : commencer par le bras gauche, aligner le droit dessus.',ex:[
  {id:'j4e1',name:'Tirage vertical barre pronation',sets:3,reps:'7–8',ref:127,unit:'kg',
+  musP:['dos'],musS:['biceps'],
   yt:'tirage vertical poitrine prise large technique',
   notes:'Composé vertical lourd. Prise large, tirer vers la clavicule, coudes vers les hanches, étirement complet en haut. RIR 1 · négative 3s.'},
  {id:'j4e2',name:'Tirage vertical unilatéral câble (banc assis)',sets:3,reps:'8–10/côté',ref:50,unit:'kg',
+  musP:['dos'],musS:['biceps'],
   yt:'tirage vertical unilatéral câble technique',
   notes:'Assis sur banc, penché léger côté opposé pour étirer le lat. Tirer le coude vers la hanche. Commencer par le gauche.'},
  {id:'j4e3',name:'Pull-over câble (finisher)',sets:2,reps:'10–12',ref:27,unit:'kg',
+  musP:['dos'],musS:[],
   yt:'pull over câble debout dos technique',
   notes:'Finisher 2 séries. Bras quasi-tendus, étirement du lat en haut, tirer vers les hanches. Léger, sensation. Skip si dos en compote.'},
  {id:'j4e4',name:'Curl alterné haltère',sets:3,reps:'7–8',ref:24,unit:'kg/bras',
+  musP:['biceps'],musS:['avant_bras'],
   yt:'curl alterné haltères technique',
   notes:'Supination complète en haut, coudes fixes, pas de balancement. Frais = 24, post-dos plutôt 22.'},
  {id:'j4e5',name:'Curl pupitre Matrix unilatéral',sets:3,reps:'8–10/bras',ref:45,unit:'kg/bras',
+  musP:['biceps'],musS:[],
   yt:'curl pupitre machine technique',
   notes:'Bras sur le pad, négative 3s, pause 1s en bas.'}]},
 
 {id:'j5',tab:'J5',title:'Postérieur + latéral + bras',sub:'Postérieur · Bras',
  warn:'Poignet gauche : stop curls si fourmillements (canal carpien). Dips : coudes à 90° max en bas.',ex:[
  {id:'j5e1',name:'Rear delt fly haltères penché',sets:4,reps:'10–12',ref:10,unit:'kg',
+  musP:['delt_post'],musS:[],
   yt:'rear delt fly haltères penché technique',
   notes:'Buste quasi-parallèle au sol (se pencher FRANCHEMENT), bras quasi-tendus, arc sur les côtés, épaules basses. Léger-strict.'},
  {id:'j5e2',name:'Curl marteau haltères',sets:3,reps:'8–10',ref:24,unit:'kg/main',
+  musP:['biceps'],musS:['avant_bras'],
   yt:'curl marteau haltères technique',
   notes:'En calibrage : montera vite. Prise neutre, coudes fixes, contrôle à la descente. Vigilance canal carpien gauche : fourmillements = stop, retour corde.'},
  {id:'j5e3',name:'Élévation latérale câble',sets:3,reps:'10–12',ref:11.3,unit:'kg',
+  musP:['delt_lat'],musS:[],
   yt:'élévation latérale câble technique',
   notes:'Tempo 3s à la descente. Poulie bassin, penché léger, buste stable, pas d’élan. Tension > charge.'},
  {id:'j5e4',name:'Overhead triceps',sets:3,reps:'10–12',ref:22.6,unit:'kg',
+  musP:['triceps'],musS:[],
   yt:'extension triceps overhead corde technique',
   notes:'2e passage tête longue. Coudes au plafond fixes, étirement max.'},
  {id:'j5e5',name:'Dips machine Matrix',sets:3,reps:'8',refText:'max + 20 + 2×2,3 + 1,2 + 2×2,3',ceiling:'PLAFOND ABSOLU',
+  musP:['triceps'],musS:['pecs'],
   yt:'dips machine assistée technique triceps',
   notes:'Charge max machine + 20 kg + 2×2,3 + 1,2 + 2×2,3. Progression reps / rest-pause uniquement (viser 10–12). Coudes à 90° MAX en bas (épaule). Négative 3s.'}]},
 
 {id:'j6',tab:'J6',title:'Jambes — reprise adaptée',sub:'Jambes',
  warn:'Sciatique : pas de compression axiale, dos soutenu. Démarrage léger et progressif.',ex:[
  {id:'j6e1',name:'Presse à cuisses',sets:3,reps:'10–12',ref:null,unit:'léger',
+  musP:['quadriceps','fessiers'],musS:['ischios'],
   yt:'presse à cuisses technique',
   notes:'Dos calé contre le dossier. Amplitude contrôlée, ne pas verrouiller les genoux. Démarrer léger, monter progressivement.'},
  {id:'j6e2',name:'Leg extension',sets:3,reps:'12–15',ref:null,unit:'léger',
+  musP:['quadriceps'],musS:[],
   yt:'leg extension technique',
   notes:'Quadriceps isolé. Contraction 1s en haut, descente contrôlée.'},
  {id:'j6e3',name:'Leg curl',sets:3,reps:'12–15',ref:null,unit:'léger',
+  musP:['ischios'],musS:[],
   yt:'leg curl assis technique',
   notes:'Ischios. Amplitude complète, contraction en fin de mouvement.'},
  {id:'j6e4',name:'Mollets machine squat guidé',sets:3,reps:'12–15',ref:null,unit:'progressif',
+  musP:['mollets'],musS:[],
   yt:'mollets debout smith machine technique',
   notes:'Amplitude complète avec étirement en bas, pas de rebond. Charge progressive (antécédents mollets : entorse droite, accident gauche).'}]}
 ];
+const DEFAULT_EX={};
+for(const s of DEFAULT_PROGRAM)for(const e of s.ex)DEFAULT_EX[e.id]=e;
 
 /* ================== PROGRAMME (custom ou défaut) ================== */
 const KEY_PROGRAM='muscu_program';
@@ -145,6 +211,12 @@ function loadProgram(){
   let p=null;
   try{p=JSON.parse(localStorage.getItem(KEY_PROGRAM))}catch(e){}
   PROGRAM=(Array.isArray(p)&&p.length)?p:JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
+  /* rétro-compatibilité : compléter les muscles depuis le programme par défaut */
+  for(const s of PROGRAM)for(const e of (s.ex||[])){
+    if(!Array.isArray(e.musP)&&DEFAULT_EX[e.id]){e.musP=DEFAULT_EX[e.id].musP.slice();e.musS=DEFAULT_EX[e.id].musS.slice()}
+    if(!Array.isArray(e.musP))e.musP=[];
+    if(!Array.isArray(e.musS))e.musS=[];
+  }
   buildMaps();
 }
 function buildMaps(){
@@ -234,6 +306,104 @@ function ytURL(e){return 'https://www.youtube.com/results?search_query='+encodeU
 function weekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x}
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 
+/* ================== RÉCUPÉRATION MUSCULAIRE ================== */
+/* Modèle : chaque séance charge les muscles travaillés (série validée :
+   1 pt muscle principal, 0,5 pt secondaire). La fatigue décroît
+   linéairement sur 48 h (petits muscles) ou 72 h (grands groupes).
+   6 points de charge = fatigue maximale le jour même. */
+function muscleFatigue(mid){
+  const rec=(MUSCLE_BY_ID[mid]||{rec:48}).rec;
+  const now=Date.now();
+  let f=0;
+  const since=new Date(now-rec*3.6e6);
+  const minIso=isoOf(since);
+  for(const w of DB.workouts){
+    if(w.date<minIso)continue;
+    const[y,mo,d]=w.date.split('-');
+    const t=new Date(+y,mo-1,+d,12).getTime();
+    const ageH=Math.max(0,(now-t)/3.6e6);
+    if(ageH>=rec)continue;
+    let load=0;
+    for(const exId in (w.ex||{})){
+      const e=EXO[exId];if(!e)continue;
+      const sets=w.ex[exId].filter(s=>s.done).length;
+      if((e.musP||[]).includes(mid))load+=sets;
+      else if((e.musS||[]).includes(mid))load+=sets*0.5;
+    }
+    if(load)f+=Math.min(1,load/6)*(1-ageH/rec);
+  }
+  if(DB.active){
+    let load=0;
+    for(const exId in DB.active.ex){
+      const e=EXO[exId];if(!e)continue;
+      const sets=DB.active.ex[exId].filter(s=>s.done).length;
+      if((e.musP||[]).includes(mid))load+=sets;
+      else if((e.musS||[]).includes(mid))load+=sets*0.5;
+    }
+    if(load)f+=Math.min(1,load/6);
+  }
+  return Math.min(1,f);
+}
+function muscleRecovery(mid){return Math.round(100*(1-muscleFatigue(mid)))}
+
+function seanceRecoveryScore(s){
+  const counts={};
+  for(const e of s.ex)for(const m of (e.musP||[]))counts[m]=(counts[m]||0)+1;
+  let sum=0,n=0;
+  for(const m in counts){sum+=muscleRecovery(m)*counts[m];n+=counts[m]}
+  return n?Math.round(sum/n):100;
+}
+function recommendSeance(){
+  if(!PROGRAM.length||DB.active)return null;
+  const today=todayISO();
+  const info=PROGRAM.map(s=>{
+    const last=lastWorkoutOf(s.id);
+    return{id:s.id,score:seanceRecoveryScore(s),
+      days:last?diffDays(last.date):9999,
+      doneToday:!!last&&last.date===today};
+  }).filter(x=>!x.doneToday);
+  if(!info.length)return null;
+  const ok=info.filter(x=>x.score>=75);
+  const pool=ok.length?ok:info;
+  pool.sort((a,b)=>b.days!==a.days?b.days-a.days:b.score-a.score);
+  return pool[0];
+}
+
+/* ================== CIBLES AUTOMATIQUES ================== */
+/* Double progression : +1 rep dans la fourchette, puis +charge et retour
+   au bas de fourchette. Exercices plafonnés : reps uniquement (max 12). */
+function repsRange(str){
+  const m=String(str||'').match(/\d+/g)||[];
+  const lo=m.length?+m[0]:8;
+  return[lo,m.length>1?+m[1]:lo];
+}
+function wInc(w){return w>=60?2.5:w>=20?2:w>=10?1:0.5}
+function suggestTargets(e){
+  const[lo,hi]=repsRange(e.reps);
+  const prev=prevSets(e.id);
+  const out=[];
+  const n=Math.max(e.sets,prev?prev.length:0);
+  for(let i=0;i<n;i++){
+    const p=prev&&prev[i]?prev[i]:null;
+    if(!p||(p.w==null&&p.r==null)){
+      out.push(typeof e.ref==='number'?{w:e.ref,r:lo}:null);
+      continue;
+    }
+    if(e.ceiling){
+      if(p.r==null)out.push({w:p.w,r:lo});
+      else if(p.r>=12)out.push({w:p.w,r:p.r});
+      else out.push({w:p.w,r:p.r+1});
+    }else if(p.r==null||p.w==null){
+      out.push({w:p.w,r:p.r!=null?Math.min(p.r+1,hi):lo});
+    }else if(p.r>=hi){
+      out.push({w:Math.round((p.w+wInc(p.w))*10)/10,r:lo});
+    }else{
+      out.push({w:p.w,r:Math.min(p.r+1,hi)});
+    }
+  }
+  return out;
+}
+
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
 let route={view:'home',seance:null};
@@ -256,6 +426,7 @@ function homeHTML(){
   const wIso=isoOf(ws);
   const weekW=DB.workouts.filter(w=>w.date>=wIso);
   let weekVol=0;weekW.forEach(w=>{weekVol+=workoutStats(w).vol});
+  const reco=recommendSeance();
   let h='<div class="top"><h1>Muscu</h1><div class="hbtns">'
    +'<button class="hbtn" data-act="settings">Réglages</button>'
    +'<button class="hbtn" data-act="data">Données</button></div></div>'
@@ -269,10 +440,15 @@ function homeHTML(){
   }
   for(const s of PROGRAM){
     const last=lastWorkoutOf(s.id);
-    h+='<button class="scard" data-act="open" data-s="'+esc(s.id)+'">'
-     +'<div class="srow"><span class="stag">'+esc(s.tab)+'</span><span class="slast">'+(last?daysAgo(last.date):'jamais réalisée')+'</span></div>'
+    const isReco=reco&&reco.id===s.id;
+    h+='<button class="scard'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
+     +'<div class="srow"><span class="stag">'+esc(s.tab)
+     +(isReco?'<span class="recobadge">RECOMMANDÉE</span>':'')
+     +'</span><span class="slast">'+(last?daysAgo(last.date):'jamais réalisée')+'</span></div>'
      +'<div class="sname">'+esc(s.title)+'</div>'
-     +'<div class="smeta">'+s.ex.length+' exercices · '+esc(s.sub||'')+'</div></button>';
+     +'<div class="smeta">'+s.ex.length+' exercices · '+esc(s.sub||'')
+     +(isReco?' · <span class="num">récup. '+reco.score+' %</span>':'')
+     +'</div></button>';
   }
   return h;
 }
@@ -284,7 +460,8 @@ function seanceHTML(sid){
   const active=DB.active&&DB.active.seance===sid?DB.active:null;
   let h='<button class="back" data-act="home">‹ Séances</button>'
    +'<div class="shead"><div><div class="stag">'+esc(s.tab)+'</div><h2>'+esc(s.title)+'</h2>'
-   +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(SETTINGS.rest)+'</div></div>'
+   +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(SETTINGS.rest)
+   +' · <span class="num">récup. '+seanceRecoveryScore(s)+' %</span></div></div>'
    +(active?'':'<button class="editbtn" data-act="edit">Modifier</button>')+'</div>';
   if(active){
     const p=sessionProgress(active);
@@ -320,22 +497,22 @@ function exCardHTML(e,idx,active){
    +'<a class="vlink" href="'+ytURL(e)+'" target="_blank" rel="noopener">Vidéo technique</a>';
   if(active){
     const sets=active.ex[e.id]||[];
-    const prev=prevSets(e.id);
-    h+='<div class="stable"><div class="sthead"><span>SÉRIE</span><span>PRÉC.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
-    sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,prev)});
+    const targets=suggestTargets(e);
+    h+='<div class="stable"><div class="sthead"><span>SÉRIE</span><span>CIBLE</span><span>KG</span><span>REPS</span><span>✓</span></div>';
+    sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
     h+='</div><button class="addset" data-act="addset">+ série</button>';
   }
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
 }
-function setRowHTML(e,i,st,prev){
-  const p=prev&&prev[i]?prev[i]:null;
-  const ptxt=p?(p.w!=null?fmtN(p.w):'—')+' × '+(p.r!=null?p.r:'—'):'—';
-  const phW=p&&p.w!=null?fmtN(p.w):'kg';
-  const phR=p&&p.r!=null?String(p.r):'reps';
+function setRowHTML(e,i,st,targets){
+  const t=targets&&targets[i]?targets[i]:null;
+  const ttxt=t?((t.w!=null?fmtN(t.w):'—')+' × '+(t.r!=null?t.r:'—')):'—';
+  const phW=t&&t.w!=null?fmtN(t.w):'kg';
+  const phR=t&&t.r!=null?String(t.r):'reps';
   return '<div class="strow'+(st.done?' done':'')+'" data-i="'+i+'">'
    +'<span class="sn num">'+(i+1)+'</span>'
-   +'<span class="prev num">'+ptxt+'</span>'
+   +'<span class="prev num">'+ttxt+'</span>'
    +'<input class="w num" type="text" inputmode="decimal" placeholder="'+esc(phW)+'" value="'+(st.w==null?'':fmtN(st.w))+'">'
    +'<input class="r num" type="text" inputmode="numeric" placeholder="'+esc(phR)+'" value="'+(st.r==null?'':st.r)+'">'
    +'<button class="chk" data-act="chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></button>'
@@ -391,6 +568,64 @@ function historyHTML(){
   return h;
 }
 
+/* ---------- carte corporelle ---------- */
+function bodySkeleton(){
+  /* silhouette stylisée commune (face / dos) */
+  return '<circle class="skel" cx="60" cy="15" r="10"/>'
+   +'<rect class="skel" x="38" y="28" width="44" height="64" rx="11"/>'
+   +'<rect class="skel" x="42" y="90" width="36" height="32" rx="9"/>'
+   +'<rect class="skel" x="24" y="32" width="11" height="62" rx="5.5"/>'
+   +'<rect class="skel" x="85" y="32" width="11" height="62" rx="5.5"/>'
+   +'<rect class="skel" x="43" y="118" width="15" height="86" rx="7"/>'
+   +'<rect class="skel" x="62" y="118" width="15" height="86" rx="7"/>';
+}
+function zone(shape,mid){
+  const f=muscleFatigue(mid);
+  const op=(0.08+0.84*f).toFixed(2);
+  return shape.replace('/>',' fill-opacity="'+op+'"/>');
+}
+function bodyMapHTML(){
+  const front=bodySkeleton()
+   +zone('<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','delt_lat')
+   +zone('<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>','delt_lat')
+   +zone('<ellipse class="zone" cx="42" cy="44" rx="4" ry="5"/>','delt_ant')
+   +zone('<ellipse class="zone" cx="78" cy="44" rx="4" ry="5"/>','delt_ant')
+   +zone('<ellipse class="zone" cx="50" cy="52" rx="10.5" ry="9"/>','pecs')
+   +zone('<ellipse class="zone" cx="70" cy="52" rx="10.5" ry="9"/>','pecs')
+   +zone('<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','biceps')
+   +zone('<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>','biceps')
+   +zone('<rect class="zone" x="24" y="72" width="8" height="20" rx="4"/>','avant_bras')
+   +zone('<rect class="zone" x="88" y="72" width="8" height="20" rx="4"/>','avant_bras')
+   +zone('<rect class="zone" x="44" y="122" width="13" height="44" rx="6"/>','quadriceps')
+   +zone('<rect class="zone" x="63" y="122" width="13" height="44" rx="6"/>','quadriceps');
+  const back=bodySkeleton()
+   +zone('<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','delt_post')
+   +zone('<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>','delt_post')
+   +zone('<path class="zone" d="M44 40 L76 40 L72 78 Q60 84 48 78 Z"/>','dos')
+   +zone('<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','triceps')
+   +zone('<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>','triceps')
+   +zone('<ellipse class="zone" cx="51" cy="108" rx="9" ry="9"/>','fessiers')
+   +zone('<ellipse class="zone" cx="69" cy="108" rx="9" ry="9"/>','fessiers')
+   +zone('<rect class="zone" x="44" y="124" width="13" height="36" rx="6"/>','ischios')
+   +zone('<rect class="zone" x="63" y="124" width="13" height="36" rx="6"/>','ischios')
+   +zone('<rect class="zone" x="45" y="168" width="11" height="28" rx="5.5"/>','mollets')
+   +zone('<rect class="zone" x="64" y="168" width="11" height="28" rx="5.5"/>','mollets');
+  let bars='';
+  const list=MUSCLES.map(m=>({m,rec:muscleRecovery(m.id)})).sort((a,b)=>a.rec-b.rec);
+  for(const x of list){
+    bars+='<div class="musrow"><span class="musl">'+esc(x.m.label)+'</span>'
+     +'<div class="musbar"><i style="width:'+x.rec+'%"></i></div>'
+     +'<span class="musv num">'+x.rec+' %</span></div>';
+  }
+  return '<div class="chartcard"><div class="charttitle">Récupération musculaire</div>'
+   +'<div class="bodymaps">'
+   +'<div class="bmap"><svg viewBox="0 0 120 210">'+front+'</svg><div class="bcap">Face</div></div>'
+   +'<div class="bmap"><svg viewBox="0 0 120 210">'+back+'</svg><div class="bcap">Dos</div></div>'
+   +'</div>'
+   +'<div class="maplegend">Zone claire = muscle en récupération · % = niveau de fraîcheur</div>'
+   +bars+'</div>';
+}
+
 /* ---------- stats ---------- */
 function statsHTML(){
   let h='<div class="top"><h1>Stats</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
@@ -406,6 +641,7 @@ function statsHTML(){
    +'<div class="statbox"><div class="v num">'+month+'</div><div class="l">Ce mois</div></div>'
    +'<div class="statbox"><div class="v num">'+fmtKg(weekVol)+'</div><div class="l">kg · semaine</div></div>'
    +'</div>';
+  h+=bodyMapHTML();
   /* tonnage hebdomadaire — 8 dernières semaines */
   const weeks=[];
   for(let i=7;i>=0;i--){
@@ -459,6 +695,10 @@ function editExHTML(e,i){
    +'<div class="efield"><label>Reps cible</label><input class="e-reps" value="'+esc(e.reps||'8–10')+'"></div>'
    +'<div class="efield"><label>Badge (plafond…)</label><input class="e-ceiling" value="'+esc(e.ceiling||'')+'"></div>'
    +'</div>'
+   +'<div class="egrid">'
+   +'<div class="efield"><label>Muscles principaux</label><input class="e-musp" placeholder="ex : dos, biceps" value="'+esc((e.musP||[]).join(', '))+'"></div>'
+   +'<div class="efield"><label>Muscles secondaires</label><input class="e-muss" placeholder="ex : triceps" value="'+esc((e.musS||[]).join(', '))+'"></div>'
+   +'</div>'
    +'<div class="efield"><label>Recherche vidéo YouTube</label><input class="e-yt" value="'+esc(e.yt||'')+'"></div>'
    +'<div class="efield"><label>Notes techniques</label><textarea class="e-notes">'+esc(e.notes||'')+'</textarea></div>'
    +'</div>';
@@ -475,7 +715,9 @@ function editHTML(sid){
    +'<div class="efield"><label>Sous-titre</label><input id="es-sub" value="'+esc(s.sub||'')+'"></div>'
    +'</div>'
    +'<div class="efield"><label>Points de vigilance</label><textarea id="es-warn">'+esc(s.warn||'')+'</textarea></div>'
-   +'</div><div id="exlist">';
+   +'</div>'
+   +'<div class="maplegend" style="margin:0 4px 12px">Muscles reconnus : '+MUSCLES.map(m=>m.id).join(', ')+'</div>'
+   +'<div id="exlist">';
   s.ex.forEach((e,i)=>{h+=editExHTML(e,i)});
   h+='</div><button class="bigbtn ghost" data-act="eadd">+ Ajouter un exercice</button>'
    +'<button class="bigbtn" data-act="esave">Enregistrer</button>';
@@ -489,7 +731,9 @@ function collectEdit(sid){
   const warn=document.getElementById('es-warn').value.trim();
   const ex=[];
   document.querySelectorAll('#exlist .ecard').forEach(card=>{
-    const name=card.querySelector('.e-name').value.trim();
+    const nameEl=card.querySelector('.e-name');
+    if(!nameEl)return;
+    const name=nameEl.value.trim();
     if(!name)return;
     const refRaw=card.querySelector('.e-ref').value.trim();
     const refNum=numOrNull(refRaw);
@@ -501,7 +745,9 @@ function collectEdit(sid){
       reps:card.querySelector('.e-reps').value.trim()||'8–10',
       unit:card.querySelector('.e-unit').value.trim()||'kg',
       notes:card.querySelector('.e-notes').value.trim(),
-      yt:card.querySelector('.e-yt').value.trim()
+      yt:card.querySelector('.e-yt').value.trim(),
+      musP:parseMuscles(card.querySelector('.e-musp').value),
+      musS:parseMuscles(card.querySelector('.e-muss').value)
     };
     if(refNum!=null)e.ref=refNum;
     else if(refRaw){e.ref=null;e.refText=refRaw}
@@ -602,7 +848,7 @@ app.addEventListener('click',ev=>{
   else if(act==='eadd'){
     const list=document.getElementById('exlist');
     const n=list.querySelectorAll('.ecard').length;
-    list.insertAdjacentHTML('beforeend',editExHTML({name:'',sets:3,reps:'8–10',unit:'kg',ref:null,notes:'',yt:''},n));
+    list.insertAdjacentHTML('beforeend',editExHTML({name:'',sets:3,reps:'8–10',unit:'kg',ref:null,notes:'',yt:'',musP:[],musS:[]},n));
     list.lastElementChild.querySelector('.e-name').focus();
   }
   else if(act==='edel'){
@@ -619,8 +865,9 @@ app.addEventListener('click',ev=>{
     if(!DB.active||!DB.active.ex[exId])return;
     DB.active.ex[exId].push({w:null,r:null,done:false});persist();
     const i=DB.active.ex[exId].length-1;
+    const e=EXO[exId];
     card.querySelector('.stable').insertAdjacentHTML('beforeend',
-      setRowHTML(EXO[exId],i,{w:null,r:null,done:false},prevSets(exId)));
+      setRowHTML(e,i,{w:null,r:null,done:false},e?suggestTargets(e):null));
     card.classList.remove('complete');
     updateProgress();
   }
@@ -632,13 +879,14 @@ app.addEventListener('click',ev=>{
     if(!st.done){
       let w=numOrNull(row.querySelector('.w').value);
       let r=intOrNull(row.querySelector('.r').value);
-      const p=prevSets(exId);
-      if(w==null&&p&&p[i]&&p[i].w!=null){w=p[i].w;row.querySelector('.w').value=fmtN(w)}
-      if(r==null&&p&&p[i]&&p[i].r!=null){r=p[i].r;row.querySelector('.r').value=r}
+      const e=EXO[exId];
+      const t=e?suggestTargets(e)[i]:null;
+      if(w==null&&t&&t.w!=null){w=t.w;row.querySelector('.w').value=fmtN(w)}
+      if(r==null&&t&&t.r!=null){r=t.r;row.querySelector('.r').value=r}
       st.w=w;st.r=r;st.done=true;
       row.classList.add('done');
       if(navigator.vibrate)navigator.vibrate(10);
-      startTimer(EXO[exId]?EXO[exId].name:'Repos');
+      startTimer(e?e.name:'Repos');
     }else{
       st.done=false;row.classList.remove('done');
     }
@@ -753,14 +1001,19 @@ function exportPayload(){
   const exos={};
   for(const s of PROGRAM)for(const e of s.ex)
     exos[e.id]={seance:s.tab,nom:e.name,cible:e.sets+'×'+e.reps,
-      reference:e.refText||(e.ref!=null?e.ref+' '+(e.unit||'kg'):e.unit||null),plafond:e.ceiling||null};
+      reference:e.refText||(e.ref!=null?e.ref+' '+(e.unit||'kg'):e.unit||null),
+      plafond:e.ceiling||null,
+      muscles_principaux:e.musP||[],muscles_secondaires:e.musS||[]};
+  const recup={};
+  for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
   return{app:'muscu',version:4,exporte_le:new Date().toISOString(),
     profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids}),
-    reglages:SETTINGS,programme:PROGRAM,exercices:exos,seances:DB.workouts};
+    reglages:SETTINGS,recuperation_musculaire:recup,
+    programme:PROGRAM,exercices:exos,seances:DB.workouts};
 }
 function showData(){
   sheet.innerHTML='<h2>Données</h2>'
-   +'<div class="sp">Exporter copie tout (profil, programme, historique) en JSON — utilisable par un coach IA. Importer restaure depuis un JSON collé ci-dessous.</div>'
+   +'<div class="sp">Exporter copie tout (profil, programme, historique, récupération) en JSON — utilisable par un coach IA. Importer restaure depuis un JSON collé ci-dessous.</div>'
    +'<textarea class="io" id="shArea" spellcheck="false" placeholder="Coller ici le JSON à importer…"></textarea>'
    +'<div class="sbtns"><button class="sbtn pri" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
@@ -784,9 +1037,13 @@ async function doExport(){
 function doImport(){
   let data;
   try{data=JSON.parse(document.getElementById('shArea').value)}catch(e){toast('JSON invalide');return}
-  /* programme personnalisé éventuel */
   if(Array.isArray(data.programme)&&data.programme.length&&data.programme.every(s=>s&&s.id&&Array.isArray(s.ex))){
-    PROGRAM=data.programme;saveProgram();
+    PROGRAM=data.programme;
+    for(const s of PROGRAM)for(const e of s.ex){
+      if(!Array.isArray(e.musP))e.musP=DEFAULT_EX[e.id]?DEFAULT_EX[e.id].musP.slice():[];
+      if(!Array.isArray(e.musS))e.musS=DEFAULT_EX[e.id]?DEFAULT_EX[e.id].musS.slice():[];
+    }
+    saveProgram();
   }
   let workouts=null;
   if(Array.isArray(data.seances))workouts=data.seances;

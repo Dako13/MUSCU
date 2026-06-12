@@ -312,3 +312,25 @@ details[open] summary::before{transform:rotate(45deg)}
   opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
 }
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- recommandation (v1.1) ---------- */
+.scard.reco{border-color:rgba(255,255,255,.18)}
+.recobadge{
+  font-size:.56rem;font-weight:700;letter-spacing:.06em;color:#0a0a0a;
+  background:var(--ac);border-radius:6px;padding:2px 6px;margin-left:8px;
+  vertical-align:1px;
+}
+
+/* ---------- carte corporelle (v1.1) ---------- */
+.bodymaps{display:flex;gap:18px;justify-content:center;padding:4px 0 10px}
+.bmap{width:42%;max-width:150px}
+.bmap svg{display:block;width:100%}
+.bmap .skel{fill:rgba(255,255,255,.04)}
+.bmap .zone{fill:var(--ac);stroke:rgba(255,255,255,.1);stroke-width:.6}
+.bcap{text-align:center;font-size:.64rem;color:var(--faint);padding-top:6px}
+.maplegend{font-size:.66rem;color:var(--faint);text-align:center;padding:0 0 12px;line-height:1.5}
+.musrow{display:flex;align-items:center;gap:10px;padding:5px 0}
+.musl{flex:0 0 124px;font-size:.74rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.musbar{flex:1;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.musbar i{display:block;height:100%;background:var(--ac);border-radius:2px}
+.musv{flex:0 0 44px;text-align:right;font-size:.72rem;font-weight:650}
