@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Muscu">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="description" content="Suivi d'entraînement musculation — séances, progression, records.">
+<title>Muscu</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<div id="app"></div>
+
+<div id="timerbar">
+  <div id="tleft" class="num">3:00</div>
+  <div id="tlabel">Repos</div>
+  <button class="tact" id="tplus">+30s</button>
+  <button class="tact" id="tskip">Passer</button>
+</div>
+
+<nav id="tabbar">
+  <button class="tabbtn on" data-v="home">
+    <svg viewBox="0 0 24 24"><path d="M4 9v6M8 6v12M16 6v12M20 9v6M8 12h8"/></svg>
+    <span>Entraîner</span>
+  </button>
+  <button class="tabbtn" data-v="history">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    <span>Historique</span>
+  </button>
+  <button class="tabbtn" data-v="stats">
+    <svg viewBox="0 0 24 24"><path d="M4 19V11M10 19V5M16 19v-9M22 19H2"/></svg>
+    <span>Stats</span>
+  </button>
+</nav>
+
+<div id="overlay"></div>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
