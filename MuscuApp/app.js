@@ -1,10 +1,12 @@
 'use strict';
 /* =====================================================
-   Muscu — suivi d'entraînement
-   v1.1.0 : récupération musculaire, séance recommandée,
-   cibles automatiques par série, carte corporelle.
+   DAKO — suivi d'entraînement
+   v3.1.0 : accueil dashboard (séance du jour + silhouette),
+   fiche exercice (muscles ciblés + comment réaliser + démo).
+   v3.0.0 : multi-programmes, splash + transitions.
+   v2.0.0 : refonte design premium (dark/rouge).
    ===================================================== */
-const APP_VERSION='1.1.0';
+const APP_VERSION='3.1.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -204,28 +206,101 @@ const DEFAULT_PROGRAM=[
 const DEFAULT_EX={};
 for(const s of DEFAULT_PROGRAM)for(const e of s.ex)DEFAULT_EX[e.id]=e;
 
-/* ================== PROGRAMME (custom ou défaut) ================== */
-const KEY_PROGRAM='muscu_program';
-let PROGRAM,SEANCE={},EXO={};
+/* ================== PROGRAMMES (multi) ================== */
+/* Stockage : { programs:[{id,name,seances:[...]}], activeId }.
+   Migration depuis l'ancien format (1 seul programme) sans perte. */
+const KEY_PROGRAMS='dako_programs';   /* nouveau format multi */
+const KEY_PROGRAM='muscu_program';    /* ancien format (compat) */
+let PROGRAMS=[],ACTIVE_PID=null,PROGRAM=[],SEANCE={},EXO={};
+
+function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3)}
+function activeProgram(){return PROGRAMS.find(p=>p.id===ACTIVE_PID)||PROGRAMS[0]||null}
+function normEx(e,ref){
+  if(!Array.isArray(e.musP)&&ref&&DEFAULT_EX[e.id]){e.musP=DEFAULT_EX[e.id].musP.slice();e.musS=DEFAULT_EX[e.id].musS.slice()}
+  if(!Array.isArray(e.musP))e.musP=[];
+  if(!Array.isArray(e.musS))e.musS=[];
+}
+function normalizePrograms(){
+  for(const p of PROGRAMS){
+    if(!p.id)p.id=uid('p_');
+    if(!p.name)p.name='Programme';
+    if(!Array.isArray(p.seances))p.seances=[];
+    for(const s of p.seances){
+      if(!s.id)s.id=uid('s_');
+      if(!Array.isArray(s.ex))s.ex=[];
+      for(const e of s.ex){if(!e.id)e.id=uid('e_');normEx(e,true);}
+    }
+  }
+  if(!PROGRAMS.some(p=>p.id===ACTIVE_PID))ACTIVE_PID=(PROGRAMS[0]||{}).id||null;
+}
 function loadProgram(){
-  let p=null;
-  try{p=JSON.parse(localStorage.getItem(KEY_PROGRAM))}catch(e){}
-  PROGRAM=(Array.isArray(p)&&p.length)?p:JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
-  /* rétro-compatibilité : compléter les muscles depuis le programme par défaut */
-  for(const s of PROGRAM)for(const e of (s.ex||[])){
-    if(!Array.isArray(e.musP)&&DEFAULT_EX[e.id]){e.musP=DEFAULT_EX[e.id].musP.slice();e.musS=DEFAULT_EX[e.id].musS.slice()}
-    if(!Array.isArray(e.musP))e.musP=[];
-    if(!Array.isArray(e.musS))e.musS=[];
+  let store=null;
+  try{store=JSON.parse(localStorage.getItem(KEY_PROGRAMS))}catch(e){}
+  if(store&&Array.isArray(store.programs)&&store.programs.length){
+    PROGRAMS=store.programs;ACTIVE_PID=store.activeId||store.programs[0].id;
+    normalizePrograms();
+  }else{
+    /* migration : on enveloppe le programme existant (custom ou défaut) */
+    let legacy=null;
+    try{legacy=JSON.parse(localStorage.getItem(KEY_PROGRAM))}catch(e){}
+    const hasCustom=Array.isArray(legacy)&&legacy.length;
+    const seances=hasCustom?legacy:JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
+    PROGRAMS=[{id:'p_main',name:hasCustom?'Mon programme':'Programme principal',seances}];
+    ACTIVE_PID='p_main';
+    normalizePrograms();savePrograms();
   }
   buildMaps();
 }
 function buildMaps(){
   SEANCE={};EXO={};
-  for(const s of PROGRAM){SEANCE[s.id]=s;for(const e of (s.ex||[]))EXO[e.id]=Object.assign({seance:s.id},e);}
+  /* SEANCE et EXO couvrent TOUS les programmes (navigation + historique global) */
+  for(const p of PROGRAMS)for(const s of (p.seances||[])){
+    SEANCE[s.id]=s;
+    for(const e of (s.ex||[]))EXO[e.id]=Object.assign({seance:s.id,program:p.id},e);
+  }
+  const act=activeProgram();
+  PROGRAM=act?act.seances:[]; /* PROGRAM = séances du programme actif (accueil, reco, records) */
 }
-function saveProgram(){try{localStorage.setItem(KEY_PROGRAM,JSON.stringify(PROGRAM))}catch(e){};buildMaps()}
-function resetProgram(){try{localStorage.removeItem(KEY_PROGRAM)}catch(e){};loadProgram()}
-function isCustomProgram(){try{return !!localStorage.getItem(KEY_PROGRAM)}catch(e){return false}}
+function savePrograms(){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){}buildMaps()}
+const saveProgram=savePrograms; /* compat : édition de séance */
+function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
+  const act=activeProgram();if(!act)return;
+  act.seances=regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)),true);
+  normalizePrograms();savePrograms();
+}
+function isCustomProgram(){return true}
+
+/* ---- gestion des programmes ---- */
+function regenIds(seances,keepDefault){
+  for(const s of seances){
+    if(!keepDefault)s.id=uid('s_');
+    for(const e of (s.ex||[])){if(!keepDefault)e.id=uid('e_');}
+  }
+  return seances;
+}
+function blankSeance(){return{id:uid('s_'),tab:'Séance',title:'Nouvelle séance',sub:'',warn:'',ex:[]}}
+function setActiveProgram(pid){if(PROGRAMS.some(p=>p.id===pid)){ACTIVE_PID=pid;savePrograms()}}
+function createProgram(name,fromDefault){
+  const pid=uid('p_');
+  const seances=fromDefault?regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM))):[blankSeance()];
+  PROGRAMS.push({id:pid,name:name||'Nouveau programme',seances});
+  ACTIVE_PID=pid;normalizePrograms();savePrograms();return pid;
+}
+function duplicateProgram(pid){
+  const src=PROGRAMS.find(p=>p.id===pid);if(!src)return;
+  const copy={id:uid('p_'),name:src.name+' (copie)',seances:regenIds(JSON.parse(JSON.stringify(src.seances)))};
+  PROGRAMS.push(copy);ACTIVE_PID=copy.id;normalizePrograms();savePrograms();
+}
+function deleteProgram(pid){
+  if(PROGRAMS.length<=1){toast('Au moins un programme requis');return false}
+  PROGRAMS=PROGRAMS.filter(p=>p.id!==pid);
+  if(ACTIVE_PID===pid)ACTIVE_PID=PROGRAMS[0].id;
+  savePrograms();return true;
+}
+function renameProgram(pid,name){const p=PROGRAMS.find(x=>x.id===pid);if(p&&name){p.name=name;savePrograms()}}
+function addSeance(){const act=activeProgram();if(!act)return null;const s=blankSeance();act.seances.push(s);savePrograms();return s.id;}
+function deleteSeance(sid){const act=activeProgram();if(!act)return;act.seances=act.seances.filter(s=>s.id!==sid);savePrograms();}
+function moveSeance(sid,dir){const act=activeProgram();if(!act)return;const a=act.seances;const i=a.findIndex(s=>s.id===sid);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;const t=a[i];a[i]=a[j];a[j]=t;savePrograms();}
 
 /* ================== RÉGLAGES ================== */
 const KEY_SETTINGS='muscu_settings';
@@ -410,45 +485,95 @@ let route={view:'home',seance:null};
 function go(view,seance){route={view,seance:seance||null};render();window.scrollTo({top:0});}
 
 function render(){
-  const tabFor={home:'home',seance:'home',edit:'home',history:'history',stats:'stats'};
+  const tabFor={home:'home',seance:'home',edit:'programs',history:'history',stats:'stats',programs:'programs'};
   document.querySelectorAll('.tabbtn').forEach(b=>
     b.classList.toggle('on',b.dataset.v===tabFor[route.view]));
   if(route.view==='home')app.innerHTML=homeHTML();
   else if(route.view==='seance')app.innerHTML=seanceHTML(route.seance);
   else if(route.view==='edit')app.innerHTML=editHTML(route.seance);
   else if(route.view==='stats')app.innerHTML=statsHTML();
+  else if(route.view==='programs')app.innerHTML=programsHTML();
   else app.innerHTML=historyHTML();
+  app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
 }
 
-/* ---------- accueil ---------- */
+/* ---------- accueil (dashboard) ---------- */
+function computeStreak(){
+  const days=new Set(DB.workouts.map(w=>w.date));
+  if(!days.size)return 0;
+  let n=0;const d=new Date();d.setHours(0,0,0,0);
+  if(!days.has(isoOf(d))){d.setDate(d.getDate()-1);if(!days.has(isoOf(d)))return 0;}
+  while(days.has(isoOf(d))){n++;d.setDate(d.getDate()-1);}
+  return n;
+}
+function sessionMuscles(s){
+  const p=new Set(),sec=new Set();
+  for(const e of (s.ex||[])){(e.musP||[]).forEach(m=>p.add(m));(e.musS||[]).forEach(m=>sec.add(m));}
+  sec.forEach(m=>{if(p.has(m))sec.delete(m)});
+  return{p,s:sec};
+}
 function homeHTML(){
-  const ws=weekStart(new Date());
-  const wIso=isoOf(ws);
+  const now=new Date();
+  const wIso=isoOf(weekStart(now));
   const weekW=DB.workouts.filter(w=>w.date>=wIso);
   let weekVol=0;weekW.forEach(w=>{weekVol+=workoutStats(w).vol});
+  const streak=computeStreak();
   const reco=recommendSeance();
-  let h='<div class="top"><h1>Muscu</h1><div class="hbtns">'
-   +'<button class="hbtn" data-act="settings">Réglages</button>'
-   +'<button class="hbtn" data-act="data">Données</button></div></div>'
-   +'<div class="subdate">'+new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'</div>'
-   +'<div class="weekline num">Cette semaine : '+weekW.length+' séance'+(weekW.length>1?'s':'')
-   +(weekVol?' · '+fmtKg(weekVol)+' kg':'')+'</div>';
+  const ap=activeProgram();
+  const hour=now.getHours();
+  const greet=hour<12?'Bonjour':(hour<18?'Bon après-midi':'Bonsoir');
+  let h='<div class="dash-top"><div class="dash-hi"><div class="greet">'+greet+'</div>'
+   +'<div class="dash-date">'+now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'</div></div>'
+   +'<div class="hbtns"><button class="hbtn" data-act="settings">Réglages</button>'
+   +'<button class="hbtn" data-act="data">Données</button></div></div>';
   if(DB.active){
     const s=SEANCE[DB.active.seance];
     if(s)h+='<button class="resume" data-act="open" data-s="'+esc(s.id)+'"><span>'+(DB.active.ps?'Séance en pause':'Séance en cours')+' · '+esc(s.tab)
       +'<small>'+esc(s.title)+'</small></span><span class="num" id="elapsed">'+elapsedStr()+'</span></button>';
   }
+  const heroS=reco?SEANCE[reco.id]:(PROGRAM[0]||null);
+  if(heroS&&!DB.active){
+    const sm=sessionMuscles(heroS);
+    const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
+    const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
+    h+='<button class="hero" data-act="open" data-s="'+esc(heroS.id)+'">'
+     +'<div class="hero-fig"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg></div>'
+     +'<div class="hero-main"><div class="hero-k">'+(reco?'SÉANCE DU JOUR':'À L’AFFICHE')+'</div>'
+     +'<div class="hero-title">'+esc(heroS.title)+'</div>'
+     +'<div class="hero-sub">'+esc(heroS.tab)+' · '+heroS.ex.length+' exercices'+(mlist?' · '+esc(mlist):'')+'</div>'
+     +'<div class="hero-row"><span class="hero-cta">Démarrer ›</span>'
+     +'<span class="hero-recup num">récup. '+seanceRecoveryScore(heroS)+' %</span></div>'
+     +'</div></button>';
+  }
+  h+='<div class="statgrid">'
+   +'<div class="statbox"><div class="v num">'+streak+'</div><div class="l">Série · jours</div></div>'
+   +'<div class="statbox"><div class="v num">'+weekW.length+'</div><div class="l">Séances · sem.</div></div>'
+   +'<div class="statbox"><div class="v num">'+fmtKg(weekVol)+'</div><div class="l">kg · sem.</div></div>'
+   +'</div>';
+  h+='<button class="progpill" data-act="programs"><span class="ppl">PROGRAMME</span>'
+   +'<span class="ppn">'+esc(ap?ap.name:'—')+'</span>'
+   +'<span class="ppx">Gérer ›</span></button>';
+  if(!PROGRAM.length){
+    h+='<div class="empty">Ce programme n’a pas encore de séance.<br>Ajoute-en une depuis l’onglet Programmes.'
+     +'<div style="margin-top:18px"><button class="bigbtn" data-act="programs" style="display:inline-block;width:auto;padding:14px 24px">Gérer les programmes</button></div></div>';
+    return h;
+  }
+  h+='<div class="sectitle">Tes séances</div>';
   for(const s of PROGRAM){
     const last=lastWorkoutOf(s.id);
     const isReco=reco&&reco.id===s.id;
-    h+='<button class="scard'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
+    const sm=sessionMuscles(s);
+    const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
+    h+='<button class="scard withfig'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
+     +'<div class="scard-fig"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg></div>'
+     +'<div class="scard-body">'
      +'<div class="srow"><span class="stag">'+esc(s.tab)
      +(isReco?'<span class="recobadge">RECOMMANDÉE</span>':'')
      +'</span><span class="slast">'+(last?daysAgo(last.date):'jamais réalisée')+'</span></div>'
      +'<div class="sname">'+esc(s.title)+'</div>'
      +'<div class="smeta">'+s.ex.length+' exercices · '+esc(s.sub||'')
      +(isReco?' · <span class="num">récup. '+reco.score+' %</span>':'')
-     +'</div></button>';
+     +'</div></div></button>';
   }
   return h;
 }
@@ -493,8 +618,7 @@ function exCardHTML(e,idx,active){
    +(e.ceiling?'<span class="badge">'+esc(e.ceiling)+'</span>':'')
    +'<span class="cdone">FAIT</span></div>'
    +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span></div>'
-   +(e.notes?'<details><summary>Notes</summary><div class="notes">'+esc(e.notes)+'</div></details>':'')
-   +'<a class="vlink" href="'+ytURL(e)+'" target="_blank" rel="noopener">Vidéo technique</a>';
+   +'<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Comment réaliser · muscles ciblés ›</button>';
   if(active){
     const sets=active.ex[e.id]||[];
     const targets=suggestTargets(e);
@@ -579,37 +703,40 @@ function bodySkeleton(){
    +'<rect class="skel" x="43" y="118" width="15" height="86" rx="7"/>'
    +'<rect class="skel" x="62" y="118" width="15" height="86" rx="7"/>';
 }
-function zone(shape,mid){
-  const f=muscleFatigue(mid);
-  const op=(0.08+0.84*f).toFixed(2);
-  return shape.replace('/>',' fill-opacity="'+op+'"/>');
+/* zones musculaires : id -> {côté, formes SVG} (partagé carte récup + fiche exercice) */
+const ZONES={
+ delt_lat:{side:'front',sh:['<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>']},
+ delt_ant:{side:'front',sh:['<ellipse class="zone" cx="42" cy="44" rx="4" ry="5"/>','<ellipse class="zone" cx="78" cy="44" rx="4" ry="5"/>']},
+ pecs:{side:'front',sh:['<ellipse class="zone" cx="50" cy="52" rx="10.5" ry="9"/>','<ellipse class="zone" cx="70" cy="52" rx="10.5" ry="9"/>']},
+ biceps:{side:'front',sh:['<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>']},
+ avant_bras:{side:'front',sh:['<rect class="zone" x="24" y="72" width="8" height="20" rx="4"/>','<rect class="zone" x="88" y="72" width="8" height="20" rx="4"/>']},
+ quadriceps:{side:'front',sh:['<rect class="zone" x="44" y="122" width="13" height="44" rx="6"/>','<rect class="zone" x="63" y="122" width="13" height="44" rx="6"/>']},
+ delt_post:{side:'back',sh:['<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>']},
+ dos:{side:'back',sh:['<path class="zone" d="M44 40 L76 40 L72 78 Q60 84 48 78 Z"/>']},
+ triceps:{side:'back',sh:['<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>']},
+ fessiers:{side:'back',sh:['<ellipse class="zone" cx="51" cy="108" rx="9" ry="9"/>','<ellipse class="zone" cx="69" cy="108" rx="9" ry="9"/>']},
+ ischios:{side:'back',sh:['<rect class="zone" x="44" y="124" width="13" height="36" rx="6"/>','<rect class="zone" x="63" y="124" width="13" height="36" rx="6"/>']},
+ mollets:{side:'back',sh:['<rect class="zone" x="45" y="168" width="11" height="28" rx="5.5"/>','<rect class="zone" x="64" y="168" width="11" height="28" rx="5.5"/>']}
+};
+function silhouette(side,valFn){
+  let s=bodySkeleton();
+  for(const mid in ZONES){
+    const z=ZONES[mid];if(z.side!==side)continue;
+    const v=Math.max(0,Math.min(1,valFn(mid)||0));
+    const op=(0.08+0.84*v).toFixed(2);
+    for(const shape of z.sh)s+=shape.replace('/>',' fill-opacity="'+op+'"/>');
+  }
+  return s;
+}
+function exMuscleMapHTML(musP,musS){
+  const val=mid=>(musP||[]).includes(mid)?1:((musS||[]).includes(mid)?0.45:0);
+  return '<div class="bodymaps exmap">'
+   +'<div class="bmap"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg><div class="bcap">Face</div></div>'
+   +'<div class="bmap"><svg viewBox="0 0 120 210">'+silhouette('back',val)+'</svg><div class="bcap">Dos</div></div></div>';
 }
 function bodyMapHTML(){
-  const front=bodySkeleton()
-   +zone('<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','delt_lat')
-   +zone('<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>','delt_lat')
-   +zone('<ellipse class="zone" cx="42" cy="44" rx="4" ry="5"/>','delt_ant')
-   +zone('<ellipse class="zone" cx="78" cy="44" rx="4" ry="5"/>','delt_ant')
-   +zone('<ellipse class="zone" cx="50" cy="52" rx="10.5" ry="9"/>','pecs')
-   +zone('<ellipse class="zone" cx="70" cy="52" rx="10.5" ry="9"/>','pecs')
-   +zone('<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','biceps')
-   +zone('<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>','biceps')
-   +zone('<rect class="zone" x="24" y="72" width="8" height="20" rx="4"/>','avant_bras')
-   +zone('<rect class="zone" x="88" y="72" width="8" height="20" rx="4"/>','avant_bras')
-   +zone('<rect class="zone" x="44" y="122" width="13" height="44" rx="6"/>','quadriceps')
-   +zone('<rect class="zone" x="63" y="122" width="13" height="44" rx="6"/>','quadriceps');
-  const back=bodySkeleton()
-   +zone('<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','delt_post')
-   +zone('<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>','delt_post')
-   +zone('<path class="zone" d="M44 40 L76 40 L72 78 Q60 84 48 78 Z"/>','dos')
-   +zone('<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','triceps')
-   +zone('<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>','triceps')
-   +zone('<ellipse class="zone" cx="51" cy="108" rx="9" ry="9"/>','fessiers')
-   +zone('<ellipse class="zone" cx="69" cy="108" rx="9" ry="9"/>','fessiers')
-   +zone('<rect class="zone" x="44" y="124" width="13" height="36" rx="6"/>','ischios')
-   +zone('<rect class="zone" x="63" y="124" width="13" height="36" rx="6"/>','ischios')
-   +zone('<rect class="zone" x="45" y="168" width="11" height="28" rx="5.5"/>','mollets')
-   +zone('<rect class="zone" x="64" y="168" width="11" height="28" rx="5.5"/>','mollets');
+  const front=silhouette('front',muscleFatigue);
+  const back=silhouette('back',muscleFatigue);
   let bars='';
   const list=MUSCLES.map(m=>({m,rec:muscleRecovery(m.id)})).sort((a,b)=>a.rec-b.rec);
   for(const x of list){
@@ -624,6 +751,29 @@ function bodyMapHTML(){
    +'</div>'
    +'<div class="maplegend">Zone claire = muscle en récupération · % = niveau de fraîcheur</div>'
    +bars+'</div>';
+}
+/* fiche exercice : visuel muscles + comment réaliser + démo */
+function showExercise(exId){
+  const e=EXO[exId];if(!e)return;
+  const musP=e.musP||[],musS=e.musS||[];
+  const steps=String(e.notes||'').split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9])/).map(t=>t.trim()).filter(t=>t.length>1);
+  let chips='';
+  musP.forEach(m=>{chips+='<span class="mchip pri">'+esc((MUSCLE_BY_ID[m]||{}).label||m)+'</span>'});
+  musS.forEach(m=>{chips+='<span class="mchip">'+esc((MUSCLE_BY_ID[m]||{}).label||m)+'</span>'});
+  let ref;
+  if(e.refText)ref=esc(e.refText);
+  else if(e.ref==null)ref=esc(e.unit||'—');
+  else ref=fmtN(e.ref)+' '+esc(e.unit||'kg');
+  const stepsHtml=steps.length?('<div class="rectitle">Comment réaliser</div><ol class="steps">'+steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'):'';
+  sheet.innerHTML='<h2>'+esc(e.name)+'</h2>'
+   +(e.ceiling?'<div class="sp"><span class="badge">'+esc(e.ceiling)+'</span></div>':'')
+   +exMuscleMapHTML(musP,musS)
+   +(chips?'<div class="mchips">'+chips+'</div>':'')
+   +'<div class="sumgrid"><div class="sumbox"><div class="v num">'+ref+'</div><div class="l">Charge réf.</div></div>'
+   +'<div class="sumbox"><div class="v num">'+e.sets+' × '+esc(e.reps)+'</div><div class="l">Objectif</div></div></div>'
+   +stepsHtml
+   +'<div class="sbtns"><a class="sbtn pri" href="'+ytURL(e)+'" target="_blank" rel="noopener">Voir la démonstration vidéo</a></div>';
+  openSheet();
 }
 
 /* ---------- stats ---------- */
@@ -762,6 +912,66 @@ function collectEdit(sid){
   return true;
 }
 
+/* ---------- gestion des programmes (vue) ---------- */
+function programsHTML(){
+  const ap=activeProgram();
+  let h='<div class="top"><h1>Programmes</h1></div>'
+   +'<div class="subdate">'+PROGRAMS.length+' programme'+(PROGRAMS.length>1?'s':'')+' · glisse, crée, duplique</div>';
+  for(const p of PROGRAMS){
+    const on=p.id===ACTIVE_PID;
+    const nS=p.seances.length,nE=p.seances.reduce((a,s)=>a+(s.ex?s.ex.length:0),0);
+    h+='<div class="pcard'+(on?' on':'')+'">'
+     +'<div class="prow"><div class="pinfo">'
+     +'<div class="pname">'+esc(p.name)+(on?'<span class="recobadge">ACTIF</span>':'')+'</div>'
+     +'<div class="smeta">'+nS+' séance'+(nS>1?'s':'')+' · '+nE+' exercice'+(nE>1?'s':'')+'</div></div></div>'
+     +'<div class="pactions">'
+     +(on?'<span class="pa ghosted">Programme actif</span>':'<button class="pa pri" data-act="pactivate" data-p="'+esc(p.id)+'">Activer</button>')
+     +'<button class="pa" data-act="prename" data-p="'+esc(p.id)+'">Renommer</button>'
+     +'<button class="pa" data-act="pdup" data-p="'+esc(p.id)+'">Dupliquer</button>'
+     +(PROGRAMS.length>1?'<button class="pa danger" data-act="pdel" data-p="'+esc(p.id)+'">Supprimer</button>':'')
+     +'</div></div>';
+  }
+  h+='<button class="bigbtn" data-act="pnew">+ Nouveau programme</button>';
+  h+='<div class="sectitle">Séances · '+esc(ap?ap.name:'')+'</div>';
+  if(ap&&ap.seances.length){
+    ap.seances.forEach(s=>{
+      h+='<div class="scard mgmt">'
+       +'<div class="srow"><span class="stag">'+esc(s.tab)+'</span>'
+       +'<div class="ebtns">'
+       +'<button class="ebtn" data-act="seup" data-s="'+esc(s.id)+'" title="Monter">↑</button>'
+       +'<button class="ebtn" data-act="sedown" data-s="'+esc(s.id)+'" title="Descendre">↓</button>'
+       +'<button class="ebtn" data-act="editseance" data-s="'+esc(s.id)+'" title="Modifier">✎</button>'
+       +'<button class="ebtn" data-act="sdelseance" data-s="'+esc(s.id)+'" title="Supprimer">✕</button>'
+       +'</div></div>'
+       +'<div class="sname">'+esc(s.title)+'</div>'
+       +'<div class="smeta">'+(s.ex?s.ex.length:0)+' exercice'+((s.ex&&s.ex.length>1)?'s':'')+(s.sub?' · '+esc(s.sub):'')+'</div>'
+       +'</div>';
+    });
+  }else{
+    h+='<div class="hempty">Aucune séance dans ce programme.</div>';
+  }
+  h+='<button class="bigbtn ghost" data-act="saddseance">+ Nouvelle séance</button>';
+  return h;
+}
+function showNewProgram(){
+  sheet.innerHTML='<h2>Nouveau programme</h2>'
+   +'<div class="sp">Nomme ton programme et choisis un point de départ.</div>'
+   +'<div class="efield"><label>Nom</label><input id="npName" placeholder="ex : Prise de masse" value="Nouveau programme"></div>'
+   +'<div class="sbtns"><button class="sbtn pri" id="npBlank">Vierge</button><button class="sbtn" id="npDefault">Depuis le modèle</button></div>';
+  openSheet();
+  const mk=(fromDefault)=>{const name=(document.getElementById('npName').value||'').trim()||'Nouveau programme';createProgram(name,fromDefault);closeSheet();go('programs');toast('Programme créé');};
+  document.getElementById('npBlank').addEventListener('click',()=>mk(false));
+  document.getElementById('npDefault').addEventListener('click',()=>mk(true));
+}
+function showRenameProgram(pid){
+  const p=PROGRAMS.find(x=>x.id===pid);if(!p)return;
+  sheet.innerHTML='<h2>Renommer</h2>'
+   +'<div class="efield"><label>Nom du programme</label><input id="rnName" value="'+esc(p.name)+'"></div>'
+   +'<div class="sbtns"><button class="sbtn pri" id="rnOk">Enregistrer</button></div>';
+  openSheet();
+  document.getElementById('rnOk').addEventListener('click',()=>{const v=(document.getElementById('rnName').value||'').trim();if(v)renameProgram(pid,v);closeSheet();render();});
+}
+
 /* ================== SÉANCE ACTIVE ================== */
 function startWorkout(sid){
   if(DB.active&&DB.active.seance!==sid){
@@ -843,6 +1053,18 @@ app.addEventListener('click',ev=>{
   else if(act==='pause')togglePause();
   else if(act==='data')showData();
   else if(act==='settings')showSettings();
+  else if(act==='exinfo')showExercise(actEl.dataset.ex);
+  else if(act==='programs')go('programs');
+  else if(act==='pactivate'){setActiveProgram(actEl.dataset.p);toast('Programme activé');go('home');}
+  else if(act==='pnew')showNewProgram();
+  else if(act==='prename')showRenameProgram(actEl.dataset.p);
+  else if(act==='pdup'){duplicateProgram(actEl.dataset.p);toast('Programme dupliqué');render();}
+  else if(act==='pdel'){if(window.confirm('Supprimer ce programme ? (l’historique de séances déjà réalisées est conservé)')){if(deleteProgram(actEl.dataset.p))render();}}
+  else if(act==='editseance')go('edit',actEl.dataset.s);
+  else if(act==='saddseance'){const sid=addSeance();if(sid)go('edit',sid);}
+  else if(act==='sdelseance'){if(window.confirm('Supprimer cette séance du programme ?')){deleteSeance(actEl.dataset.s);render();}}
+  else if(act==='seup'){moveSeance(actEl.dataset.s,-1);render();}
+  else if(act==='sedown'){moveSeance(actEl.dataset.s,1);render();}
   else if(act==='edit')go('edit',route.seance);
   else if(act==='esave'){if(collectEdit(route.seance)){toast('Séance enregistrée');go('seance',route.seance)}}
   else if(act==='eadd'){
@@ -981,7 +1203,7 @@ function showSettings(){
    +'<div class="efield"><label>Poids corporel (kg)</label><input id="setPoids" inputmode="decimal" value="'+(SETTINGS.poids??'')+'" style="width:100%;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none"></div>'
    +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
    +'<div class="sbtns"><button class="sbtn pri" id="setOk">Fermer</button></div>'
-   +'<div class="about">Muscu v'+APP_VERSION+(isCustomProgram()?' · programme personnalisé':' · programme par défaut')+'</div>';
+   +'<div class="about">Dako v'+APP_VERSION+' · '+esc((activeProgram()||{}).name||'')+'</div>';
   openSheet();
   document.getElementById('restChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
@@ -1006,9 +1228,10 @@ function exportPayload(){
       muscles_principaux:e.musP||[],muscles_secondaires:e.musS||[]};
   const recup={};
   for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
-  return{app:'muscu',version:4,exporte_le:new Date().toISOString(),
+  return{app:'dako',version:5,exporte_le:new Date().toISOString(),
     profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids}),
     reglages:SETTINGS,recuperation_musculaire:recup,
+    programmes:PROGRAMS,programme_actif:ACTIVE_PID,
     programme:PROGRAM,exercices:exos,seances:DB.workouts};
 }
 function showData(){
@@ -1037,13 +1260,15 @@ async function doExport(){
 function doImport(){
   let data;
   try{data=JSON.parse(document.getElementById('shArea').value)}catch(e){toast('JSON invalide');return}
-  if(Array.isArray(data.programme)&&data.programme.length&&data.programme.every(s=>s&&s.id&&Array.isArray(s.ex))){
-    PROGRAM=data.programme;
-    for(const s of PROGRAM)for(const e of s.ex){
-      if(!Array.isArray(e.musP))e.musP=DEFAULT_EX[e.id]?DEFAULT_EX[e.id].musP.slice():[];
-      if(!Array.isArray(e.musS))e.musS=DEFAULT_EX[e.id]?DEFAULT_EX[e.id].musS.slice():[];
-    }
-    saveProgram();
+  if(Array.isArray(data.programmes)&&data.programmes.length&&data.programmes.every(p=>p&&Array.isArray(p.seances))){
+    /* nouveau format multi-programmes */
+    PROGRAMS=data.programmes;
+    ACTIVE_PID=data.programme_actif||PROGRAMS[0].id;
+    normalizePrograms();savePrograms();
+  }else if(Array.isArray(data.programme)&&data.programme.length&&data.programme.every(s=>s&&s.id&&Array.isArray(s.ex))){
+    /* ancien format : remplace les séances du programme actif */
+    const act=activeProgram();
+    if(act){act.seances=data.programme;normalizePrograms();savePrograms();}
   }
   let workouts=null;
   if(Array.isArray(data.seances))workouts=data.seances;
@@ -1100,3 +1325,11 @@ if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
 }
 
 render();
+
+/* ================== SPLASH ================== */
+(function(){
+  const sp=document.getElementById('splash');
+  if(!sp)return;
+  const hide=()=>{sp.classList.add('hide');setTimeout(()=>{if(sp&&sp.parentNode)sp.parentNode.removeChild(sp)},600)};
+  setTimeout(hide,1100);
+})();
