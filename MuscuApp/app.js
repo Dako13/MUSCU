@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.6.0';
+const APP_VERSION='4.8.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -1871,10 +1871,15 @@ function exportPayload(){
 }
 function showData(){
   sheet.innerHTML='<h2>Données</h2>'
-   +'<div class="sp">Exporter copie tout (profil, programme, historique, récupération) en JSON — utilisable par un coach IA. Importer restaure depuis un JSON collé ci-dessous.</div>'
+   +'<div class="sp">Donne tes données à un coach IA, ou sauvegarde / restaure ton suivi.</div>'
+   +'<div class="rectitle">Coach IA · gratuit</div>'
+   +'<div class="sp" style="margin-bottom:10px">Copie tout ton suivi <b>avec une consigne prête à coller</b>. Ouvre ensuite l’app Claude (ou claude.ai), colle, et pose tes questions.</div>'
+   +'<div class="sbtns"><button class="sbtn pri" id="doCoach">Copier pour mon coach IA</button></div>'
+   +'<div class="rectitle" style="margin-top:20px">Sauvegarde / restauration</div>'
    +'<textarea class="io" id="shArea" spellcheck="false" placeholder="Coller ici le JSON à importer…"></textarea>'
-   +'<div class="sbtns"><button class="sbtn pri" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
+   +'<div class="sbtns"><button class="sbtn" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
+  document.getElementById('doCoach').addEventListener('click',doCoachCopy);
   document.getElementById('doExport').addEventListener('click',doExport);
   document.getElementById('doImport').addEventListener('click',doImport);
 }
@@ -1890,6 +1895,28 @@ async function doExport(){
     try{ok=document.execCommand('copy')}catch(e){}
   }
   toast(ok?'Données copiées dans le presse-papier':'Copie auto impossible — copie le texte sélectionné');
+  if(ok)closeSheet();
+}
+const COACH_PROMPT=
+ 'Tu es mon coach de musculation personnel. Ci-dessous, toutes mes données d’entraînement exportées depuis mon app Dako au format JSON : profil, programme actif, historique de séances, records, récupération musculaire et bilan forme (poids / mensurations).\n\n'
+ +'À partir de ces données :\n'
+ +'- analyse ma progression et mes tendances ;\n'
+ +'- repère mes points forts, mes points faibles et d’éventuels plateaus ;\n'
+ +'- vérifie l’équilibre entre groupes musculaires et le volume par muscle ;\n'
+ +'- propose des pistes concrètes (charges, répétitions, choix d’exercices, organisation des séances).\n\n'
+ +'Pose-moi des questions si besoin avant de conclure. Réponds en français.\n\n'
+ +'=== MES DONNÉES (JSON) ===\n';
+async function doCoachCopy(){
+  const txt=COACH_PROMPT+JSON.stringify(exportPayload(),null,1);
+  let ok=false;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    try{await navigator.clipboard.writeText(txt);ok=true}catch(e){}
+  }
+  if(!ok){
+    const a=document.getElementById('shArea');
+    if(a){a.value=txt;a.focus();a.select();a.setSelectionRange(0,txt.length);try{ok=document.execCommand('copy')}catch(e){}}
+  }
+  toast(ok?'Copié — colle dans Claude (app ou claude.ai)':'Copie impossible — copie le texte sélectionné');
   if(ok)closeSheet();
 }
 function doImport(){
