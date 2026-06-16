@@ -126,7 +126,7 @@ input,textarea,select{font:inherit;color:inherit}
 }
 .card.complete{border-color:var(--ac-soft);background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(135deg,rgba(225,29,42,.25),transparent) border-box;border:1px solid transparent}
 .chead{display:flex;align-items:flex-start;gap:10px}
-.cnum{font-family:var(--font-head);font-size:.86rem;color:var(--faint);font-weight:600;padding-top:3px}
+.cnum{flex:0 0 auto;width:24px;height:24px;border-radius:8px;background:var(--ac-soft);color:var(--ac);font-family:var(--font-head);font-size:.9rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
 .cname{font-size:1.04rem;font-weight:600;letter-spacing:-.01em;line-height:1.38;flex:1}
 .badge{
   flex:0 0 auto;font-family:var(--font-head);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
@@ -138,12 +138,12 @@ input,textarea,select{font:inherit;color:inherit}
   background:var(--ac);color:var(--on-ac);border-radius:7px;padding:3px 8px;margin-top:2px;white-space:nowrap;
 }
 .card.complete .cdone{display:inline-block}
-.cmeta{display:flex;align-items:baseline;gap:14px;padding:12px 0 2px;margin-left:22px}
+.cmeta{display:flex;align-items:baseline;gap:14px;padding:12px 0 2px;margin-left:34px}
 .refval{font-family:var(--font-head);font-size:1.85rem;font-weight:700;letter-spacing:-.01em;color:var(--ac)}
 .refval.txt{font-size:1.08rem;font-weight:600;color:var(--dim)}
 .refunit{font-size:.76rem;color:var(--dim);margin-left:5px}
 .target{font-size:.82rem;color:var(--dim)}
-details{margin-left:22px}
+details{margin-left:34px}
 summary{
   list-style:none;font-size:.78rem;color:var(--faint);
   padding:8px 0;transition:color .18s;display:flex;align-items:center;gap:6px;
@@ -154,7 +154,7 @@ details[open] summary::before{transform:rotate(45deg)}
 .notes{font-size:.86rem;color:var(--dim);line-height:1.6;padding:2px 0 8px;white-space:pre-line}
 .vlink{
   display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--faint);
-  padding:7px 0;margin-left:22px;text-decoration:none;transition:color .18s;
+  padding:7px 0;margin-left:34px;text-decoration:none;transition:color .18s;
 }
 .vlink:active{color:var(--ac)}
 .vlink::before{
@@ -188,7 +188,7 @@ details[open] summary::before{transform:rotate(45deg)}
 @keyframes prPop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
 .addset{
   font-size:.84rem;color:var(--dim);font-weight:600;
-  padding:11px 0 2px;margin-left:22px;transition:color .18s;
+  padding:11px 0 2px;margin-left:34px;transition:color .18s;
 }
 .addset:active{color:var(--ac)}
 
