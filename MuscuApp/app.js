@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.8.0';
+const APP_VERSION='4.9.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -262,7 +262,7 @@ function buildMaps(){
   const act=activeProgram();
   PROGRAM=act?act.seances:[]; /* PROGRAM = séances du programme actif (accueil, reco, records) */
 }
-function savePrograms(){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){}mirrorSoon();buildMaps()}
+function savePrograms(){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){storeFailed()}mirrorSoon();buildMaps()}
 const saveProgram=savePrograms; /* compat : édition de séance */
 function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
   const act=activeProgram();if(!act)return;
@@ -318,7 +318,7 @@ function loadSettings(){
     objectif:(typeof s.objectif==='string'?s.objectif:'')
   };
 }
-function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){}mirrorSoon()}
+function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
 
 /* ================== BILAN FORME (poids + mensurations) ================== */
 const MEASURES=[
@@ -341,7 +341,7 @@ function loadBody(){
   a.sort((x,y)=>x.date<y.date?-1:1);
   return a;
 }
-function saveBody(){try{localStorage.setItem(KEY_BODY,JSON.stringify(BODY))}catch(e){}mirrorSoon()}
+function saveBody(){try{localStorage.setItem(KEY_BODY,JSON.stringify(BODY))}catch(e){storeFailed()}mirrorSoon()}
 function addBody(entry){
   const i=BODY.findIndex(b=>b.date===entry.date);
   if(i>=0)BODY[i]={date:entry.date,vals:Object.assign({},BODY[i].vals,entry.vals)};
@@ -471,7 +471,9 @@ function loadDB(){
   db.workouts.sort((a,b)=>a.date<b.date?-1:1);
   return db;
 }
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}mirrorSoon()}
+var _storeWarned=false;
+function storeFailed(){if(_storeWarned)return;_storeWarned=true;try{toast('⚠ Sauvegarde impossible — pense à exporter tes données (Réglages › Données)')}catch(e){}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
 
 /* ===== Sauvegarde durable — miroir IndexedDB (anti-purge iOS) =====
    localStorage reste le stockage de travail (synchrone). À chaque
@@ -1266,6 +1268,27 @@ function showExPicker(){
   openSheet();
   sheet.querySelectorAll('[data-act="exsel"]').forEach(b=>b.addEventListener('click',()=>{STATEX=b.dataset.ex;closeSheet();render();}));
 }
+/* ---------- plateaux (coach local : charge max stagnante, sans IA) ---------- */
+function plateauCard(){
+  const flagged=[],seen={};
+  for(const s of PROGRAM)for(const e of s.ex){
+    if(seen[e.id])continue;seen[e.id]=1;
+    if(e.ceiling)continue; /* exercice plafonné : stagnation de charge voulue */
+    const pts=exHistory(e.id).map(en=>({date:en.date,m:maxW(en.sets)})).filter(x=>x.m!=null);
+    if(pts.length<3)continue;
+    if(diffDays(pts[pts.length-1].date)>21)continue; /* plus entraîné récemment → on ignore */
+    let best=-1,bestIdx=0;
+    pts.forEach((p,i)=>{if(p.m>best){best=p.m;bestIdx=i}});
+    const since=diffDays(pts[bestIdx].date),sessionsSince=pts.length-1-bestIdx;
+    if(since>=28&&sessionsSince>=2)flagged.push({name:e.name,tab:s.tab,w:best,wk:Math.round(since/7)});
+  }
+  if(!flagged.length)return '';
+  flagged.sort((a,b)=>b.wk-a.wk);
+  let h='<div class="reccard"><div class="charttitle">Plateaux · à débloquer</div>';
+  for(const f of flagged)
+    h+='<div class="recrow"><span class="rn">'+esc(f.tab)+' · '+esc(f.name)+'</span><span class="rv num">'+fmtN(f.w)+' kg · '+f.wk+' sem</span></div>';
+  return h+'<div class="maplegend" style="text-align:left;padding:8px 2px 0">Charge max stable depuis ≥ 4 semaines. Pistes : varier l’angle ou la machine, rest-pause, tempo plus lent, ou une semaine de décharge. (Progresser en répétitions compte aussi.)</div></div>';
+}
 
 /* ---------- stats ---------- */
 function statsHTML(){
@@ -1302,6 +1325,8 @@ function statsHTML(){
   h+='</div>';
   /* progression par exercice (courbe de charge max + record) */
   h+=exProgressCard();
+  /* plateaux : charge max stagnante ≥ 4 sem (coach local, sans IA) */
+  h+=plateauCard();
   /* tonnage hebdomadaire — 8 dernières semaines */
   const weeks=[];
   for(let i=7;i>=0;i--){
@@ -1752,11 +1777,22 @@ app.addEventListener('input',ev=>{
 
 /* ================== MINUTEUR DE REPOS ================== */
 const tbar=document.getElementById('timerbar'),tleftEl=document.getElementById('tleft'),tlabel=document.getElementById('tlabel');
-let tInt=null,tEndAt=0,audioCtx=null;
+let tInt=null,tEndAt=0,audioCtx=null,wakeLock=null;
+/* Wake Lock : garde l'écran allumé pendant le repos (sinon le minuteur
+   s'interrompt à la mise en veille). Auto-relâché en arrière-plan → repris
+   au retour si le minuteur tourne encore. */
+async function acquireWake(){
+  if(!('wakeLock'in navigator))return;
+  try{wakeLock=await navigator.wakeLock.request('screen')}catch(e){wakeLock=null}
+}
+function releaseWake(){if(wakeLock){try{wakeLock.release()}catch(e){}wakeLock=null}}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&tInt)acquireWake();
+});
 function startTimer(label,rest){
   const sec=(rest!=null&&rest>0)?rest:SETTINGS.rest;
   tlabel.textContent=label||'Repos';
-  tbar.classList.add('on');tbar.classList.remove('fin');
+  tbar.classList.add('on');tbar.classList.remove('fin');acquireWake();
   tEndAt=Date.now()+sec*1000;
   tleftEl.textContent=fmtT(sec);
   if(!audioCtx){try{audioCtx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
@@ -1784,7 +1820,7 @@ function timerDone(){
   }catch(e){}
   setTimeout(()=>{if(!tInt)stopTimer()},4000);
 }
-function stopTimer(){clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin')}
+function stopTimer(){clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake()}
 document.getElementById('tplus').addEventListener('click',()=>{
   if(!tInt)return;tEndAt+=30000;tleftEl.textContent=fmtT((tEndAt-Date.now())/1000);
 });
