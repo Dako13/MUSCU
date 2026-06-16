@@ -48,9 +48,9 @@ input,textarea,select{font:inherit;color:inherit}
   line-height:1.04;
 }
 .top h1::after{content:"";display:inline-block;width:.34em;height:.34em;margin-left:.12em;border-radius:2px;background:var(--ac);box-shadow:0 0 12px var(--ac-glow);vertical-align:.04em}
-.top .hbtns{display:flex;gap:18px}
-.top .hbtn{font-size:.84rem;color:var(--dim);padding:6px 0;transition:color .18s}
-.top .hbtn:active{color:var(--ac)}
+.top .hbtns,.dash-top .hbtns{display:flex;gap:18px}
+.top .hbtn,.dash-top .hbtn{font-size:.84rem;color:var(--dim);padding:6px 0;transition:color .18s}
+.top .hbtn:active,.dash-top .hbtn:active{color:var(--ac)}
 .subdate{font-size:.82rem;color:var(--faint);padding:4px 4px 8px;text-transform:capitalize}
 .weekline{font-size:.8rem;color:var(--dim);padding:0 4px 18px}
 
