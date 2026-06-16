@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.9.0';
+const APP_VERSION='4.10.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -315,7 +315,8 @@ function loadSettings(){
     poids:numOrNull(s.poids)||PROFILE.poids_kg,
     taille:intOrNull(s.taille)||PROFILE.taille_cm,
     age:intOrNull(s.age)||PROFILE.age,
-    objectif:(typeof s.objectif==='string'?s.objectif:'')
+    objectif:(typeof s.objectif==='string'?s.objectif:''),
+    salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air'
   };
 }
 function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
@@ -1867,6 +1868,9 @@ function showSettings(){
    +'<div class="efield"><label>Âge</label><input id="setAge" inputmode="numeric" value="'+(SETTINGS.age??'')+'" style="'+inp+'"></div>'
    +'</div>'
    +'<div class="efield"><label>Objectif</label><input id="setObj" placeholder="ex : prise de masse" value="'+esc(SETTINGS.objectif||'')+'" style="'+inp+'"></div>'
+   +'<div class="efield"><label>Salle (le coach adapte les exos au matériel)</label><div class="chips" id="salleChips" style="flex-wrap:wrap">'
+   +['On Air','Basic-Fit','Fitness Park','Autre'].map(v=>'<button class="chip'+(SETTINGS.salle===v?' on':'')+'" data-salle="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('')
+   +'</div></div>'
    +'<div class="rectitle">Outils</div>'
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
    +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
@@ -1882,6 +1886,11 @@ function showSettings(){
   document.getElementById('setTaille').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.taille=v;saveSettings()});
   document.getElementById('setAge').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.age=v;saveSettings()});
   document.getElementById('setObj').addEventListener('input',ev=>{SETTINGS.objectif=ev.target.value.trim();saveSettings()});
+  document.getElementById('salleChips').addEventListener('click',ev=>{
+    const c=ev.target.closest('.chip');if(!c)return;
+    SETTINGS.salle=c.dataset.salle;saveSettings();
+    document.querySelectorAll('#salleChips .chip').forEach(x=>x.classList.toggle('on',x===c));
+  });
   document.getElementById('setCalc').addEventListener('click',showCalculators);
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
@@ -1900,22 +1909,25 @@ function exportPayload(){
   const recup={};
   for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
   return{app:'dako',version:6,exporte_le:new Date().toISOString(),
-    profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode}),
+    profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode,salle:SETTINGS.salle}),
     reglages:SETTINGS,recuperation_musculaire:recup,
     programmes:PROGRAMS,programme_actif:ACTIVE_PID,
     programme:PROGRAM,exercices:exos,seances:DB.workouts,bilan_forme:BODY};
 }
 function showData(){
   sheet.innerHTML='<h2>Données</h2>'
-   +'<div class="sp">Donne tes données à un coach IA, ou sauvegarde / restaure ton suivi.</div>'
+   +'<div class="sp">Lance ton coach IA gratuit (app Claude / claude.ai), ou sauvegarde / restaure ton suivi.</div>'
    +'<div class="rectitle">Coach IA · gratuit</div>'
-   +'<div class="sp" style="margin-bottom:10px">Copie tout ton suivi <b>avec une consigne prête à coller</b>. Ouvre ensuite l’app Claude (ou claude.ai), colle, et pose tes questions.</div>'
-   +'<div class="sbtns"><button class="sbtn pri" id="doCoach">Copier pour mon coach IA</button></div>'
+   +'<div class="sp" style="margin-bottom:10px"><b>1.</b> Copie le prompt coach et colle-le dans Claude. <b>2.</b> Colle ensuite ton programme et/ou ton historique quand il les demande.</div>'
+   +'<div class="sbtns"><button class="sbtn pri" id="cPrompt">1 · Prompt coach</button></div>'
+   +'<div class="sbtns" style="margin-top:8px"><button class="sbtn" id="cProg">2 · Mon programme</button><button class="sbtn" id="cHist">2 · Mon historique</button></div>'
    +'<div class="rectitle" style="margin-top:20px">Sauvegarde / restauration</div>'
    +'<textarea class="io" id="shArea" spellcheck="false" placeholder="Coller ici le JSON à importer…"></textarea>'
    +'<div class="sbtns"><button class="sbtn" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
-  document.getElementById('doCoach').addEventListener('click',doCoachCopy);
+  document.getElementById('cPrompt').addEventListener('click',()=>clipCopy(COACH_PROMPT,'Prompt coach copié — colle-le dans Claude'));
+  document.getElementById('cProg').addEventListener('click',()=>clipCopy(coachProgramText(),'Programme copié — colle-le après le prompt'));
+  document.getElementById('cHist').addEventListener('click',()=>clipCopy(coachHistoryText(),'Historique copié — colle-le après le prompt'));
   document.getElementById('doExport').addEventListener('click',doExport);
   document.getElementById('doImport').addEventListener('click',doImport);
 }
@@ -1934,16 +1946,24 @@ async function doExport(){
   if(ok)closeSheet();
 }
 const COACH_PROMPT=
- 'Tu es mon coach de musculation personnel. Ci-dessous, toutes mes données d’entraînement exportées depuis mon app Dako au format JSON : profil, programme actif, historique de séances, records, récupération musculaire et bilan forme (poids / mensurations).\n\n'
- +'À partir de ces données :\n'
- +'- analyse ma progression et mes tendances ;\n'
- +'- repère mes points forts, mes points faibles et d’éventuels plateaus ;\n'
- +'- vérifie l’équilibre entre groupes musculaires et le volume par muscle ;\n'
- +'- propose des pistes concrètes (charges, répétitions, choix d’exercices, organisation des séances).\n\n'
- +'Pose-moi des questions si besoin avant de conclure. Réponds en français.\n\n'
- +'=== MES DONNÉES (JSON) ===\n';
-async function doCoachCopy(){
-  const txt=COACH_PROMPT+JSON.stringify(exportPayload(),null,1);
+ 'Tu es mon coach personnel de musculation, du niveau des meilleurs préparateurs en bodybuilding et hypertrophie. Tu es exigeant, précis et bienveillant, et tu raisonnes à partir de la science de l’entraînement : surcharge progressive, volume hebdomadaire par muscle (repères ~10–20 séries/semaine, de MEV à MRV), proximité de l’échec (RIR / RPE), sélection et exécution des exercices, périodisation, semaines de décharge, récupération, sommeil et bases de nutrition.\n\n'
+ +'CONTEXTE IMPORTANT :\n'
+ +'- Je m’entraîne en salle commerciale et j’ALTERNE entre deux salles : On Air Fitness et Basic-Fit. Le matériel diffère d’une salle à l’autre. Quand tu prescris ou ajustes un exercice, propose toujours une option réalisable avec le matériel réellement disponible dans ma salle du jour, et donne des substitutions (machine ⇄ haltères ⇄ poulie ⇄ charge libre) si une machine n’existe pas. Demande-moi dans quelle salle je suis si ce n’est pas précisé.\n'
+ +'- Juste après ce message, je peux te coller la STRUCTURE DE MON PROGRAMME et/ou mon HISTORIQUE de séances (exportés depuis mon app Dako). Sers-t’en comme base de travail.\n\n'
+ +'AVANT DE PRESCRIRE QUOI QUE CE SOIT, pose-moi des questions pour bien me cerner :\n'
+ +'- mon OBJECTIF principal (prise de masse, recomposition, force…) et mes priorités (muscles en retard) ;\n'
+ +'- mon niveau et mon ancienneté en musculation ;\n'
+ +'- ma fréquence et mes jours d’entraînement, le temps par séance ;\n'
+ +'- mes blessures, douleurs et limitations (j’en ai — demande-les explicitement et adapte) ;\n'
+ +'- ma salle du jour et le matériel dont je dispose ;\n'
+ +'- mes préférences et ce que je n’aime pas faire.\n\n'
+ +'ENSUITE, agis comme un vrai coach qui me suit dans la durée :\n'
+ +'- analyse ma progression et mon volume par muscle, repère les plateaux et propose des ajustements concrets (charges, reps, RIR, choix d’exercices, organisation des séances) ;\n'
+ +'- explique brièvement le POURQUOI et donne des consignes techniques claires ;\n'
+ +'- propose une semaine de décharge quand c’est pertinent ;\n'
+ +'- reste réaliste et sécuritaire : pas de conseil médical ; si douleur articulaire ou tendineuse, adapte ou oriente vers un professionnel.\n\n'
+ +'Réponds en français, de façon structurée et actionnable. Commence par te présenter en UNE phrase, puis pose-moi tes premières questions (ou, si je t’ai déjà donné mes infos et mes données, lance directement l’analyse).';
+async function clipCopy(txt,okMsg){
   let ok=false;
   if(navigator.clipboard&&navigator.clipboard.writeText){
     try{await navigator.clipboard.writeText(txt);ok=true}catch(e){}
@@ -1952,8 +1972,41 @@ async function doCoachCopy(){
     const a=document.getElementById('shArea');
     if(a){a.value=txt;a.focus();a.select();a.setSelectionRange(0,txt.length);try{ok=document.execCommand('copy')}catch(e){}}
   }
-  toast(ok?'Copié — colle dans Claude (app ou claude.ai)':'Copie impossible — copie le texte sélectionné');
-  if(ok)closeSheet();
+  toast(ok?(okMsg||'Copié'):'Copie impossible — copie le texte sélectionné');
+}
+function coachProgramText(){
+  const ap=activeProgram();
+  let t='=== STRUCTURE DE MON PROGRAMME ===\n';
+  t+='Salle actuelle : '+(SETTINGS.salle||'?')+'\n';
+  t+='Profil : '+(SETTINGS.poids||'?')+' kg, '+(SETTINGS.taille||'?')+' cm, '+(SETTINGS.age||'?')+' ans'+(SETTINGS.objectif?' · objectif : '+SETTINGS.objectif:'')+'\n';
+  t+='Programme : '+(ap?ap.name:'—')+'\n';
+  for(const s of PROGRAM){
+    t+='\n['+s.tab+'] '+s.title+(s.sub?' ('+s.sub+')':'')+'\n';
+    s.ex.forEach((e,i)=>{
+      const ref=e.refText||(e.ref!=null?fmtN(e.ref)+' '+(e.unit||'kg'):(e.unit||''));
+      const mus=(e.musP||[]).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(', ');
+      t+=' '+(i+1)+'. '+e.name+' — '+e.sets+'×'+e.reps+(ref?' — réf '+ref:'')+(mus?' — '+mus:'')+(e.ceiling?' — '+e.ceiling:'')+'\n';
+      if(e.notes)t+='     '+e.notes+'\n';
+    });
+    if(s.warn)t+='     ⚠ '+s.warn+'\n';
+  }
+  return t;
+}
+function coachHistoryText(){
+  let t='=== MON HISTORIQUE (séances récentes) ===\n';
+  t+='Salle actuelle : '+(SETTINGS.salle||'?')+'\n';
+  const arr=DB.workouts.slice(-15).reverse();
+  if(!arr.length)return t+'(aucune séance enregistrée pour l’instant)\n';
+  for(const w of arr){
+    const s=SEANCE[w.seance];
+    t+='\n'+fmtDateShort(w.date)+' · '+(s?s.tab+' '+s.title:w.seance)+(w.dur?' · '+fmtDur(w.dur):'')+'\n';
+    for(const exId in (w.ex||{})){
+      const sets=w.ex[exId].filter(x=>x.done&&(x.w!=null||x.r!=null));
+      if(!sets.length)continue;
+      t+='  '+(EXO[exId]?EXO[exId].name:exId)+' : '+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'\n';
+    }
+  }
+  return t;
 }
 function doImport(){
   let data;
