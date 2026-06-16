@@ -1,11 +1,12 @@
 /* Service worker — cache hors ligne.
    Pour publier une mise à jour : incrémenter CACHE (v1 → v2). */
-const CACHE='dako-v22';
+const CACHE='dako-v23';
 const ASSETS=[
   './',
   './index.html',
   './app.css',
   './app.js',
+  './bodymap.js',
   './manifest.webmanifest',
   './icons/icon-180.png',
   './icons/icon-192.png',

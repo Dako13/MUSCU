@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.12.0';
+const APP_VERSION='4.13.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -701,7 +701,7 @@ function homeHTML(){
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
     h+='<button class="hero" data-act="open" data-s="'+esc(heroS.id)+'">'
-     +'<div class="hero-fig"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg></div>'
+     +'<div class="hero-fig">'+silhouette('front',val)+'</div>'
      +'<div class="hero-main"><div class="hero-k">'+(reco?'SÉANCE DU JOUR':'À L’AFFICHE')+'</div>'
      +'<div class="hero-title">'+esc(heroS.title)+'</div>'
      +'<div class="hero-sub">'+esc(heroS.tab)+' · '+heroS.ex.length+' exercices'+(mlist?' · '+esc(mlist):'')+'</div>'
@@ -730,7 +730,7 @@ function homeHTML(){
     const sm=sessionMuscles(s);
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     h+='<button class="scard withfig'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
-     +'<div class="scard-fig"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg></div>'
+     +'<div class="scard-fig">'+silhouette('front',val)+'</div>'
      +'<div class="scard-body">'
      +'<div class="srow"><span class="stag">'+esc(s.tab)
      +(isReco?'<span class="recobadge">RECOMMANDÉE</span>':'')
@@ -900,46 +900,45 @@ function showEditWorkout(i){
 }
 
 /* ---------- carte corporelle ---------- */
-function bodySkeleton(){
-  /* silhouette stylisée commune (face / dos) */
-  return '<circle class="skel" cx="60" cy="15" r="10"/>'
-   +'<rect class="skel" x="38" y="28" width="44" height="64" rx="11"/>'
-   +'<rect class="skel" x="42" y="90" width="36" height="32" rx="9"/>'
-   +'<rect class="skel" x="24" y="32" width="11" height="62" rx="5.5"/>'
-   +'<rect class="skel" x="85" y="32" width="11" height="62" rx="5.5"/>'
-   +'<rect class="skel" x="43" y="118" width="15" height="86" rx="7"/>'
-   +'<rect class="skel" x="62" y="118" width="15" height="86" rx="7"/>';
-}
-/* zones musculaires : id -> {côté, formes SVG} (partagé carte récup + fiche exercice) */
-const ZONES={
- delt_lat:{side:'front',sh:['<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>']},
- delt_ant:{side:'front',sh:['<ellipse class="zone" cx="42" cy="44" rx="4" ry="5"/>','<ellipse class="zone" cx="78" cy="44" rx="4" ry="5"/>']},
- pecs:{side:'front',sh:['<ellipse class="zone" cx="50" cy="52" rx="10.5" ry="9"/>','<ellipse class="zone" cx="70" cy="52" rx="10.5" ry="9"/>']},
- biceps:{side:'front',sh:['<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>']},
- avant_bras:{side:'front',sh:['<rect class="zone" x="24" y="72" width="8" height="20" rx="4"/>','<rect class="zone" x="88" y="72" width="8" height="20" rx="4"/>']},
- quadriceps:{side:'front',sh:['<rect class="zone" x="44" y="122" width="13" height="44" rx="6"/>','<rect class="zone" x="63" y="122" width="13" height="44" rx="6"/>']},
- delt_post:{side:'back',sh:['<ellipse class="zone" cx="33" cy="38" rx="7" ry="7"/>','<ellipse class="zone" cx="87" cy="38" rx="7" ry="7"/>']},
- dos:{side:'back',sh:['<path class="zone" d="M44 40 L76 40 L72 78 Q60 84 48 78 Z"/>']},
- triceps:{side:'back',sh:['<rect class="zone" x="25" y="48" width="9" height="20" rx="4.5"/>','<rect class="zone" x="86" y="48" width="9" height="20" rx="4.5"/>']},
- fessiers:{side:'back',sh:['<ellipse class="zone" cx="51" cy="108" rx="9" ry="9"/>','<ellipse class="zone" cx="69" cy="108" rx="9" ry="9"/>']},
- ischios:{side:'back',sh:['<rect class="zone" x="44" y="124" width="13" height="36" rx="6"/>','<rect class="zone" x="63" y="124" width="13" height="36" rx="6"/>']},
- mollets:{side:'back',sh:['<rect class="zone" x="45" y="168" width="11" height="28" rx="5.5"/>','<rect class="zone" x="64" y="168" width="11" height="28" rx="5.5"/>']}
-};
-function silhouette(side,valFn){
-  let s=bodySkeleton();
-  for(const mid in ZONES){
-    const z=ZONES[mid];if(z.side!==side)continue;
-    const v=Math.max(0,Math.min(1,valFn(mid)||0));
-    const op=(0.08+0.84*v).toFixed(2);
-    for(const shape of z.sh)s+=shape.replace('/>',' fill-opacity="'+op+'"/>');
+/* Mappe les muscles Dako sur les tracés de la carte musculaire (slugs
+   body-highlighter, cf. bodymap.js), par côté. Muscle non listé = reste gris. */
+const SLUG_FRONT={pecs:['chest'],abdos:['abs'],delt_ant:['deltoids'],delt_lat:['deltoids'],
+ biceps:['biceps'],triceps:['triceps'],avant_bras:['forearm'],quadriceps:['quadriceps'],
+ adducteurs:['adductors'],mollets:['calves','tibialis']};
+const SLUG_BACK={dos:['upper-back','trapezius'],lombaires:['lower-back'],delt_post:['deltoids'],
+ delt_lat:['deltoids'],triceps:['triceps'],avant_bras:['forearm'],fessiers:['gluteal'],
+ ischios:['hamstring'],mollets:['calves'],adducteurs:['adductors']};
+function slugValues(side,valFn){
+  const map=side==='back'?SLUG_BACK:SLUG_FRONT,out={};
+  for(const id in map){
+    const v=Math.max(0,Math.min(1,valFn(id)||0));
+    if(v<=0)continue;
+    for(const sl of map[id])out[sl]=Math.max(out[sl]||0,v);
   }
-  return s;
+  return out;
+}
+function silhouette(side,valFn){
+  const back=side==='back';
+  const data=(back?(typeof BODY_BACK!=='undefined'&&BODY_BACK):(typeof BODY_FRONT!=='undefined'&&BODY_FRONT))||[];
+  const vb=back?(typeof BODY_VB_BACK!=='undefined'?BODY_VB_BACK:'724 0 724 1448'):(typeof BODY_VB_FRONT!=='undefined'?BODY_VB_FRONT:'0 0 724 1448');
+  const outline=back?(typeof BODY_OUTLINE_BACK!=='undefined'&&BODY_OUTLINE_BACK):(typeof BODY_OUTLINE_FRONT!=='undefined'&&BODY_OUTLINE_FRONT);
+  const sv=slugValues(side,valFn);
+  let s='<svg class="silh" viewBox="'+vb+'" preserveAspectRatio="xMidYMid meet">';
+  for(const m of data){
+    const p=[].concat((m.path&&m.path.common)||[],(m.path&&m.path.left)||[],(m.path&&m.path.right)||[]);
+    const v=sv[m.slug]||0;
+    const cls=v>0?'bzone':'bbody';
+    const op=v>0?' fill-opacity="'+(0.5+0.5*v).toFixed(2)+'"':'';
+    for(const d of p)s+='<path class="'+cls+'" d="'+d+'"'+op+'/>';
+  }
+  if(outline)s+='<path class="boutline" d="'+outline+'"/>';
+  return s+'</svg>';
 }
 function exMuscleMapHTML(musP,musS){
   const val=mid=>(musP||[]).includes(mid)?1:((musS||[]).includes(mid)?0.45:0);
   return '<div class="bodymaps exmap">'
-   +'<div class="bmap"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg><div class="bcap">Face</div></div>'
-   +'<div class="bmap"><svg viewBox="0 0 120 210">'+silhouette('back',val)+'</svg><div class="bcap">Dos</div></div></div>';
+   +'<div class="bmap">'+silhouette('front',val)+'<div class="bcap">Face</div></div>'
+   +'<div class="bmap">'+silhouette('back',val)+'<div class="bcap">Dos</div></div></div>';
 }
 function bodyMapHTML(){
   const front=silhouette('front',muscleFatigue);
@@ -953,8 +952,8 @@ function bodyMapHTML(){
   }
   return '<div class="chartcard"><div class="charttitle">Récupération musculaire</div>'
    +'<div class="bodymaps">'
-   +'<div class="bmap"><svg viewBox="0 0 120 210">'+front+'</svg><div class="bcap">Face</div></div>'
-   +'<div class="bmap"><svg viewBox="0 0 120 210">'+back+'</svg><div class="bcap">Dos</div></div>'
+   +'<div class="bmap">'+front+'<div class="bcap">Face</div></div>'
+   +'<div class="bmap">'+back+'<div class="bcap">Dos</div></div>'
    +'</div>'
    +'<div class="maplegend">Zone claire = muscle en récupération · % = niveau de fraîcheur</div>'
    +bars+'</div>';
@@ -1540,7 +1539,7 @@ function programsHTML(){
       const sm=sessionMuscles(s);
       const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
       h+='<div class="scard mgmt withfig">'
-       +'<div class="scard-fig"><svg viewBox="0 0 120 210">'+silhouette('front',val)+'</svg></div>'
+       +'<div class="scard-fig">'+silhouette('front',val)+'</div>'
        +'<div class="scard-body">'
        +'<div class="srow"><span class="stag">'+esc(s.tab)+'</span>'
        +'<div class="ebtns">'

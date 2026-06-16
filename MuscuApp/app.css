@@ -385,9 +385,14 @@ details[open] summary::before{transform:rotate(45deg)}
 /* ---------- carte corporelle (v1.1) ---------- */
 .bodymaps{display:flex;gap:18px;justify-content:center;padding:4px 0 12px}
 .bmap{width:42%;max-width:150px}
-.bmap svg{display:block;width:100%}
+.bmap svg{display:block;width:110px;height:220px;margin:0 auto}
 .bmap .skel{fill:rgba(255,255,255,.05)}
 .bmap .zone{fill:var(--ac);stroke:rgba(255,255,255,.12);stroke-width:.6}
+/* silhouette anatomique (bodymap.js) : corps gris, muscles travaillés en rouge */
+.silh{display:block}
+.bbody{fill:rgba(255,255,255,.12)}
+.bzone{fill:var(--ac)}
+.boutline{fill:none;stroke:rgba(255,255,255,.22);stroke-width:3;vector-effect:non-scaling-stroke}
 .bcap{text-align:center;font-size:.7rem;color:var(--dim);padding-top:7px}
 .maplegend{font-size:.72rem;color:var(--dim);text-align:center;padding:0 0 14px;line-height:1.55}
 .musrow{display:flex;align-items:center;gap:10px;padding:7px 0}
@@ -509,7 +514,7 @@ details[open] summary::before{transform:rotate(45deg)}
 }
 .hero:active{transform:scale(.99)}
 .hero-fig{flex:0 0 90px;display:flex;align-items:center;justify-content:center}
-.hero-fig svg{width:90px;height:auto;filter:drop-shadow(0 0 10px var(--ac-glow))}
+.hero-fig svg{width:70px;height:140px;filter:drop-shadow(0 0 10px var(--ac-glow))}
 .hero-fig .skel{fill:rgba(255,255,255,.06)}
 .hero-fig .zone{fill:var(--ac)}
 .hero-main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
@@ -523,7 +528,7 @@ details[open] summary::before{transform:rotate(45deg)}
 /* cartes séance avec silhouette */
 .scard.withfig{display:flex;gap:16px;align-items:center}
 .scard-fig{flex:0 0 52px;display:flex;align-items:center;justify-content:center}
-.scard-fig svg{width:52px;height:auto}
+.scard-fig svg{width:42px;height:84px}
 .scard-fig .skel{fill:rgba(255,255,255,.05)}
 .scard-fig .zone{fill:var(--ac)}
 .scard-body{flex:1;min-width:0}
