@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.17.0';
+const APP_VERSION='4.18.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -320,7 +320,7 @@ function loadSettings(){
     objectif:(typeof s.objectif==='string'?s.objectif:''),
     salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
     niveau:(typeof s.niveau==='string')?s.niveau:'',
-    theme:(['dark','rose','pink'].indexOf(s.theme)>=0?s.theme:'dark')
+    theme:(['dark','rose'].indexOf(s.theme)>=0?s.theme:'dark')
   };
 }
 function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
@@ -997,9 +997,17 @@ function slugValues(side,valFn){
 }
 function silhouette(side,valFn){
   const back=side==='back';
-  const data=(back?(typeof BODY_BACK!=='undefined'&&BODY_BACK):(typeof BODY_FRONT!=='undefined'&&BODY_FRONT))||[];
-  const vb=back?(typeof BODY_VB_BACK!=='undefined'?BODY_VB_BACK:'724 0 724 1448'):(typeof BODY_VB_FRONT!=='undefined'?BODY_VB_FRONT:'0 0 724 1448');
-  const outline=back?(typeof BODY_OUTLINE_BACK!=='undefined'&&BODY_OUTLINE_BACK):(typeof BODY_OUTLINE_FRONT!=='undefined'&&BODY_OUTLINE_FRONT);
+  const fem=(typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.theme==='rose'&&typeof BODY_FRONT_F!=='undefined');
+  let data,vb,outline;
+  if(fem){
+    data=(back?BODY_BACK_F:BODY_FRONT_F)||[];
+    vb=back?BODY_VB_BACK_F:BODY_VB_FRONT_F;
+    outline=back?BODY_OUTLINE_BACK_F:BODY_OUTLINE_FRONT_F;
+  }else{
+    data=(back?(typeof BODY_BACK!=='undefined'&&BODY_BACK):(typeof BODY_FRONT!=='undefined'&&BODY_FRONT))||[];
+    vb=back?(typeof BODY_VB_BACK!=='undefined'?BODY_VB_BACK:'724 0 724 1448'):(typeof BODY_VB_FRONT!=='undefined'?BODY_VB_FRONT:'0 0 724 1448');
+    outline=back?(typeof BODY_OUTLINE_BACK!=='undefined'&&BODY_OUTLINE_BACK):(typeof BODY_OUTLINE_FRONT!=='undefined'&&BODY_OUTLINE_FRONT);
+  }
   const sv=slugValues(side,valFn);
   let s='<svg class="silh" viewBox="'+vb+'" preserveAspectRatio="xMidYMid meet">';
   for(const m of data){
@@ -2000,7 +2008,7 @@ function showSettings(){
   sheet.innerHTML='<h2>Réglages</h2><div class="sp">Appliqués immédiatement.</div>'
    +'<div class="rectitle">Apparence</div>'
    +'<div class="efield"><label>Thème</label><div class="chips" id="themeChips" style="flex-wrap:wrap">'
-   +[['dark','Sombre'],['rose','Rosé'],['pink','Rose pastel']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
+   +[['dark','Sombre'],['rose','Rosé (femme)']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
    +'</div></div>'
    +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
    +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')

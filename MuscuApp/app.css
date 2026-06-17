@@ -30,22 +30,6 @@
 }
 :root[data-theme="rose"] body{background:radial-gradient(120% 70% at 50% -10%, rgba(236,72,153,.13), transparent 60%), var(--bg);}
 :root[data-theme="rose"] #tabbar{background:rgba(18,10,15,.9);}
-/* ===== Thème Rose pastel (clair) ===== */
-:root[data-theme="pink"]{
-  --bg:#fff5fa; --card:#ffffff; --card2:#fff0f6; --input:#fbe7f1; --elev:#ffffff;
-  --line:rgba(190,24,93,.14); --line2:rgba(190,24,93,.24);
-  --txt:#3c1226; --dim:#8a5570; --faint:#b384a0;
-  --ac:#e84393; --ac-hi:#ff5fa8; --ac-deep:#c2186b; --on-ac:#ffffff;
-  --ac-glow:rgba(232,67,147,.30); --ac-soft:rgba(232,67,147,.12); --danger:#e23b6d;
-}
-:root[data-theme="pink"] body{background:radial-gradient(120% 70% at 50% -10%, rgba(232,67,147,.16), transparent 55%), var(--bg);}
-:root[data-theme="pink"] #tabbar{background:rgba(255,245,250,.86);}
-:root[data-theme="pink"] .pbar,:root[data-theme="pink"] .vtrack,:root[data-theme="pink"] .musbar,:root[data-theme="pink"] .wk-dot{background:rgba(60,18,38,.10);}
-:root[data-theme="pink"] .bmap .skel,:root[data-theme="pink"] .hero-fig .skel,:root[data-theme="pink"] .scard-fig .skel{fill:rgba(60,18,38,.06);}
-:root[data-theme="pink"] .bbody{fill:rgba(60,18,38,.13);}
-:root[data-theme="pink"] .boutline{stroke:rgba(60,18,38,.22);}
-:root[data-theme="pink"] .bmap .zone{stroke:rgba(60,18,38,.14);}
-:root[data-theme="pink"] .d-floor{stroke:rgba(60,18,38,.14);}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:16px}
 body{
