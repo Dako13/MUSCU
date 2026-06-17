@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.13.0';
+const APP_VERSION='4.14.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -375,6 +375,7 @@ const MACHINES=[
  {n:'Pec Deck (Fly)',b:'Gym80',p:['pecs'],s:[],t:'Machine'},
  {n:'Cable Crossover',b:'Matrix',p:['pecs'],s:['delt_ant'],t:'Poulies'},
  {n:'Cable Crossover',b:'Technogym',p:['pecs'],s:['delt_ant'],t:'Poulies'},
+ {n:'Pec Fly (poulies, allongé)',b:'Matrix',p:['pecs'],s:[],t:'Poulies'},
  {n:'Développé couché (barre)',b:'Eleiko',p:['pecs'],s:['triceps','delt_ant'],t:'Charge libre'},
  {n:'Développé couché / incliné haltères',b:'Charge libre',p:['pecs'],s:['delt_ant','triceps'],t:'Haltères'},
  /* Dos */
@@ -388,6 +389,9 @@ const MACHINES=[
  {n:'ISO-Lateral D.Y. Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Convergente'},
  {n:'Pull-over',b:'Technogym',p:['dos'],s:[],t:'Machine'},
  {n:'Pull-over',b:'Gym80',p:['dos'],s:[],t:'Machine'},
+ {n:'Tirage vertical unilatéral (poulie, banc devant)',b:'Matrix',p:['dos'],s:['biceps'],t:'Poulie'},
+ {n:'Tirage horizontal unilatéral (poulie)',b:'Matrix',p:['dos'],s:['biceps'],t:'Poulie'},
+ {n:'Pull-over (poulie)',b:'Matrix',p:['dos'],s:[],t:'Poulie'},
  {n:'Assisted Pull-up / Dips',b:'Matrix',p:['dos'],s:['biceps'],t:'Assistée'},
  {n:'T-Bar Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Charge libre'},
  {n:'Rowing barre / haltère',b:'Charge libre',p:['dos'],s:['biceps'],t:'Charge libre'},
@@ -410,6 +414,8 @@ const MACHINES=[
  {n:'Preacher Curl (pupitre)',b:'Technogym',p:['biceps'],s:[],t:'Machine'},
  {n:'Curl poulie basse',b:'Matrix',p:['biceps'],s:['avant_bras'],t:'Poulie'},
  {n:'Curl barre EZ / haltères',b:'Charge libre',p:['biceps'],s:['avant_bras'],t:'Charge libre'},
+ {n:'Curl incliné (haltères)',b:'Charge libre',p:['biceps'],s:[],t:'Haltères'},
+ {n:'Curl marteau (haltères)',b:'Charge libre',p:['biceps'],s:['avant_bras'],t:'Haltères'},
  /* Triceps */
  {n:'Triceps Extension (machine)',b:'Technogym',p:['triceps'],s:[],t:'Machine'},
  {n:'Dips (machine assistée)',b:'Matrix',p:['triceps'],s:['pecs','delt_ant'],t:'Assistée'},
@@ -430,6 +436,7 @@ const MACHINES=[
  {n:'Fentes / Bulgarian (haltères)',b:'Charge libre',p:['quadriceps','fessiers'],s:['ischios'],t:'Haltères'},
  /* Fessiers */
  {n:'Hip Thrust (machine)',b:'Technogym',p:['fessiers'],s:['ischios'],t:'Machine'},
+ {n:'Hip Thrust (barre)',b:'Charge libre',p:['fessiers'],s:['ischios'],t:'Charge libre'},
  {n:'Abducteurs (machine)',b:'Technogym',p:['fessiers'],s:[],t:'Machine'},
  {n:'Adducteurs (machine)',b:'Technogym',p:['adducteurs'],s:[],t:'Machine'},
  {n:'Glute / Kickback (poulie)',b:'Matrix',p:['fessiers'],s:[],t:'Poulie'},
@@ -467,6 +474,22 @@ const TIP_BY_PATTERN={
 };
 function machineTip(m){return TIP_BY_PATTERN[exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
 function machineChains(m){return BRAND_CHAINS[m.b]||[];}
+/* Type de chargement : broche (sélectorisée, pin) vs disques (plate-loaded) vs charge libre / poulie / poids du corps. */
+function machineLoad(m){
+  const t=m.t||'',n=m.n||'';
+  if(t==='Cardio')return 'cardio';
+  if(t==='Poids du corps')return 'corps';
+  if(/Poulie/i.test(t))return 'poulie';
+  if(/Hack Squat|Leg Press 45|T-Bar/i.test(n))return 'disques';
+  if(t==='Haltères')return 'libre';
+  if(t==='Convergente'||t==='Guidée')return 'disques';
+  if(t==='Assistée')return 'broche';
+  if(t==='Charge libre')return 'libre';
+  return 'broche';
+}
+const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio'};
+const LOAD_DESC={broche:'Sélectorisée : tu choisis la charge avec une broche dans la pile, rien à porter.',disques:'Plate-loaded : tu charges et décharges les disques toi-même.',libre:'Charge libre (barre / haltères) : équilibre et gainage en plus.',poulie:'Poulie à broche : tension constante, réglage rapide.',corps:'Au poids du corps (lestable).',cardio:'Appareil cardio.'};
+const LOAD_FILTER=[['broche','Broche'],['disques','À disques'],['libre','Charge libre'],['poulie','Poulie']];
 
 /* ================== DONNÉES SÉANCES ================== */
 loadProgram(); /* doit précéder loadDB() : la migration s'appuie sur EXO */
@@ -662,7 +685,7 @@ function suggestTargets(e){
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
 let route={view:'home',seance:null};
-let MFILTER={g:null,b:null,c:null,q:''};
+let MFILTER={g:null,b:null,c:null,l:null,q:''};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 function go(view,seance){route={view,seance:seance||null};render();window.scrollTo({top:0});}
@@ -1498,7 +1521,7 @@ function machinesHTML(){
   const brands=[];MACHINES.forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
   let h='<button class="back" data-act="programs">‹ Programmes</button>'
    +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Machines</h2>'
-   +'<div class="smeta">'+MACHINES.length+' machines · filtre par muscle, marque, salle</div></div></div>'
+   +'<div class="smeta">'+MACHINES.length+' machines · muscle · marque · salle · chargement</div></div></div>'
    +'<input id="mq" class="msearch" placeholder="Rechercher une machine…" value="'+esc(MFILTER.q||'')+'">';
   h+='<div class="mfilters">'
    +'<button class="mfchip'+(!MFILTER.g?' on':'')+'" data-act="mfg" data-g="">Tous muscles</button>';
@@ -1510,6 +1533,9 @@ function machinesHTML(){
   h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.c?' on':'')+'" data-act="mfc" data-c="">Toutes salles</button>';
   CHAINS.forEach(c=>{h+='<button class="mfchip'+(MFILTER.c===c?' on':'')+'" data-act="mfc" data-c="'+esc(c)+'">'+esc(c)+'</button>'});
   h+='</div>';
+  h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.l?' on':'')+'" data-act="mfl" data-l="">Tout chargement</button>';
+  LOAD_FILTER.forEach(x=>{h+='<button class="mfchip'+(MFILTER.l===x[0]?' on':'')+'" data-act="mfl" data-l="'+x[0]+'">'+esc(x[1])+'</button>'});
+  h+='</div>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
   const ids=grp?grp[2]:null;
   const q=(MFILTER.q||'').toLowerCase();
@@ -1518,6 +1544,7 @@ function machinesHTML(){
   MACHINES.forEach((m,i)=>{
     if(MFILTER.b&&m.b!==MFILTER.b)return;
     if(MFILTER.c&&machineChains(m).indexOf(MFILTER.c)<0)return;
+    if(MFILTER.l&&machineLoad(m)!==MFILTER.l)return;
     const all=(m.p||[]).concat(m.s||[]);
     if(ids&&!all.some(x=>ids.indexOf(x)>=0))return;
     const mus=(m.p||[]).map(mLabel).join(', ');
@@ -1525,7 +1552,7 @@ function machinesHTML(){
     if(q&&searchStr.indexOf(q)<0)return;
     n++;
     h+='<button class="mrow" data-act="machine" data-m="'+i+'" data-search="'+esc(searchStr)+'">'
-     +'<div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(mus)+(m.t?' · '+esc(m.t):'')+'</div></div>'
+     +'<div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(mus)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div>'
      +'<span class="mrow-b">'+esc(m.b)+'</span></button>';
   });
   if(!n)h+='<div class="hempty">Aucune machine pour ce filtre.</div>';
@@ -1541,10 +1568,12 @@ function showMachine(i){
   const opts=seances.map(s=>'<button class="sbtn" data-act="machadd" data-m="'+i+'" data-s="'+esc(s.id)+'">'+esc(s.tab)+' · '+esc(s.title)+'</button>').join('');
   const chains=machineChains(m);
   const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+' '+m.b+' machine musculation');
+  const load=machineLoad(m);
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
-   +'<div class="sp">'+esc(m.b)+(m.t?' · '+esc(m.t):'')+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +'<div class="sp">'+esc(m.b)+' · '+esc(LOAD_SHORT[load])+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
    +'<div class="sbtns" style="margin-bottom:14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +'<div class="mchips">'+chips+'</div>'
+   +'<div class="rectitle">Chargement</div><div class="notes" style="margin-bottom:14px">'+esc(LOAD_DESC[load])+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
@@ -1715,6 +1744,7 @@ app.addEventListener('click',ev=>{
   else if(act==='mfg'){MFILTER.g=actEl.dataset.g||null;render();}
   else if(act==='mfb'){MFILTER.b=actEl.dataset.b||null;render();}
   else if(act==='mfc'){MFILTER.c=actEl.dataset.c||null;render();}
+  else if(act==='mfl'){MFILTER.l=actEl.dataset.l||null;render();}
   else if(act==='machadd')addMachineToSeance(+actEl.dataset.m,actEl.dataset.s);
   else if(act==='programs')go('programs');
   else if(act==='pactivate'){setActiveProgram(actEl.dataset.p);toast('Programme activé');go('home');}
