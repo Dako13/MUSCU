@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.14.0';
+const APP_VERSION='4.15.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -316,7 +316,8 @@ function loadSettings(){
     taille:intOrNull(s.taille)||PROFILE.taille_cm,
     age:intOrNull(s.age)||PROFILE.age,
     objectif:(typeof s.objectif==='string'?s.objectif:''),
-    salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air'
+    salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
+    niveau:(typeof s.niveau==='string')?s.niveau:''
   };
 }
 function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
@@ -1470,7 +1471,7 @@ function editHTML(sid){
    +'<div class="maplegend" style="margin:0 4px 12px">Muscles reconnus : '+MUSCLES.map(m=>m.id).join(', ')+'</div>'
    +'<div id="exlist">';
   s.ex.forEach((e,i)=>{h+=editExHTML(e,i)});
-  h+='</div><button class="bigbtn ghost" data-act="eadd">+ Ajouter un exercice</button>'
+  h+='</div><button class="bigbtn" data-act="elib">+ Depuis la bibliothèque</button>'+'<button class="bigbtn ghost" data-act="eadd">+ Exercice vierge</button>'
    +'<button class="bigbtn" data-act="esave">Enregistrer</button>';
   return h;
 }
@@ -1759,6 +1760,7 @@ app.addEventListener('click',ev=>{
   else if(act==='sedown'){moveSeance(actEl.dataset.s,1);render();}
   else if(act==='edit')go('edit',route.seance);
   else if(act==='esave'){if(collectEdit(route.seance)){toast('Séance enregistrée');go('seance',route.seance)}}
+  else if(act==='elib')showLibPicker();
   else if(act==='eadd'){
     const list=document.getElementById('exlist');
     const n=list.querySelectorAll('.ecard').length;
@@ -1930,6 +1932,45 @@ function showSummary(o){
   openSheet();
   document.getElementById('shOk').addEventListener('click',closeSheet);
 }
+function showLibPicker(){
+  let h='<h2>Bibliothèque</h2><div class="sp">Choisis un exercice à ajouter à la séance en cours d’édition.</div>'
+   +'<input id="libq" class="msearch" placeholder="Rechercher un exercice / une machine…" style="margin:0 0 12px">'
+   +'<div id="liblist">';
+  MACHINES.forEach((m,i)=>{
+    const mus=(m.p||[]).map(mLabel).join(', ');
+    const ss=(m.n+' '+m.b+' '+mus).toLowerCase();
+    h+='<button class="sbtn" data-m="'+i+'" data-s="'+esc(ss)+'" style="justify-content:space-between;text-align:left;gap:10px;margin-bottom:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m.n)+' · '+esc(m.b)+'</span><span style="opacity:.55;font-size:.78rem;white-space:nowrap">'+esc(LOAD_SHORT[machineLoad(m)])+'</span></button>';
+  });
+  h+='</div>';
+  sheet.innerHTML=h;openSheet();
+  const q=document.getElementById('libq');
+  if(q)q.addEventListener('input',()=>{const v=q.value.toLowerCase();document.querySelectorAll('#liblist .sbtn').forEach(b=>{b.style.display=b.dataset.s.indexOf(v)>=0?'':'none'})});
+  sheet.querySelectorAll('#liblist .sbtn').forEach(b=>b.addEventListener('click',()=>{
+    const m=MACHINES[+b.dataset.m],list=document.getElementById('exlist');
+    if(!m||!list)return;
+    const n=list.querySelectorAll('.ecard').length;
+    list.insertAdjacentHTML('beforeend',editExHTML({name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])},n));
+    closeSheet();toast('Exercice ajouté — pense à enregistrer');
+  }));
+}
+function showOnboarding(){
+  const salles=['On Air','Basic-Fit','Fitness Park','Autre'],objs=['Prise de masse','Recomposition','Force','Forme'],nivs=['Débutant','Intermédiaire','Avancé'];
+  const row=(g,arr,sel)=>arr.map(v=>'<button class="chip'+(sel===v?' on':'')+'" data-ob="'+g+'" data-v="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('');
+  sheet.innerHTML='<h2>Bienvenue sur Dako</h2>'
+   +'<div class="sp">Trois infos pour personnaliser ton suivi — modifiable à tout moment dans Réglages.</div>'
+   +'<div class="efield"><label>Ta salle</label><div class="chips" style="flex-wrap:wrap">'+row('salle',salles,SETTINGS.salle)+'</div></div>'
+   +'<div class="efield"><label>Ton objectif</label><div class="chips" style="flex-wrap:wrap">'+row('obj',objs,SETTINGS.objectif)+'</div></div>'
+   +'<div class="efield"><label>Ton niveau</label><div class="chips" style="flex-wrap:wrap">'+row('niv',nivs,SETTINGS.niveau)+'</div></div>'
+   +'<div class="sbtns"><button class="sbtn pri" id="obGo">C’est parti ›</button></div>';
+  openSheet();
+  sheet.querySelectorAll('[data-ob]').forEach(b=>b.addEventListener('click',()=>{
+    const g=b.dataset.ob;
+    sheet.querySelectorAll('[data-ob="'+g+'"]').forEach(x=>x.classList.toggle('on',x===b));
+    if(g==='salle')SETTINGS.salle=b.dataset.v;else if(g==='obj')SETTINGS.objectif=b.dataset.v;else if(g==='niv')SETTINGS.niveau=b.dataset.v;
+  }));
+  const go=document.getElementById('obGo');
+  if(go)go.addEventListener('click',()=>{try{localStorage.setItem('dako_onboarded','1')}catch(e){}saveSettings();closeSheet();render();toast('Profil enregistré · bienvenue 💪');});
+}
 function showSettings(){
   const inp='width:100%;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none';
   sheet.innerHTML='<h2>Réglages</h2><div class="sp">Appliqués immédiatement.</div>'
@@ -1945,6 +1986,9 @@ function showSettings(){
    +'<div class="efield"><label>Objectif</label><input id="setObj" placeholder="ex : prise de masse" value="'+esc(SETTINGS.objectif||'')+'" style="'+inp+'"></div>'
    +'<div class="efield"><label>Salle (le coach adapte les exos au matériel)</label><div class="chips" id="salleChips" style="flex-wrap:wrap">'
    +['On Air','Basic-Fit','Fitness Park','Autre'].map(v=>'<button class="chip'+(SETTINGS.salle===v?' on':'')+'" data-salle="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('')
+   +'</div></div>'
+   +'<div class="efield"><label>Niveau</label><div class="chips" id="nivChips" style="flex-wrap:wrap">'
+   +['Débutant','Intermédiaire','Avancé'].map(v=>'<button class="chip'+(SETTINGS.niveau===v?' on':'')+'" data-niv="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('')
    +'</div></div>'
    +'<div class="rectitle">Outils</div>'
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
@@ -1966,6 +2010,11 @@ function showSettings(){
     SETTINGS.salle=c.dataset.salle;saveSettings();
     document.querySelectorAll('#salleChips .chip').forEach(x=>x.classList.toggle('on',x===c));
   });
+  document.getElementById('nivChips').addEventListener('click',ev=>{
+    const c=ev.target.closest('.chip');if(!c)return;
+    SETTINGS.niveau=c.dataset.niv;saveSettings();
+    document.querySelectorAll('#nivChips .chip').forEach(x=>x.classList.toggle('on',x===c));
+  });
   document.getElementById('setCalc').addEventListener('click',showCalculators);
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
@@ -1984,7 +2033,7 @@ function exportPayload(){
   const recup={};
   for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
   return{app:'dako',version:6,exporte_le:new Date().toISOString(),
-    profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode,salle:SETTINGS.salle}),
+    profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode,salle:SETTINGS.salle,niveau:SETTINGS.niveau}),
     reglages:SETTINGS,recuperation_musculaire:recup,
     programmes:PROGRAMS,programme_actif:ACTIVE_PID,
     programme:PROGRAM,exercices:exos,seances:DB.workouts,bilan_forme:BODY};
@@ -2065,7 +2114,7 @@ function coachProgramText(){
   const ap=activeProgram();
   let t='=== STRUCTURE DE MON PROGRAMME ===\n';
   t+='Salle actuelle : '+(SETTINGS.salle||'?')+'\n';
-  t+='Profil : '+(SETTINGS.poids||'?')+' kg, '+(SETTINGS.taille||'?')+' cm, '+(SETTINGS.age||'?')+' ans'+(SETTINGS.objectif?' · objectif : '+SETTINGS.objectif:'')+'\n';
+  t+='Profil : '+(SETTINGS.poids||'?')+' kg, '+(SETTINGS.taille||'?')+' cm, '+(SETTINGS.age||'?')+' ans'+(SETTINGS.objectif?' · objectif : '+SETTINGS.objectif:'')+(SETTINGS.niveau?' · niveau : '+SETTINGS.niveau:'')+'\n';
   t+='Programme : '+(ap?ap.name:'—')+'\n';
   for(const s of PROGRAM){
     t+='\n['+s.tab+'] '+s.title+(s.sub?' ('+s.sub+')':'')+'\n';
@@ -2165,6 +2214,7 @@ if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
 
 render();
 backupReminder();
+try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
 /* miroir de secours + restauration si le stockage a été purgé */
 mirrorSnapshot();
 maybeRestoreFromIDB().then(restored=>{
