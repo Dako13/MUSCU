@@ -1,6 +1,6 @@
 /* Service worker — cache hors ligne.
    Pour publier une mise à jour : incrémenter CACHE (v1 → v2). */
-const CACHE='dako-v29';
+const CACHE='dako-v30';
 const ASSETS=[
   './',
   './index.html',
@@ -26,6 +26,19 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
   const url=new URL(e.request.url);
   if(url.origin!==location.origin)return; /* liens externes (YouTube) : réseau direct */
+  const p=url.pathname;
+  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/app.css');
+  if(shell){
+    /* réseau d'abord : la dernière version s'affiche dès qu'on est en ligne (repli cache hors-ligne) */
+    e.respondWith(
+      fetch(e.request).then(res=>{
+        if(res&&res.ok){const cl=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cl));return res;}
+        return caches.match(e.request).then(c=>c||res);
+      }).catch(()=>caches.match(e.request))
+    );
+    return;
+  }
+  /* reste (icônes, polices, bodymap…) : cache d'abord, mise à jour en arrière-plan */
   e.respondWith(
     caches.match(e.request).then(cached=>{
       const fetched=fetch(e.request).then(res=>{
