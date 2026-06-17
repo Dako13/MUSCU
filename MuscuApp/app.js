@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.0';
+const APP_VERSION='4.18.1';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -2008,7 +2008,7 @@ function showSettings(){
   sheet.innerHTML='<h2>Réglages</h2><div class="sp">Appliqués immédiatement.</div>'
    +'<div class="rectitle">Apparence</div>'
    +'<div class="efield"><label>Thème</label><div class="chips" id="themeChips" style="flex-wrap:wrap">'
-   +[['dark','Sombre'],['rose','Rosé (femme)']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
+   +[['dark','Sombre'],['rose','Rosé']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
    +'</div></div>'
    +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
    +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')
@@ -2039,7 +2039,7 @@ function showSettings(){
   });
   document.getElementById('themeChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
-    SETTINGS.theme=c.dataset.th;saveSettings();applyTheme();
+    SETTINGS.theme=c.dataset.th;saveSettings();applyTheme();render();
     document.querySelectorAll('#themeChips .chip').forEach(x=>x.classList.toggle('on',x===c));
   });
   document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null){SETTINGS.poids=v;saveSettings()}});
