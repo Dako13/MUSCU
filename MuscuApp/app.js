@@ -366,62 +366,94 @@ const MACHINES=[
  /* Pectoraux */
  {n:'Chest Press',b:'Technogym',p:['pecs'],s:['triceps','delt_ant'],t:'Machine'},
  {n:'Chest Press',b:'Matrix',p:['pecs'],s:['triceps','delt_ant'],t:'Machine'},
- {n:'Iso-Lateral Bench Press',b:'Hammer Strength',p:['pecs'],s:['triceps','delt_ant'],t:'Convergente'},
- {n:'Incline Press',b:'Hammer Strength',p:['pecs'],s:['delt_ant','triceps'],t:'Convergente'},
+ {n:'ISO-Lateral Bench Press',b:'Hammer Strength',p:['pecs'],s:['triceps','delt_ant'],t:'Convergente'},
+ {n:'ISO-Lateral Incline Press',b:'Hammer Strength',p:['pecs'],s:['delt_ant','triceps'],t:'Convergente'},
+ {n:'ISO-Lateral Decline Press',b:'Hammer Strength',p:['pecs'],s:['triceps'],t:'Convergente'},
+ {n:'Chest Press',b:'Gym80',p:['pecs'],s:['triceps','delt_ant'],t:'Machine'},
+ {n:'Incline Press',b:'Technogym',p:['pecs'],s:['delt_ant','triceps'],t:'Machine'},
  {n:'Pec Deck (Fly)',b:'Technogym',p:['pecs'],s:[],t:'Machine'},
- {n:'Cable Crossover',b:'Matrix',p:['pecs'],s:[],t:'Poulies'},
+ {n:'Pec Deck (Fly)',b:'Gym80',p:['pecs'],s:[],t:'Machine'},
+ {n:'Cable Crossover',b:'Matrix',p:['pecs'],s:['delt_ant'],t:'Poulies'},
+ {n:'Cable Crossover',b:'Technogym',p:['pecs'],s:['delt_ant'],t:'Poulies'},
  {n:'Développé couché (barre)',b:'Eleiko',p:['pecs'],s:['triceps','delt_ant'],t:'Charge libre'},
- {n:'Développé incliné haltères',b:'Charge libre',p:['pecs'],s:['delt_ant','triceps'],t:'Haltères'},
+ {n:'Développé couché / incliné haltères',b:'Charge libre',p:['pecs'],s:['delt_ant','triceps'],t:'Haltères'},
  /* Dos */
  {n:'Lat Pulldown (tirage vertical)',b:'Technogym',p:['dos'],s:['biceps'],t:'Poulie haute'},
+ {n:'Lat Pulldown',b:'Matrix',p:['dos'],s:['biceps'],t:'Poulie haute'},
+ {n:'ISO-Lateral Front Lat Pulldown',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Convergente'},
  {n:'Seated Row (tirage horizontal)',b:'Technogym',p:['dos'],s:['biceps'],t:'Machine'},
- {n:'Iso-Lateral Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Convergente'},
- {n:'High Row',b:'Hammer Strength',p:['dos'],s:['biceps','delt_post'],t:'Convergente'},
+ {n:'Seated Row',b:'Matrix',p:['dos'],s:['biceps'],t:'Machine'},
+ {n:'ISO-Lateral Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Convergente'},
+ {n:'ISO-Lateral High Row',b:'Hammer Strength',p:['dos'],s:['biceps','delt_post'],t:'Convergente'},
+ {n:'ISO-Lateral D.Y. Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Convergente'},
  {n:'Pull-over',b:'Technogym',p:['dos'],s:[],t:'Machine'},
- {n:'Assisted Pull-up',b:'Matrix',p:['dos'],s:['biceps'],t:'Assistée'},
+ {n:'Pull-over',b:'Gym80',p:['dos'],s:[],t:'Machine'},
+ {n:'Assisted Pull-up / Dips',b:'Matrix',p:['dos'],s:['biceps'],t:'Assistée'},
  {n:'T-Bar Row',b:'Hammer Strength',p:['dos'],s:['biceps'],t:'Charge libre'},
+ {n:'Rowing barre / haltère',b:'Charge libre',p:['dos'],s:['biceps'],t:'Charge libre'},
  {n:'Soulevé de terre (barre)',b:'Eleiko',p:['dos','ischios','fessiers'],s:['lombaires','avant_bras'],t:'Charge libre'},
+ {n:'Extension lombaire (banc à 45°)',b:'Technogym',p:['lombaires'],s:['fessiers','ischios'],t:'Machine'},
  /* Épaules */
  {n:'Shoulder Press',b:'Technogym',p:['delt_ant','delt_lat'],s:['triceps'],t:'Machine'},
- {n:'Shoulder Press',b:'Hammer Strength',p:['delt_ant','delt_lat'],s:['triceps'],t:'Convergente'},
- {n:'Lateral Raise',b:'Technogym',p:['delt_lat'],s:[],t:'Machine'},
- {n:'Rear Delt / Reverse Fly',b:'Technogym',p:['delt_post'],s:[],t:'Machine'},
+ {n:'Shoulder Press',b:'Matrix',p:['delt_ant','delt_lat'],s:['triceps'],t:'Machine'},
+ {n:'ISO-Lateral Shoulder Press',b:'Hammer Strength',p:['delt_ant','delt_lat'],s:['triceps'],t:'Convergente'},
+ {n:'Shoulder Press',b:'Gym80',p:['delt_ant','delt_lat'],s:['triceps'],t:'Machine'},
+ {n:'Lateral Raise (machine)',b:'Technogym',p:['delt_lat'],s:[],t:'Machine'},
+ {n:'Lateral Raise (machine)',b:'Gym80',p:['delt_lat'],s:[],t:'Machine'},
  {n:'Élévation latérale (poulie)',b:'Matrix',p:['delt_lat'],s:[],t:'Poulie'},
+ {n:'Rear Delt / Reverse Fly',b:'Technogym',p:['delt_post'],s:[],t:'Machine'},
  {n:'Face Pull (corde)',b:'Matrix',p:['delt_post'],s:['dos'],t:'Poulie'},
+ {n:'Développé militaire (barre)',b:'Eleiko',p:['delt_ant'],s:['delt_lat','triceps'],t:'Charge libre'},
  /* Biceps */
- {n:'Biceps Curl',b:'Technogym',p:['biceps'],s:[],t:'Machine'},
+ {n:'Biceps Curl (machine)',b:'Technogym',p:['biceps'],s:[],t:'Machine'},
  {n:'Preacher Curl (pupitre)',b:'Hammer Strength',p:['biceps'],s:[],t:'Machine'},
- {n:'Curl barre EZ',b:'Charge libre',p:['biceps'],s:['avant_bras'],t:'Charge libre'},
- {n:'Curl poulie basse',b:'Matrix',p:['biceps'],s:[],t:'Poulie'},
+ {n:'Preacher Curl (pupitre)',b:'Technogym',p:['biceps'],s:[],t:'Machine'},
+ {n:'Curl poulie basse',b:'Matrix',p:['biceps'],s:['avant_bras'],t:'Poulie'},
+ {n:'Curl barre EZ / haltères',b:'Charge libre',p:['biceps'],s:['avant_bras'],t:'Charge libre'},
  /* Triceps */
- {n:'Triceps Extension',b:'Technogym',p:['triceps'],s:[],t:'Machine'},
- {n:'Dips assistés',b:'Matrix',p:['triceps'],s:['pecs','delt_ant'],t:'Assistée'},
- {n:'Pushdown (poulie)',b:'Matrix',p:['triceps'],s:[],t:'Poulie'},
- /* Jambes */
+ {n:'Triceps Extension (machine)',b:'Technogym',p:['triceps'],s:[],t:'Machine'},
+ {n:'Dips (machine assistée)',b:'Matrix',p:['triceps'],s:['pecs','delt_ant'],t:'Assistée'},
+ {n:'Dips (machine convergente)',b:'Hammer Strength',p:['triceps'],s:['pecs'],t:'Convergente'},
+ {n:'Pushdown (poulie haute)',b:'Matrix',p:['triceps'],s:[],t:'Poulie'},
+ {n:'Extension overhead (corde)',b:'Technogym',p:['triceps'],s:[],t:'Poulie'},
+ /* Jambes (quadriceps / ischios) */
  {n:'Leg Press',b:'Technogym',p:['quadriceps','fessiers'],s:['ischios'],t:'Machine'},
- {n:'Leg Press 45°',b:'Hammer Strength',p:['quadriceps','fessiers'],s:['ischios'],t:'Machine'},
- {n:'Hack Squat',b:'Hammer Strength',p:['quadriceps'],s:['fessiers'],t:'Machine'},
+ {n:'Leg Press 45°',b:'Hammer Strength',p:['quadriceps','fessiers'],s:['ischios'],t:'Charge libre'},
+ {n:'Hack Squat',b:'Hammer Strength',p:['quadriceps'],s:['fessiers'],t:'Charge libre'},
+ {n:'Hack Squat',b:'Gym80',p:['quadriceps'],s:['fessiers'],t:'Machine'},
  {n:'Leg Extension',b:'Technogym',p:['quadriceps'],s:[],t:'Machine'},
+ {n:'Leg Extension',b:'Matrix',p:['quadriceps'],s:[],t:'Machine'},
  {n:'Leg Curl (assis)',b:'Technogym',p:['ischios'],s:[],t:'Machine'},
  {n:'Leg Curl (allongé)',b:'Technogym',p:['ischios'],s:['mollets'],t:'Machine'},
- {n:'Hip Thrust',b:'Technogym',p:['fessiers'],s:['ischios'],t:'Machine'},
- {n:'Abducteurs',b:'Technogym',p:['fessiers'],s:[],t:'Machine'},
- {n:'Adducteurs',b:'Technogym',p:['adducteurs'],s:[],t:'Machine'},
- {n:'Mollets debout (calf)',b:'Matrix',p:['mollets'],s:[],t:'Machine'},
- {n:'Smith Machine',b:'Matrix',p:['quadriceps','fessiers'],s:['ischios'],t:'Guidée'},
  {n:'Squat (barre + rack)',b:'Eleiko',p:['quadriceps','fessiers'],s:['ischios','lombaires'],t:'Charge libre'},
+ {n:'Smith Machine',b:'Matrix',p:['quadriceps','fessiers'],s:['ischios'],t:'Guidée'},
+ {n:'Fentes / Bulgarian (haltères)',b:'Charge libre',p:['quadriceps','fessiers'],s:['ischios'],t:'Haltères'},
+ /* Fessiers */
+ {n:'Hip Thrust (machine)',b:'Technogym',p:['fessiers'],s:['ischios'],t:'Machine'},
+ {n:'Abducteurs (machine)',b:'Technogym',p:['fessiers'],s:[],t:'Machine'},
+ {n:'Adducteurs (machine)',b:'Technogym',p:['adducteurs'],s:[],t:'Machine'},
+ {n:'Glute / Kickback (poulie)',b:'Matrix',p:['fessiers'],s:[],t:'Poulie'},
+ /* Mollets */
+ {n:'Mollets debout (standing calf)',b:'Matrix',p:['mollets'],s:[],t:'Machine'},
+ {n:'Mollets assis (seated calf)',b:'Technogym',p:['mollets'],s:[],t:'Machine'},
  /* Abdos */
- {n:'Abdominal Crunch',b:'Technogym',p:['abdos'],s:[],t:'Machine'},
+ {n:'Abdominal Crunch (machine)',b:'Technogym',p:['abdos'],s:[],t:'Machine'},
  {n:'Rotary Torso',b:'Technogym',p:['abdos'],s:[],t:'Machine'},
+ {n:'Crunch poulie haute (corde)',b:'Matrix',p:['abdos'],s:[],t:'Poulie'},
+ {n:'Chaise romaine (relevé jambes)',b:'Charge libre',p:['abdos'],s:[],t:'Poids du corps'},
  /* Cardio */
- {n:'Tapis de course',b:'Matrix',p:['cardio'],s:[],t:'Cardio'},
- {n:'SkillMill',b:'Technogym',p:['cardio'],s:['fessiers'],t:'Cardio'},
- {n:'Vélo assis',b:'Matrix',p:['cardio'],s:[],t:'Cardio'},
+ {n:'Tapis de course',b:'Technogym',p:['cardio'],s:[],t:'Cardio'},
+ {n:'Tapis de course',b:'Life Fitness',p:['cardio'],s:[],t:'Cardio'},
+ {n:'Vélo / vélo assis',b:'Matrix',p:['cardio'],s:[],t:'Cardio'},
  {n:'Rameur',b:'Technogym',p:['cardio'],s:['dos'],t:'Cardio'},
- {n:'Stair / Climb',b:'Technogym',p:['cardio'],s:['fessiers'],t:'Cardio'}
+ {n:'Elliptique',b:'Technogym',p:['cardio'],s:[],t:'Cardio'},
+ {n:'SkillMill',b:'Technogym',p:['cardio'],s:['fessiers'],t:'Cardio'},
+ {n:'Stair / Climb',b:'Life Fitness',p:['cardio'],s:['fessiers'],t:'Cardio'}
 ];
-const MACHINE_GROUPS=[['pecs','Pecs',['pecs']],['dos','Dos',['dos']],['epaules','Épaules',['delt_ant','delt_lat','delt_post']],['biceps','Biceps',['biceps']],['triceps','Triceps',['triceps']],['jambes','Jambes',['quadriceps','ischios']],['fessiers','Fessiers',['fessiers','adducteurs']],['mollets','Mollets',['mollets']],['abdos','Abdos',['abdos']],['cardio','Cardio',['cardio']]];
-const BRAND_CHAINS={'Technogym':['Basic-Fit','Fitness Park','On Air'],'Matrix':['Basic-Fit'],'Hammer Strength':['Fitness Park'],'Eleiko':['Fitness Park'],'Charge libre':['Basic-Fit','Fitness Park','On Air']};
+const MACHINE_GROUPS=[['pecs','Pecs',['pecs']],['dos','Dos',['dos','lombaires']],['epaules','Épaules',['delt_ant','delt_lat','delt_post']],['biceps','Biceps',['biceps']],['triceps','Triceps',['triceps']],['jambes','Jambes',['quadriceps','ischios']],['fessiers','Fessiers',['fessiers','adducteurs']],['mollets','Mollets',['mollets']],['abdos','Abdos',['abdos']],['cardio','Cardio',['cardio']]];
+/* Marques réelles par enseigne (recherche 2026). Base indicative : composition courante des clubs, pas un inventaire club par club. */
+const CHAINS=['On Air','Basic-Fit','Fitness Park'];
+const BRAND_CHAINS={'Technogym':['On Air','Basic-Fit','Fitness Park'],'Matrix':['Basic-Fit'],'Hammer Strength':['Fitness Park','On Air'],'Gym80':['On Air'],'Eleiko':['Fitness Park','On Air'],'Life Fitness':['Basic-Fit','On Air'],'Charge libre':['On Air','Basic-Fit','Fitness Park']};
 const TIP_BY_PATTERN={
  press:'Coudes à ~45°, descends jusqu’à l’étirement, pousse sans verrouiller. Tempo contrôlé.',
  pulldown:'Tire les coudes vers les hanches, poitrine haute, étire complètement en haut sans balancer.',
@@ -630,7 +662,7 @@ function suggestTargets(e){
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
 let route={view:'home',seance:null};
-let MFILTER={g:null,b:null,q:''};
+let MFILTER={g:null,b:null,c:null,q:''};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 function go(view,seance){route={view,seance:seance||null};render();window.scrollTo({top:0});}
@@ -701,7 +733,7 @@ function homeHTML(){
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
     h+='<button class="hero" data-act="open" data-s="'+esc(heroS.id)+'">'
-     +'<div class="hero-fig">'+silhouette('front',val)+'</div>'
+     +'<div class="hero-fig">'+silhouette(dominantSide(heroS),val)+'</div>'
      +'<div class="hero-main"><div class="hero-k">'+(reco?'SÉANCE DU JOUR':'À L’AFFICHE')+'</div>'
      +'<div class="hero-title">'+esc(heroS.title)+'</div>'
      +'<div class="hero-sub">'+esc(heroS.tab)+' · '+heroS.ex.length+' exercices'+(mlist?' · '+esc(mlist):'')+'</div>'
@@ -730,7 +762,7 @@ function homeHTML(){
     const sm=sessionMuscles(s);
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     h+='<button class="scard withfig'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
-     +'<div class="scard-fig">'+silhouette('front',val)+'</div>'
+     +'<div class="scard-fig">'+silhouette(dominantSide(s),val)+'</div>'
      +'<div class="scard-body">'
      +'<div class="srow"><span class="stag">'+esc(s.tab)
      +(isReco?'<span class="recobadge">RECOMMANDÉE</span>':'')
@@ -933,6 +965,13 @@ function silhouette(side,valFn){
   }
   if(outline)s+='<path class="boutline" d="'+outline+'"/>';
   return s+'</svg>';
+}
+/* Côté affiché : dos si la séance est à dominante dos / postérieure, sinon face. */
+const BACK_MUS={dos:1,delt_post:1,triceps:1,fessiers:1,ischios:1,lombaires:1};
+function dominantSide(s){
+  let b=0,f=0;
+  for(const e of ((s&&s.ex)||[]))for(const m of (e.musP||[])){if(BACK_MUS[m])b++;else f++;}
+  return b>f?'back':'front';
 }
 function exMuscleMapHTML(musP,musS){
   const val=mid=>(musP||[]).includes(mid)?1:((musS||[]).includes(mid)?0.45:0);
@@ -1459,7 +1498,7 @@ function machinesHTML(){
   const brands=[];MACHINES.forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
   let h='<button class="back" data-act="programs">‹ Programmes</button>'
    +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Machines</h2>'
-   +'<div class="smeta">'+MACHINES.length+' machines · filtre par muscle et marque</div></div></div>'
+   +'<div class="smeta">'+MACHINES.length+' machines · filtre par muscle, marque, salle</div></div></div>'
    +'<input id="mq" class="msearch" placeholder="Rechercher une machine…" value="'+esc(MFILTER.q||'')+'">';
   h+='<div class="mfilters">'
    +'<button class="mfchip'+(!MFILTER.g?' on':'')+'" data-act="mfg" data-g="">Tous muscles</button>';
@@ -1468,6 +1507,9 @@ function machinesHTML(){
    +'<button class="mfchip alt'+(!MFILTER.b?' on':'')+'" data-act="mfb" data-b="">Toutes marques</button>';
   brands.forEach(b=>{h+='<button class="mfchip alt'+(MFILTER.b===b?' on':'')+'" data-act="mfb" data-b="'+esc(b)+'">'+esc(b)+'</button>'});
   h+='</div>';
+  h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.c?' on':'')+'" data-act="mfc" data-c="">Toutes salles</button>';
+  CHAINS.forEach(c=>{h+='<button class="mfchip'+(MFILTER.c===c?' on':'')+'" data-act="mfc" data-c="'+esc(c)+'">'+esc(c)+'</button>'});
+  h+='</div>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
   const ids=grp?grp[2]:null;
   const q=(MFILTER.q||'').toLowerCase();
@@ -1475,6 +1517,7 @@ function machinesHTML(){
   h+='<div id="mlist">';
   MACHINES.forEach((m,i)=>{
     if(MFILTER.b&&m.b!==MFILTER.b)return;
+    if(MFILTER.c&&machineChains(m).indexOf(MFILTER.c)<0)return;
     const all=(m.p||[]).concat(m.s||[]);
     if(ids&&!all.some(x=>ids.indexOf(x)>=0))return;
     const mus=(m.p||[]).map(mLabel).join(', ');
@@ -1497,8 +1540,10 @@ function showMachine(i){
   const seances=ap?ap.seances:[];
   const opts=seances.map(s=>'<button class="sbtn" data-act="machadd" data-m="'+i+'" data-s="'+esc(s.id)+'">'+esc(s.tab)+' · '+esc(s.title)+'</button>').join('');
   const chains=machineChains(m);
+  const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+' '+m.b+' machine musculation');
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
-   +'<div class="sp">'+esc(m.b)+(m.t?' · '+esc(m.t):'')+(chains.length?' · souvent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +'<div class="sp">'+esc(m.b)+(m.t?' · '+esc(m.t):'')+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +'<div class="sbtns" style="margin-bottom:14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +'<div class="mchips">'+chips+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
@@ -1539,7 +1584,7 @@ function programsHTML(){
       const sm=sessionMuscles(s);
       const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
       h+='<div class="scard mgmt withfig">'
-       +'<div class="scard-fig">'+silhouette('front',val)+'</div>'
+       +'<div class="scard-fig">'+silhouette(dominantSide(s),val)+'</div>'
        +'<div class="scard-body">'
        +'<div class="srow"><span class="stag">'+esc(s.tab)+'</span>'
        +'<div class="ebtns">'
@@ -1669,6 +1714,7 @@ app.addEventListener('click',ev=>{
   else if(act==='machine')showMachine(+actEl.dataset.m);
   else if(act==='mfg'){MFILTER.g=actEl.dataset.g||null;render();}
   else if(act==='mfb'){MFILTER.b=actEl.dataset.b||null;render();}
+  else if(act==='mfc'){MFILTER.c=actEl.dataset.c||null;render();}
   else if(act==='machadd')addMachineToSeance(+actEl.dataset.m,actEl.dataset.s);
   else if(act==='programs')go('programs');
   else if(act==='pactivate'){setActiveProgram(actEl.dataset.p);toast('Programme activé');go('home');}
