@@ -653,3 +653,11 @@ a.sbtn{display:flex;align-items:center;justify-content:center;text-decoration:no
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
 }
+
+/* ---------- glisser-déposer (réordonner) ---------- */
+.ehl{display:flex;align-items:center;gap:9px;min-width:0}
+.grip{touch-action:none;cursor:grab;color:var(--faint);font-size:1.05rem;line-height:1;padding:2px 4px 2px 0;-webkit-user-select:none;user-select:none}
+.grip:active{cursor:grabbing;color:var(--ac)}
+.dragging{opacity:.94;box-shadow:0 14px 34px rgba(0,0,0,.5);transform:scale(1.015);position:relative;z-index:6}
+.scard.dragging,.ecard.dragging{border-color:var(--ac)}
+.seancelist{display:block}

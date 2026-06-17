@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.16.0';
+const APP_VERSION='4.17.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -1453,8 +1453,8 @@ function statsHTML(){
 /* ---------- éditeur de programme ---------- */
 function editExHTML(e,i){
   const refStr=e.refText?e.refText:(e.ref!=null?fmtN(e.ref):'');
-  return '<div class="ecard" data-exid="'+esc(e.id||'')+'">'
-   +'<div class="ehead"><span class="en num">EXERCICE '+(i+1)+'</span>'
+  return '<div class="ecard" data-dragitem data-exid="'+esc(e.id||'')+'">'
+   +'<div class="ehead"><div class="ehl"><span class="grip" title="Glisser pour réordonner">⠿</span><span class="en num">EXERCICE '+(i+1)+'</span></div>'
    +'<div class="ebtns"><button class="ebtn" data-act="eup" title="Monter">↑</button>'
    +'<button class="ebtn" data-act="edown" title="Descendre">↓</button>'
    +'<button class="ebtn" data-act="edel" title="Supprimer">✕</button></div></div>'
@@ -1491,7 +1491,7 @@ function editHTML(sid){
    +'<div class="efield"><label>Points de vigilance</label><textarea id="es-warn">'+esc(s.warn||'')+'</textarea></div>'
    +'</div>'
    +'<div class="maplegend" style="margin:0 4px 12px">Muscles reconnus : '+MUSCLES.map(m=>m.id).join(', ')+'</div>'
-   +'<div id="exlist">';
+   +'<div id="exlist" data-dragsort="ex">';
   s.ex.forEach((e,i)=>{h+=editExHTML(e,i)});
   h+='</div><button class="bigbtn" data-act="elib">+ Depuis la bibliothèque</button>'+'<button class="bigbtn ghost" data-act="eadd">+ Exercice vierge</button>'
    +'<button class="bigbtn" data-act="esave">Enregistrer</button>';
@@ -1632,13 +1632,14 @@ function programsHTML(){
   h+='<button class="bigbtn" data-act="pnew">+ Nouveau programme</button>';
   h+='<div class="sectitle">Séances · '+esc(ap?ap.name:'')+'</div>';
   if(ap&&ap.seances.length){
+    h+='<div class="seancelist" data-dragsort="seance">';
     ap.seances.forEach(s=>{
       const sm=sessionMuscles(s);
       const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
-      h+='<div class="scard mgmt withfig">'
+      h+='<div class="scard mgmt withfig" data-dragitem data-sid="'+esc(s.id)+'">'
        +'<div class="scard-fig">'+silhouette(dominantSide(s),val)+'</div>'
        +'<div class="scard-body">'
-       +'<div class="srow"><span class="stag">'+esc(s.tab)+'</span>'
+       +'<div class="srow"><div class="ehl"><span class="grip" title="Glisser pour réordonner">⠿</span><span class="stag">'+esc(s.tab)+'</span></div>'
        +'<div class="ebtns">'
        +'<button class="ebtn" data-act="seup" data-s="'+esc(s.id)+'" title="Monter">↑</button>'
        +'<button class="ebtn" data-act="sedown" data-s="'+esc(s.id)+'" title="Descendre">↓</button>'
@@ -1649,6 +1650,7 @@ function programsHTML(){
        +'<div class="smeta">'+(s.ex?s.ex.length:0)+' exercice'+((s.ex&&s.ex.length>1)?'s':'')+(s.sub?' · '+esc(s.sub):'')+'</div>'
        +'</div></div>';
     });
+    h+='</div>';
   }else{
     h+='<div class="hempty">Aucune séance dans ce programme.</div>';
   }
@@ -2243,6 +2245,38 @@ if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   });
 }
 
+function initDragSort(){
+  let drag=null,pid=null,kind=null,cont=null;
+  const onDown=e=>{
+    const handle=e.target.closest('.grip');if(!handle)return;
+    const item=handle.closest('[data-dragitem]');if(!item)return;
+    cont=item.closest('[data-dragsort]');if(!cont)return;
+    e.preventDefault();drag=item;pid=e.pointerId;kind=cont.dataset.dragsort;
+    item.classList.add('dragging');try{item.setPointerCapture(pid)}catch(_){}
+  };
+  const onMove=e=>{
+    if(!drag)return;e.preventDefault();
+    drag.style.pointerEvents='none';
+    const u=document.elementFromPoint(e.clientX,e.clientY);
+    drag.style.pointerEvents='';
+    if(!u)return;const over=u.closest('[data-dragitem]');
+    if(!over||over===drag||over.parentNode!==cont)return;
+    const r=over.getBoundingClientRect();
+    cont.insertBefore(drag,((e.clientY-r.top)>r.height/2)?over.nextSibling:over);
+  };
+  const onUp=()=>{
+    if(!drag)return;const d=drag,k=kind,c=cont;
+    d.classList.remove('dragging');try{d.releasePointerCapture(pid)}catch(_){}
+    d.style.pointerEvents='';drag=null;pid=null;kind=null;cont=null;
+    if(k==='ex'){c.querySelectorAll('.ecard .en').forEach((el,i)=>{el.textContent='EXERCICE '+(i+1)});if(navigator.vibrate)navigator.vibrate(8);}
+    else if(k==='seance'){const ids=[...c.querySelectorAll('[data-dragitem]')].map(el=>el.dataset.sid);const ap=activeProgram();if(ap){ap.seances.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));savePrograms();}if(navigator.vibrate)navigator.vibrate(8);render();}
+  };
+  app.addEventListener('pointerdown',onDown,{passive:false});
+  app.addEventListener('pointermove',onMove,{passive:false});
+  app.addEventListener('pointerup',onUp);
+  app.addEventListener('pointercancel',onUp);
+}
+initDragSort();
 render();
 backupReminder();
 try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
