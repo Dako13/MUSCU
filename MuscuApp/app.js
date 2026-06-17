@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.15.0';
+const APP_VERSION='4.16.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -306,6 +306,8 @@ function moveSeance(sid,dir){const act=activeProgram();if(!act)return;const a=ac
 /* ================== RÉGLAGES ================== */
 const KEY_SETTINGS='muscu_settings';
 let SETTINGS=loadSettings();
+function applyTheme(){const t=(SETTINGS&&SETTINGS.theme)||'dark';if(t==='dark')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);}
+applyTheme();
 function loadSettings(){
   let s=null;
   try{s=JSON.parse(localStorage.getItem(KEY_SETTINGS))}catch(e){}
@@ -317,7 +319,8 @@ function loadSettings(){
     age:intOrNull(s.age)||PROFILE.age,
     objectif:(typeof s.objectif==='string'?s.objectif:''),
     salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
-    niveau:(typeof s.niveau==='string')?s.niveau:''
+    niveau:(typeof s.niveau==='string')?s.niveau:'',
+    theme:(['dark','rose','pink'].indexOf(s.theme)>=0?s.theme:'dark')
   };
 }
 function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
@@ -449,6 +452,25 @@ const MACHINES=[
  {n:'Rotary Torso',b:'Technogym',p:['abdos'],s:[],t:'Machine'},
  {n:'Crunch poulie haute (corde)',b:'Matrix',p:['abdos'],s:[],t:'Poulie'},
  {n:'Chaise romaine (relevé jambes)',b:'Charge libre',p:['abdos'],s:[],t:'Poids du corps'},
+ /* Haltères & barre (charge libre) */
+ {n:'Développé couché (haltères)',b:'Charge libre',p:['pecs'],s:['triceps','delt_ant'],t:'Haltères'},
+ {n:'Développé incliné (haltères)',b:'Charge libre',p:['pecs'],s:['delt_ant','triceps'],t:'Haltères'},
+ {n:'Écarté incliné (haltères)',b:'Charge libre',p:['pecs'],s:[],t:'Haltères'},
+ {n:'Développé militaire (haltères)',b:'Charge libre',p:['delt_ant','delt_lat'],s:['triceps'],t:'Haltères'},
+ {n:'Élévations latérales (haltères)',b:'Charge libre',p:['delt_lat'],s:[],t:'Haltères'},
+ {n:'Oiseau / Reverse fly (haltères)',b:'Charge libre',p:['delt_post'],s:['dos'],t:'Haltères'},
+ {n:'Haussements d’épaules / Shrugs (haltères)',b:'Charge libre',p:['dos'],s:[],t:'Haltères'},
+ {n:'Rowing buste penché (barre)',b:'Charge libre',p:['dos'],s:['biceps','delt_post'],t:'Charge libre'},
+ {n:'Rowing unilatéral (haltère, banc)',b:'Charge libre',p:['dos'],s:['biceps'],t:'Haltères'},
+ {n:'Soulevé de terre roumain (barre)',b:'Charge libre',p:['ischios'],s:['fessiers'],t:'Charge libre'},
+ {n:'Good morning (barre)',b:'Charge libre',p:['ischios'],s:['fessiers'],t:'Charge libre'},
+ {n:'Fentes marchées (haltères)',b:'Charge libre',p:['quadriceps'],s:['fessiers','ischios'],t:'Haltères'},
+ {n:'Squat bulgare (haltères, banc)',b:'Charge libre',p:['quadriceps'],s:['fessiers'],t:'Haltères'},
+ {n:'Curl pupitre / Larry Scott (machine)',b:'Technogym',p:['biceps'],s:[],t:'Machine'},
+ {n:'Extension triceps corde (poulie)',b:'Matrix',p:['triceps'],s:[],t:'Poulie'},
+ {n:'Kickback triceps (poulie)',b:'Matrix',p:['triceps'],s:[],t:'Poulie'},
+ {n:'Élévations latérales (poulie)',b:'Matrix',p:['delt_lat'],s:[],t:'Poulie'},
+ {n:'Face pull (poulie, corde)',b:'Matrix',p:['delt_post'],s:['dos'],t:'Poulie'},
  /* Cardio */
  {n:'Tapis de course',b:'Technogym',p:['cardio'],s:[],t:'Cardio'},
  {n:'Tapis de course',b:'Life Fitness',p:['cardio'],s:[],t:'Cardio'},
@@ -488,9 +510,9 @@ function machineLoad(m){
   if(t==='Charge libre')return 'libre';
   return 'broche';
 }
-const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio'};
+const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques (poids)',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio'};
 const LOAD_DESC={broche:'Sélectorisée : tu choisis la charge avec une broche dans la pile, rien à porter.',disques:'Plate-loaded : tu charges et décharges les disques toi-même.',libre:'Charge libre (barre / haltères) : équilibre et gainage en plus.',poulie:'Poulie à broche : tension constante, réglage rapide.',corps:'Au poids du corps (lestable).',cardio:'Appareil cardio.'};
-const LOAD_FILTER=[['broche','Broche'],['disques','À disques'],['libre','Charge libre'],['poulie','Poulie']];
+const LOAD_FILTER=[['broche','Pin / broche'],['disques','Poids / disques'],['libre','Charge libre'],['poulie','Poulie']];
 
 /* ================== DONNÉES SÉANCES ================== */
 loadProgram(); /* doit précéder loadDB() : la migration s'appuie sur EXO */
@@ -1974,6 +1996,10 @@ function showOnboarding(){
 function showSettings(){
   const inp='width:100%;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none';
   sheet.innerHTML='<h2>Réglages</h2><div class="sp">Appliqués immédiatement.</div>'
+   +'<div class="rectitle">Apparence</div>'
+   +'<div class="efield"><label>Thème</label><div class="chips" id="themeChips" style="flex-wrap:wrap">'
+   +[['dark','Sombre'],['rose','Rosé'],['pink','Rose pastel']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
+   +'</div></div>'
    +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
    +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')
    +'</div></div>'
@@ -2000,6 +2026,11 @@ function showSettings(){
     const c=ev.target.closest('.chip');if(!c)return;
     SETTINGS.rest=+c.dataset.rest;saveSettings();
     document.querySelectorAll('#restChips .chip').forEach(x=>x.classList.toggle('on',x===c));
+  });
+  document.getElementById('themeChips').addEventListener('click',ev=>{
+    const c=ev.target.closest('.chip');if(!c)return;
+    SETTINGS.theme=c.dataset.th;saveSettings();applyTheme();
+    document.querySelectorAll('#themeChips .chip').forEach(x=>x.classList.toggle('on',x===c));
   });
   document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null){SETTINGS.poids=v;saveSettings()}});
   document.getElementById('setTaille').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.taille=v;saveSettings()});
@@ -2219,7 +2250,7 @@ try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
 mirrorSnapshot();
 maybeRestoreFromIDB().then(restored=>{
   if(restored){
-    loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();
+    loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();applyTheme();
     render();
     toast('Données restaurées depuis la sauvegarde de secours');
   }
