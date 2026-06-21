@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.8';
+const APP_VERSION='4.18.9';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -1314,8 +1314,7 @@ function exerciseGuideHTML(p,steps){
 }
 function machineVisualHTML(m,p,load){
   const mus=(m.p||[]).concat(m.s||[]).map(mLabel).slice(0,3).join(' · ');
-  return '<div class="machineviz"><div class="machineviz-demo">'+demoSVG(p)+'</div>'
-   +'<div class="machineviz-info"><div class="machineviz-k">Mouvement</div><div class="machineviz-v">'+esc(patternLabel(p))+'</div>'
+  return '<div class="machineviz"><div class="machineviz-info"><div class="machineviz-k">Mouvement</div><div class="machineviz-v">'+esc(patternLabel(p))+'</div>'
    +'<div class="machineviz-sub">'+esc(LOAD_SHORT[load])+(mus?' · '+esc(mus):'')+'</div></div></div>';
 }
 function machineCoachHTML(p,load){
@@ -1338,14 +1337,13 @@ function showExercise(exId){
   else if(e.ref==null)ref=esc(e.unit||'—');
   else ref=fmtN(e.ref)+' '+esc(e.unit||'kg');
   sheet.innerHTML='<h2>'+esc(e.name)+'</h2>'
-   +(e.ceiling?'<div class="sp"><span class="badge">'+esc(e.ceiling)+'</span></div>':'')
-   +'<div class="exdemo">'+demoSVG(p)+'<span class="exdemo-tag">Mouvement</span><span class="exdemo-type">'+esc(patternLabel(p))+'</span></div>'
+   +'<div class="sp">'+esc(patternLabel(p))+(e.ceiling?' · <span class="badge">'+esc(e.ceiling)+'</span>':'')+'</div>'
+   +'<div class="sbtns" style="margin-bottom:16px"><a class="sbtn pri" href="'+ytURL(e)+'" target="_blank" rel="noopener">Voir la démonstration vidéo ›</a></div>'
    +exMuscleMapHTML(musP,musS)
    +(chips?'<div class="mchips">'+chips+'</div>':'')
    +'<div class="sumgrid"><div class="sumbox"><div class="v num">'+ref+'</div><div class="l">Charge réf.</div></div>'
    +'<div class="sumbox"><div class="v num">'+e.sets+' × '+esc(e.reps)+'</div><div class="l">Objectif</div></div></div>'
-   +exerciseGuideHTML(p,steps)
-   +'<div class="sbtns"><a class="sbtn pri" href="'+ytURL(e)+'" target="_blank" rel="noopener">Voir la démonstration vidéo</a></div>';
+   +exerciseGuideHTML(p,steps);
   openSheet();
 }
 
@@ -1783,8 +1781,8 @@ function showMachine(i){
   const p=exPattern({name:m.n});
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
    +'<div class="sp">'+esc(m.b)+' · '+esc(LOAD_SHORT[load])+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir la machine en photos ›</a></div>'
    +machineVisualHTML(m,p,load)
-   +'<div class="sbtns" style="margin-bottom:14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +'<div class="mchips">'+chips+'</div>'
    +'<div class="rectitle">Chargement</div><div class="notes" style="margin-bottom:14px">'+esc(LOAD_DESC[load])+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
