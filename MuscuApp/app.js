@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.5';
+const APP_VERSION='4.18.6';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -800,12 +800,12 @@ function homeHTML(){
     const sm=sessionMuscles(heroS);
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
-    h+='<button class="hero" data-act="open" data-s="'+esc(heroS.id)+'">'
+    h+='<button class="hero" data-act="quickstart" data-s="'+esc(heroS.id)+'">'
      +'<div class="hero-fig">'+silhouette(dominantSide(heroS),val)+'</div>'
      +'<div class="hero-main"><div class="hero-k">'+(reco?'SÉANCE DU JOUR':'À L’AFFICHE')+'</div>'
      +'<div class="hero-title">'+esc(heroS.title)+'</div>'
      +'<div class="hero-sub">'+esc(heroS.tab)+' · '+heroS.ex.length+' exercices'+(mlist?' · '+esc(mlist):'')+'</div>'
-     +'<div class="hero-row"><span class="hero-cta">Démarrer ›</span>'
+     +'<div class="hero-row"><span class="hero-cta">Démarrer maintenant ›</span>'
      +'<span class="hero-recup num">récup. '+seanceRecoveryScore(heroS)+' %</span></div>'
      +'</div></button>';
   }
@@ -1800,6 +1800,7 @@ app.addEventListener('click',ev=>{
   else if(act==='open')go('seance',actEl.dataset.s);
   else if(act==='openback')go('seance',actEl.dataset.s);
   else if(act==='start')startWorkout(route.seance);
+  else if(act==='quickstart'){const sid=actEl.dataset.s;startWorkout(sid);if(DB.active&&DB.active.seance===sid)go('seance',sid);}
   else if(act==='finish')finishWorkout();
   else if(act==='cancel')cancelWorkout();
   else if(act==='pause')togglePause();
