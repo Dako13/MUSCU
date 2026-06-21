@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.4';
+const APP_VERSION='4.18.5';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -605,6 +605,12 @@ function exHistory(exId){
   return out;
 }
 function prevSets(exId){const h=exHistory(exId);return h.length?h[h.length-1].sets:null}
+function lastSessionLine(exId){
+  const p=prevSets(exId);
+  if(!p||!p.length)return '';
+  const txt=p.map(s=>(s.w!=null?fmtN(s.w):'—')+'×'+(s.r!=null?s.r:'—')).join(' · ');
+  return '<div class="lastline" style="font-size:.8rem;color:var(--dim);padding:10px 2px 2px"><span class="lastlbl" style="color:var(--ac);font-weight:600">Dernière fois</span> '+txt+'</div>';
+}
 function maxW(sets){const ws=sets.map(s=>s.w).filter(w=>w!=null);return ws.length?Math.max(...ws):null}
 function bestEver(exId){const h=exHistory(exId);let b=null;for(const en of h){const m=maxW(en.sets);if(m!=null&&(b==null||m>b))b=m}return b}
 function workoutStats(w){
@@ -878,6 +884,7 @@ function exCardHTML(e,idx,active){
    +'<span class="cdone">FAIT</span></div>'
    +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span></div>'
    +'<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Comment réaliser · muscles ciblés ›</button>';
+  h+=lastSessionLine(e.id);
   if(active){
     const sets=active.ex[e.id]||[];
     const targets=suggestTargets(e);
@@ -1721,7 +1728,11 @@ function startWorkout(sid){
   const ex={};
   for(const e of SEANCE[sid].ex){
     ex[e.id]=[];
-    for(let i=0;i<e.sets;i++)ex[e.id].push({w:null,r:null,done:false});
+    const prev=prevSets(e.id);
+    for(let i=0;i<e.sets;i++){
+      const p=prev&&prev[i]?prev[i]:null;
+      ex[e.id].push({w:p&&p.w!=null?p.w:null,r:p&&p.r!=null?p.r:null,done:false});
+    }
   }
   DB.active={seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex};
   persist();render();
