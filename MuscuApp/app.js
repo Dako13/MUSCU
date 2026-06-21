@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.6';
+const APP_VERSION='4.18.7';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -1106,7 +1106,9 @@ function exPattern(e){
   return 'chestpress';
 }
 const REDUCED=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches);
+const DEMO_ALIAS={rowhoriz:'row',chestpress:'press',benchpress:'press',inclinepress:'press'};
 function demoSVG(p){
+  p=DEMO_ALIAS[p]||p;
   const an=(v,d)=>REDUCED?'':'<animateTransform attributeName="transform" attributeType="XML" type="rotate" values="'+v+'" keyTimes="0;0.5;1" dur="'+(d||2.2)+'s" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" repeatCount="indefinite"/>';
   const tr=(v,d)=>REDUCED?'':'<animateTransform attributeName="transform" attributeType="XML" type="translate" values="'+v+'" keyTimes="0;0.5;1" dur="'+(d||2.2)+'s" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" repeatCount="indefinite"/>';
   const av=(attr,v,d)=>REDUCED?'':'<animate attributeName="'+attr+'" values="'+v+'" keyTimes="0;0.5;1" dur="'+(d||2.2)+'s" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" repeatCount="indefinite"/>';
@@ -1174,16 +1176,151 @@ function demoSVG(p){
        +'<line class="d-move" x1="74" y1="100" x2="66" y2="150"/><line class="d-move" x1="74" y1="100" x2="82" y2="150"/></g>'
        +'<rect class="d-bench" x="56" y="150" width="44" height="10" rx="3"/>';
       break;
+    case 'shoulderpress':
+      g='<circle class="d-head" cx="80" cy="28" r="11"/><line class="d-bone" x1="80" y1="39" x2="80" y2="104"/>'+legsF
+       +'<g>'+tr('0 34;0 0;0 34',2.1)+'<line class="d-move" x1="62" y1="30" x2="62" y2="70"/><line class="d-move" x1="98" y1="30" x2="98" y2="70"/><line class="d-gear" x1="54" y1="30" x2="106" y2="30"/></g>';
+      break;
+    case 'fly':
+      g='<rect class="d-bench" x="38" y="118" width="88" height="7" rx="2"/>'
+       +'<circle class="d-head" cx="44" cy="108" r="10"/><line class="d-bone" x1="56" y1="110" x2="104" y2="110"/>'
+       +'<circle class="d-joint" cx="72" cy="98" r="3.5"/><circle class="d-joint" cx="96" cy="98" r="3.5"/>'
+       +'<g><line class="d-move" x1="72" y1="98" x2="42" y2="74"/><circle class="d-wt" cx="40" cy="72" r="6"/>'+an('0 72 98;52 72 98;0 72 98',2.4)+'</g>'
+       +'<g><line class="d-move" x1="96" y1="98" x2="126" y2="74"/><circle class="d-wt" cx="128" cy="72" r="6"/>'+an('0 96 98;-52 96 98;0 96 98',2.4)+'</g>';
+      break;
+    case 'reardelt':
+      g='<circle class="d-head" cx="72" cy="38" r="10"/><g>'+an('0 74 90;-18 74 90;0 74 90',2.2)+'<line class="d-bone" x1="72" y1="48" x2="74" y2="104"/>'+legsS+'</g>'
+       +'<circle class="d-joint" cx="74" cy="62" r="3.5"/>'
+       +'<g><line class="d-move" x1="74" y1="62" x2="116" y2="82"/><circle class="d-wt" cx="118" cy="83" r="6"/>'+an('-18 74 62;28 74 62;-18 74 62',2.2)+'</g>';
+      break;
+    case 'pullover':
+      g='<rect class="d-bench" x="38" y="118" width="88" height="7" rx="2"/>'
+       +'<circle class="d-head" cx="44" cy="108" r="10"/><line class="d-bone" x1="56" y1="110" x2="104" y2="110"/>'
+       +'<g><line class="d-move" x1="74" y1="100" x2="70" y2="46"/><circle class="d-wt" cx="70" cy="42" r="8"/>'+an('-58 74 100;8 74 100;-58 74 100',2.5)+'</g>';
+      break;
+    case 'squat':
+      g='<g>'+tr('0 0;0 18;0 0',2.3)+'<circle class="d-head" cx="80" cy="28" r="11"/><line class="d-bone" x1="80" y1="39" x2="80" y2="96"/>'
+       +'<line class="d-move" x1="80" y1="96" x2="58" y2="150"/><line class="d-move" x1="80" y1="96" x2="104" y2="150"/>'
+       +'<line class="d-gear" x1="54" y1="54" x2="106" y2="54"/></g>';
+      break;
+    case 'legpress':
+      g='<rect class="d-bench" x="32" y="112" width="58" height="9" rx="3"/><line class="d-bench" x1="48" y1="120" x2="48" y2="160" stroke-width="4"/>'
+       +'<circle class="d-head" cx="48" cy="96" r="10"/><line class="d-bone" x1="58" y1="100" x2="86" y2="116"/>'
+       +'<g>'+tr('0 0;24 -18;0 0',2.4)+'<rect class="d-pad" x="104" y="54" width="16" height="66" rx="4"/><line class="d-move" x1="86" y1="116" x2="108" y2="94"/><line class="d-move" x1="86" y1="116" x2="108" y2="78"/></g>';
+      break;
+    case 'hipthrust':
+      g='<rect class="d-bench" x="28" y="92" width="40" height="9" rx="3"/><circle class="d-head" cx="42" cy="82" r="9"/>'
+       +'<g>'+tr('0 14;0 -4;0 14',2.2)+'<line class="d-bone" x1="52" y1="92" x2="104" y2="110"/><circle class="d-joint" cx="104" cy="110" r="3.5"/><line class="d-move" x1="104" y1="110" x2="132" y2="150"/><line class="d-move" x1="104" y1="110" x2="82" y2="150"/></g>'
+       +'<line class="d-gear" x1="82" y1="104" x2="122" y2="104"/>';
+      break;
+    case 'hinge':
+      g='<circle class="d-head" cx="78" cy="34" r="10"/><g>'+an('0 76 96;34 76 96;0 76 96',2.4)+'<line class="d-bone" x1="76" y1="44" x2="76" y2="96"/><line class="d-move" x1="76" y1="60" x2="58" y2="118"/><line class="d-move" x1="76" y1="60" x2="94" y2="118"/></g>'
+       +'<line class="d-bone" x1="76" y1="96" x2="64" y2="156"/><line class="d-bone" x1="76" y1="96" x2="90" y2="156"/>';
+      break;
+    case 'lunge':
+      g='<g>'+tr('0 0;0 13;0 0',2.2)+'<circle class="d-head" cx="76" cy="30" r="10"/><line class="d-bone" x1="76" y1="40" x2="76" y2="96"/>'
+       +'<line class="d-move" x1="76" y1="96" x2="48" y2="150"/><line class="d-move" x1="76" y1="96" x2="116" y2="150"/><line class="d-bone" x1="48" y1="150" x2="32" y2="150"/><line class="d-bone" x1="116" y1="150" x2="136" y2="150"/></g>';
+      break;
+    case 'abductor':
+      g='<rect class="d-bench" x="52" y="100" width="56" height="8" rx="3"/><circle class="d-head" cx="80" cy="36" r="11"/><line class="d-bone" x1="80" y1="47" x2="80" y2="100"/>'
+       +'<g><line class="d-move" x1="80" y1="106" x2="58" y2="150"/>'+an('0 80 106;-24 80 106;0 80 106',2.1)+'</g>'
+       +'<g><line class="d-move" x1="80" y1="106" x2="102" y2="150"/>'+an('0 80 106;24 80 106;0 80 106',2.1)+'</g>';
+      break;
+    case 'adductor':
+      g='<rect class="d-bench" x="52" y="100" width="56" height="8" rx="3"/><circle class="d-head" cx="80" cy="36" r="11"/><line class="d-bone" x1="80" y1="47" x2="80" y2="100"/>'
+       +'<g><line class="d-move" x1="80" y1="106" x2="50" y2="150"/>'+an('-24 80 106;0 80 106;-24 80 106',2.1)+'</g>'
+       +'<g><line class="d-move" x1="80" y1="106" x2="110" y2="150"/>'+an('24 80 106;0 80 106;24 80 106',2.1)+'</g>';
+      break;
+    case 'abs':
+      g='<line class="d-bone" x1="34" y1="148" x2="128" y2="148"/><circle class="d-head" cx="48" cy="126" r="10"/>'
+       +'<g>'+an('0 84 142;-24 84 142;0 84 142',2.1)+'<line class="d-move" x1="56" y1="132" x2="104" y2="142"/><line class="d-bone" x1="104" y1="142" x2="132" y2="122"/></g>';
+      break;
+    case 'shrug':
+      g='<circle class="d-head" cx="80" cy="30" r="11"/><line class="d-bone" x1="80" y1="41" x2="80" y2="104"/>'+legsF
+       +'<g>'+tr('0 0;0 -12;0 0',1.8)+'<line class="d-move" x1="58" y1="78" x2="58" y2="118"/><circle class="d-wt" cx="58" cy="122" r="7"/><line class="d-move" x1="102" y1="78" x2="102" y2="118"/><circle class="d-wt" cx="102" cy="122" r="7"/></g>';
+      break;
+    case 'cardio':
+      g='<rect class="d-bench" x="36" y="142" width="88" height="9" rx="4"/><line class="d-cable" x1="110" y1="142" x2="130" y2="96"/>'
+       +'<circle class="d-head" cx="76" cy="42" r="10"/><line class="d-bone" x1="76" y1="52" x2="76" y2="104"/>'
+       +'<g>'+an('-12 76 104;16 76 104;-12 76 104',1.5)+'<line class="d-move" x1="76" y1="104" x2="58" y2="142"/><line class="d-move" x1="76" y1="104" x2="96" y2="142"/></g>';
+      break;
     default:
       g='<circle class="d-head" cx="80" cy="32" r="11"/><line class="d-bone" x1="80" y1="43" x2="80" y2="104"/>'+legsF;
   }
   return '<svg class="exdemo-svg" viewBox="0 0 160 172">'+floor+g+'</svg>';
+}
+const PATTERN_LABEL={
+ cardio:'Cardio maîtrisé',chestpress:'Poussée poitrine',benchpress:'Développé couché',inclinepress:'Développé incliné',shoulderpress:'Poussée épaules',
+ fly:'Ouverture contrôlée',pullover:'Pull-over',pulldown:'Tirage vertical',rowhoriz:'Tirage horizontal',reardelt:'Arrière épaules',
+ lateral:'Élévation latérale',shrug:'Trapèzes',curl:'Curl biceps',triceps:'Extension triceps',
+ legpress:'Presse à cuisses',squat:'Squat',hipthrust:'Hip thrust',hinge:'Charnière hanche',lunge:'Fente',
+ legext:'Extension jambes',legcurl:'Curl ischios',adductor:'Adducteurs',abductor:'Abducteurs',calf:'Mollets',abs:'Gainage abdos'
+};
+const COACH_LABELS=['Position','Trajectoire','Respiration','À éviter'];
+const COACH_GUIDE={
+ cardio:['Monte progressivement en intensité, buste grand et regard loin.','Garde un rythme régulier avant de chercher la vitesse.','Respire en continu, sans bloquer la cage.','Ne pars pas trop fort si tu veux tenir la zone ciblée.'],
+ chestpress:['Poignées à hauteur de poitrine, omoplates posées, pieds stables.','Pousse en diagonale légère, coudes vers 45°, retour contrôlé.','Souffle en poussant, inspire sur la descente.','Évite de verrouiller brutalement ou de décoller les épaules.'],
+ benchpress:['Omoplates serrées, pieds ancrés, poignets alignés au-dessus des coudes.','Descends vers le bas des pectoraux, pousse sans rebond.','Grosse inspiration avant la descente, souffle après le passage dur.','Ne casse pas les poignets et ne rebondis pas sur la poitrine.'],
+ inclinepress:['Banc autour de 30°, poitrine haute, bas du dos neutre.','Descends vers le haut des pectoraux, coudes sous les poignets.','Inspire en bas, souffle sur la poussée.','Évite de transformer le mouvement en développé épaules.'],
+ shoulderpress:['Bassin gainé, côtes rentrées, poignées au niveau des oreilles.','Pousse au-dessus de la tête puis redescends sans perdre le contrôle.','Souffle en montant, inspire en revenant.','Ne cambre pas pour finir la répétition.'],
+ fly:['Coudes légèrement fléchis et angle constant tout du long.','Ouvre jusqu’à sentir les pectoraux, referme sans claquer les poignées.','Inspire à l’ouverture, souffle en resserrant.','Ne plie pas les bras comme sur un développé.'],
+ pullover:['Buste stable, cage ouverte, bras presque tendus.','Va chercher l’étirement puis ramène avec les dorsaux.','Inspire en arrière, souffle en revenant au-dessus du torse.','Évite de tirer uniquement avec les triceps.'],
+ pulldown:['Poitrine haute, épaules basses, prise solide.','Tire les coudes vers les hanches puis laisse remonter en grand.','Souffle en tirant, inspire sur l’étirement.','Ne tire pas derrière la nuque et ne balance pas le buste.'],
+ rowhoriz:['Buste fixe, poitrine ouverte, épaules basses.','Tire les coudes en arrière et serre les omoplates une seconde.','Souffle en tirant, inspire en tendant les bras.','Ne compense pas avec un balancier du dos.'],
+ reardelt:['Nuque longue, épaules basses, charge légère.','Ouvre vers l’arrière en pensant aux coudes, pas aux mains.','Souffle à l’ouverture, inspire au retour.','Ne hausse pas les trapèzes à chaque rep.'],
+ lateral:['Charge légère, épaules basses, coudes souples.','Monte par les coudes jusqu’à l’horizontale, retour lent.','Souffle en montant, inspire en descendant.','Ne donne pas d’élan avec le bas du dos.'],
+ shrug:['Bras longs, nuque neutre, charge tenue près du corps.','Monte les épaules droit vers les oreilles, pause courte en haut.','Souffle en haut, inspire en bas.','Ne roule pas les épaules en cercle.'],
+ curl:['Coudes fixes, buste droit, poignets solides.','Monte sans avancer les coudes, retiens la descente.','Souffle en montant, inspire en descendant.','Ne balance pas le buste pour finir la série.'],
+ triceps:['Coudes verrouillés près du corps ou au-dessus selon la variante.','Étends complètement puis reviens sans perdre la tension.','Souffle sur l’extension, inspire au retour.','Ne laisse pas les coudes partir dans tous les sens.'],
+ legpress:['Pieds largeur épaules, genoux dans l’axe des pointes.','Descends profond sans décoller le bassin, pousse par le milieu du pied.','Inspire en descente, souffle en poussant.','Ne verrouille pas les genoux en haut.'],
+ squat:['Pieds ancrés, cage tenue, regard devant.','Descends genoux dans l’axe, remonte en poussant le sol.','Inspire et gaine avant de descendre, souffle en remontant.','Ne laisse pas les talons ou les genoux partir.'],
+ hipthrust:['Omoplates sur le banc, menton rentré, pieds sous les genoux.','Monte le bassin jusqu’à l’alignement et serre les fessiers.','Souffle en haut, inspire en redescendant.','Ne cambre pas le bas du dos pour gagner de la hauteur.'],
+ hinge:['Hanches vers l’arrière, dos plat, genoux souples.','Descends jusqu’à l’étirement des ischios, remonte par les fessiers.','Inspire en descendant, souffle en remontant.','Ne transforme pas le mouvement en squat.'],
+ lunge:['Grand pas, buste haut, poids surtout dans le pied avant.','Descends verticalement puis pousse dans le talon avant.','Inspire en bas, souffle en remontant.','Ne laisse pas le genou avant rentrer vers l’intérieur.'],
+ legext:['Dos contre le dossier, genoux alignés avec l’axe de la machine.','Tends fort en haut, pause courte, descente lente.','Souffle en tendant, inspire au retour.','Ne lance pas la charge avec un à-coup.'],
+ legcurl:['Genoux alignés avec l’axe, bassin plaqué au support.','Ramène les talons vers toi, contrôle tout le retour.','Souffle en fermant, inspire en ouvrant.','Ne laisse pas les hanches se soulever.'],
+ adductor:['Dos posé, amplitude confortable, bassin stable.','Resserre les cuisses avec contrôle, pause courte au centre.','Souffle en fermant, inspire en ouvrant.','Ne claque pas les coussins en fin de course.'],
+ abductor:['Dos posé, pieds stables, genoux contre les coussins.','Écarte en contractant les fessiers, reviens lentement.','Souffle à l’ouverture, inspire au retour.','Ne cherche pas une amplitude qui fait basculer le bassin.'],
+ calf:['Avant-pied stable, amplitude complète, genoux solides.','Descends en étirement puis monte haut sur la pointe.','Souffle en haut, inspire en bas.','Ne rebondis pas en bas du mouvement.'],
+ abs:['Nuque longue, bassin contrôlé, mouvement court et propre.','Enroule la colonne ou maintiens le gainage selon la variante.','Souffle fort sur la contraction.','Ne tire pas sur la nuque et ne creuse pas le bas du dos.']
+};
+const LOAD_SETUP={
+ broche:'Choisis la broche avant de t’installer, puis teste une rep légère.',
+ disques:'Charge les deux côtés de façon symétrique et verrouille les disques.',
+ libre:'Prépare la zone, garde la charge proche et sécurise tes appuis.',
+ poulie:'Règle la hauteur de poulie et garde le câble dans l’axe du mouvement.',
+ corps:'Règle l’assistance ou le lest avant la série de travail.',
+ cardio:'Règle vitesse, inclinaison ou résistance avant de monter en intensité.'
+};
+function patternLabel(p){return PATTERN_LABEL[p]||'Mouvement guidé';}
+function guideForPattern(p){return COACH_GUIDE[p]||COACH_GUIDE.chestpress;}
+function coachCardsHTML(lines){
+  let h='<div class="coachgrid">';
+  for(let i=0;i<COACH_LABELS.length;i++){
+    h+='<div class="coachcard"><div class="coachk">'+esc(COACH_LABELS[i])+'</div><div class="coachv">'+esc(lines[i]||lines[0]||'Mouvement contrôlé, amplitude propre.')+'</div></div>';
+  }
+  return h+'</div>';
+}
+function exerciseGuideHTML(p,steps){
+  const notes=steps.length?('<div class="rectitle softtitle">Notes du programme</div><ol class="steps compact">'+steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'):'';
+  return '<div class="rectitle">Comment réaliser</div>'+coachCardsHTML(guideForPattern(p))+notes;
+}
+function machineVisualHTML(m,p,load){
+  const mus=(m.p||[]).concat(m.s||[]).map(mLabel).slice(0,3).join(' · ');
+  return '<div class="machineviz"><div class="machineviz-demo">'+demoSVG(p)+'</div>'
+   +'<div class="machineviz-info"><div class="machineviz-k">Mouvement</div><div class="machineviz-v">'+esc(patternLabel(p))+'</div>'
+   +'<div class="machineviz-sub">'+esc(LOAD_SHORT[load])+(mus?' · '+esc(mus):'')+'</div></div></div>';
+}
+function machineCoachHTML(p,load){
+  const g=guideForPattern(p);
+  const lines=[LOAD_SETUP[load]||'Règle la machine avant la série de travail.',g[0],g[1],g[3]];
+  return '<div class="rectitle">Mode d’emploi rapide</div>'+coachCardsHTML(lines);
 }
 
 /* fiche exercice : démo animée + visuel muscles + comment réaliser */
 function showExercise(exId){
   const e=EXO[exId];if(!e)return;
   const musP=e.musP||[],musS=e.musS||[];
+  const p=exPattern(e);
   const steps=String(e.notes||'').split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9])/).map(t=>t.trim()).filter(t=>t.length>1);
   let chips='';
   musP.forEach(m=>{chips+='<span class="mchip pri">'+esc((MUSCLE_BY_ID[m]||{}).label||m)+'</span>'});
@@ -1192,15 +1329,14 @@ function showExercise(exId){
   if(e.refText)ref=esc(e.refText);
   else if(e.ref==null)ref=esc(e.unit||'—');
   else ref=fmtN(e.ref)+' '+esc(e.unit||'kg');
-  const stepsHtml=steps.length?('<div class="rectitle">Comment réaliser</div><ol class="steps">'+steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'):'';
   sheet.innerHTML='<h2>'+esc(e.name)+'</h2>'
    +(e.ceiling?'<div class="sp"><span class="badge">'+esc(e.ceiling)+'</span></div>':'')
-   +'<div class="exdemo">'+demoSVG(exPattern(e))+'<span class="exdemo-tag">Mouvement</span></div>'
+   +'<div class="exdemo">'+demoSVG(p)+'<span class="exdemo-tag">Mouvement</span><span class="exdemo-type">'+esc(patternLabel(p))+'</span></div>'
    +exMuscleMapHTML(musP,musS)
    +(chips?'<div class="mchips">'+chips+'</div>':'')
    +'<div class="sumgrid"><div class="sumbox"><div class="v num">'+ref+'</div><div class="l">Charge réf.</div></div>'
    +'<div class="sumbox"><div class="v num">'+e.sets+' × '+esc(e.reps)+'</div><div class="l">Objectif</div></div></div>'
-   +stepsHtml
+   +exerciseGuideHTML(p,steps)
    +'<div class="sbtns"><a class="sbtn pri" href="'+ytURL(e)+'" target="_blank" rel="noopener">Voir la démonstration vidéo</a></div>';
   openSheet();
 }
@@ -1636,12 +1772,15 @@ function showMachine(i){
   const chains=machineChains(m);
   const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+' '+m.b+' machine musculation');
   const load=machineLoad(m);
+  const p=exPattern({name:m.n});
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
    +'<div class="sp">'+esc(m.b)+' · '+esc(LOAD_SHORT[load])+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +machineVisualHTML(m,p,load)
    +'<div class="sbtns" style="margin-bottom:14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +'<div class="mchips">'+chips+'</div>'
    +'<div class="rectitle">Chargement</div><div class="notes" style="margin-bottom:14px">'+esc(LOAD_DESC[load])+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
+   +machineCoachHTML(p,load)
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
   openSheet();

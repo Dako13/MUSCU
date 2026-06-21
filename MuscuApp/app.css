@@ -578,12 +578,24 @@ details[open] summary::before{transform:rotate(45deg)}
 .steps li{position:relative;counter-increment:st;padding:9px 0 9px 36px;font-size:.9rem;line-height:1.55;color:var(--txt);border-bottom:1px solid var(--line)}
 .steps li:last-child{border-bottom:none}
 .steps li::before{content:counter(st);position:absolute;left:0;top:8px;width:23px;height:23px;border-radius:8px;background:var(--ac-soft);color:var(--ac);font-family:var(--font-head);font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center}
+.steps.compact{margin-top:0}
+.steps.compact li{font-size:.84rem;color:var(--dim);padding-top:8px;padding-bottom:8px}
+.softtitle{margin-top:2px;color:var(--dim)}
+.coachgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0 0 16px}
+.coachcard{
+  min-height:104px;padding:12px 11px;border:.5px solid var(--line);
+  border-radius:15px;background:linear-gradient(180deg,var(--glass),transparent 72%),var(--card2);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+}
+.coachk{font-family:var(--font-head);font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:7px}
+.coachv{font-size:.82rem;line-height:1.45;color:var(--txt)}
 a.sbtn{display:flex;align-items:center;justify-content:center;text-decoration:none}
 
 /* ---------- démonstration animée ---------- */
-.exdemo{position:relative;background:radial-gradient(120% 80% at 50% 0%,rgba(225,29,42,.12),transparent 60%),var(--card2);border:1px solid var(--line);border-radius:18px;padding:8px;margin:6px 0 16px;display:flex;align-items:center;justify-content:center}
-.exdemo-svg{display:block;width:60%;max-width:200px;height:auto}
+.exdemo{position:relative;min-height:194px;overflow:hidden;background:radial-gradient(120% 80% at 50% 0%,var(--ac-soft),transparent 60%),var(--card2);border:1px solid var(--line);border-radius:18px;padding:8px;margin:6px 0 16px;display:flex;align-items:center;justify-content:center}
+.exdemo-svg{display:block;width:66%;max-width:220px;height:auto}
 .exdemo-tag{position:absolute;top:10px;left:12px;font-family:var(--font-head);font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ac)}
+.exdemo-type{position:absolute;right:12px;bottom:10px;max-width:58%;font-family:var(--font-head);font-size:.74rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt);background:var(--glass);border:.5px solid var(--line2);border-radius:999px;padding:5px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .d-floor{stroke:rgba(255,255,255,.10);stroke-width:3;stroke-linecap:round}
 .d-head{fill:none;stroke:#efeae6;stroke-width:4}
 .d-bone{stroke:#efeae6;stroke-width:5;stroke-linecap:round;fill:none}
@@ -593,6 +605,19 @@ a.sbtn{display:flex;align-items:center;justify-content:center;text-decoration:no
 .d-gear{stroke:#7a7a7a;stroke-width:5;stroke-linecap:round}
 .d-cable{stroke:#7a7a7a;stroke-width:2.5;stroke-linecap:round;fill:none}
 .d-bench{fill:#1c1c1c;stroke:#333;stroke-width:1.5}
+.d-pad{fill:var(--ac-soft);stroke:var(--ac);stroke-width:2}
+
+/* ---------- fiche machine ---------- */
+.machineviz{
+  display:grid;grid-template-columns:116px minmax(0,1fr);align-items:center;gap:13px;
+  margin:4px 0 14px;padding:12px;border:.5px solid var(--line);
+  border-radius:17px;background:linear-gradient(180deg,var(--glass),transparent 70%),var(--card2);
+}
+.machineviz-demo{display:flex;align-items:center;justify-content:center;min-height:112px;border-radius:13px;background:var(--ink);border:.5px solid var(--line)}
+.machineviz-demo .exdemo-svg{width:100%;max-width:110px}
+.machineviz-k{font-family:var(--font-head);font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:5px}
+.machineviz-v{font-family:var(--font-head);font-size:1.38rem;font-weight:700;line-height:1;color:var(--txt);text-transform:uppercase}
+.machineviz-sub{font-size:.82rem;line-height:1.45;color:var(--dim);margin-top:7px}
 
 /* ---------- bilan forme ---------- */
 .bilanhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -1086,6 +1111,9 @@ summary{border-radius:10px}
   .statbox{padding-left:8px;padding-right:8px}
   .strow{gap:5px}
   .stpb{flex-basis:29px}
+  .coachgrid{grid-template-columns:1fr}
+  .machineviz{grid-template-columns:1fr}
+  .machineviz-demo{min-height:126px}
 }
 
 /* ---------- reduced motion ---------- */
