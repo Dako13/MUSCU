@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.11';
+const APP_VERSION='4.18.12';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -732,12 +732,12 @@ function targetCue(e){
   const targets=suggestTargets(e),prev=prevSets(e.id)||[];
   const t=firstUsefulSet(targets),p=firstUsefulSet(prev);
   if(!t)return{tone:'base',title:'Cible à construire',body:'Valide une première séance pour générer une cible automatique.',target:'—'};
-  let title='Consolider';
+  let title='Même cible';
   if(e.ceiling)title='Monter les reps';
   else if(p&&t.w!=null&&p.w!=null&&t.w>p.w)title='Augmenter la charge';
   else if(p&&t.r!=null&&p.r!=null&&t.r>p.r)title='Ajouter une rep';
   const body=p?'Dernière fois '+setShort(p)+' · vise '+setShort(t):'Départ conseillé '+setShort(t);
-  return{tone:title==='Consolider'?'base':'hot',title,body,target:setShort(t)};
+  return{tone:title==='Même cible'?'base':'hot',title,body,target:setShort(t)};
 }
 function activeExerciseScore(sets){
   const done=(sets||[]).filter(s=>s.done),best=maxW(done);
@@ -745,11 +745,10 @@ function activeExerciseScore(sets){
 }
 function workoutCoachHTML(e,sets){
   const cue=targetCue(e),score=activeExerciseScore(sets);
-  const btn=cue.target==='—'?'<button class="wcoach-btn ghost" disabled>Auto</button>':'<button class="wcoach-btn" data-act="filltarget">Appliquer</button>';
   return '<div class="wcoach '+cue.tone+'"><div><div class="wcoach-k">Cible du jour</div><div class="wcoach-v">'+esc(cue.title)+' · <span class="num">'+esc(cue.target)+'</span></div>'
    +'<div class="wcoach-s">'+esc(cue.body)+'</div></div>'
    +'<div class="wcoach-r"><span class="num">'+score.done+'/'+score.total+'</span><small>Séries</small>'+(score.best!=null?'<b class="num">'+fmtN(score.best)+' kg</b>':'')+'</div>'
-   +btn+'</div>';
+   +'</div>';
 }
 
 /* ================== ROUTAGE / RENDU ================== */
@@ -2119,19 +2118,6 @@ app.addEventListener('click',ev=>{
     const card=actEl.closest('.ecard');
     if(act==='eup'&&card.previousElementSibling)card.previousElementSibling.before(card);
     if(act==='edown'&&card.nextElementSibling)card.nextElementSibling.after(card);
-  }
-  else if(act==='filltarget'){
-    const card=actEl.closest('.card');const exId=card&&card.dataset.ex,e=EXO[exId];
-    if(!DB.active||!e||!DB.active.ex[exId])return;
-    const targets=suggestTargets(e);
-    DB.active.ex[exId].forEach((st,i)=>{
-      if(st.done)return;
-      const t=targets[i]||targets[targets.length-1]||null;
-      if(!t)return;
-      if(t.w!=null)st.w=t.w;
-      if(t.r!=null)st.r=t.r;
-    });
-    persist();render();toast('Cible appliquée');
   }
   else if(act==='addset'){
     const card=actEl.closest('.card');const exId=card.dataset.ex;

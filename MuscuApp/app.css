@@ -170,7 +170,7 @@ input,textarea,select{font:inherit;color:inherit}
 .refunit{font-size:.76rem;color:var(--dim);margin-left:5px}
 .target{font-size:.82rem;color:var(--dim)}
 .wcoach{
-  display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;
   margin:12px 0 12px 34px;padding:12px;border:.5px solid var(--line);
   border-radius:15px;background:linear-gradient(180deg,var(--glass),transparent 72%),var(--card2);
 }
@@ -182,13 +182,6 @@ input,textarea,select{font:inherit;color:inherit}
 .wcoach-r>span{font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--txt);line-height:1}
 .wcoach-r small{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
 .wcoach-r b{font-family:var(--font-head);font-size:.82rem;color:var(--ac);font-weight:700;white-space:nowrap}
-.wcoach-btn{
-  align-self:stretch;display:flex;align-items:center;justify-content:center;
-  border-radius:12px;padding:0 11px;background:var(--ac);color:var(--on-ac);
-  font-family:var(--font-head);font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  box-shadow:0 8px 18px -12px var(--ac-glow);
-}
-.wcoach-btn.ghost,.wcoach-btn:disabled{background:var(--input);color:var(--faint);box-shadow:none}
 details{margin-left:34px}
 summary{
   list-style:none;font-size:.78rem;color:var(--faint);
@@ -1166,7 +1159,6 @@ summary{border-radius:10px}
   .stpb{flex-basis:29px}
   .wcoach{grid-template-columns:1fr;margin-left:0}
   .wcoach-r{align-items:flex-start;flex-direction:row;gap:8px}
-  .wcoach-btn{min-height:38px}
   .coachgrid{grid-template-columns:1fr}
   .pulsegrid{grid-template-columns:1fr}
   .machineviz{grid-template-columns:1fr}
