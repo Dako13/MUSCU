@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.9';
+const APP_VERSION='4.18.10';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -944,7 +944,8 @@ function workoutMusclesHTML(w){
 /* ---------- historique ---------- */
 function suiviHTML(){
   let h='<div class="top"><h1>Suivi</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>'
-   +'<div class="seg">'
+   +suiviSummaryHTML()
+   +'<div class="seg suiviseg">'
    +'<button class="segb'+(SUIVI==='stats'?'':' on')+'" data-act="suivitab" data-t="history">Historique</button>'
    +'<button class="segb'+(SUIVI==='stats'?' on':'')+'" data-act="suivitab" data-t="stats">Stats</button></div>';
   return h+(SUIVI==='stats'?statsHTML(true):historyHTML(true));
@@ -1474,6 +1475,7 @@ function downloadBackup(){
     document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1500);
     try{localStorage.setItem('dako_lastbackup',todayISO())}catch(e){}
+    mirrorSoon();
     toast('Sauvegarde téléchargée');
   }catch(e){toast('Échec de la sauvegarde')}
 }
@@ -1482,6 +1484,96 @@ function backupReminder(){
   if(!DB.workouts.length)return;
   const days=last?diffDays(last):999;
   if(days>=7)setTimeout(()=>toast('Pense à sauvegarder tes données (Réglages › Sauvegarde)'),1800);
+}
+function backupState(){
+  let last=null;try{last=localStorage.getItem('dako_lastbackup')}catch(e){}
+  const days=last?diffDays(last):null;
+  if(days==null)return{tone:'warn',label:'Aucune sauvegarde fichier',detail:'Télécharge un export JSON dès que possible.'};
+  if(days>=7)return{tone:'warn',label:'Sauvegarde à refaire',detail:'Dernier export il y a '+days+' j.'};
+  return{tone:'ok',label:'Sauvegarde récente',detail:days===0?'Export fait aujourd’hui.':'Dernier export il y a '+days+' j.'};
+}
+function storageSizeKB(){
+  let n=0;
+  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),v=localStorage.getItem(k)||'';n+=((k||'').length+v.length)*2}}catch(e){}
+  return Math.max(1,Math.round(n/1024));
+}
+function totalsOfWorkouts(list){
+  let vol=0,sets=0;
+  list.forEach(w=>{const st=workoutStats(w);vol+=st.vol;sets+=st.sets});
+  return{vol,sets,sessions:list.length};
+}
+function periodStartIso(isMonth,shift){
+  const now=new Date(),d=isMonth?new Date(now.getFullYear(),now.getMonth()+shift,1):weekStart(now);
+  if(!isMonth)d.setDate(d.getDate()+shift*7);
+  return isoOf(d);
+}
+function periodEndIso(isMonth,shift){
+  const now=new Date(),d=isMonth?new Date(now.getFullYear(),now.getMonth()+shift+1,1):weekStart(now);
+  if(!isMonth)d.setDate(d.getDate()+(shift+1)*7);
+  return isoOf(d);
+}
+function workoutsInRange(a,b){return DB.workouts.filter(w=>w.date>=a&&w.date<b)}
+function signed(n){return (n>0?'+':'')+n}
+function signedKg(n){return (n>0?'+':'')+fmtKg(Math.round(n))+' kg'}
+function muscleGroupScores(mvol){
+  return STAT_MUSCLE_GROUPS.map(g=>{let v=0;g[1].forEach(m=>v+=mvol[m]||0);return{label:g[0],v:Math.round(v)}}).sort((a,b)=>b.v-a.v);
+}
+function bestRecentProgress(){
+  const out=[],seen={};
+  for(const s of PROGRAM)for(const e of s.ex){
+    if(seen[e.id])continue;seen[e.id]=1;
+    const h=exHistory(e.id).map(en=>({date:en.date,m:maxW(en.sets)})).filter(x=>x.m!=null);
+    if(h.length<2)continue;
+    const last=h[h.length-1];
+    if(diffDays(last.date)>21)continue;
+    let prev=null;for(let i=0;i<h.length-1;i++)if(prev==null||h[i].m>prev)prev=h[i].m;
+    if(prev!=null&&last.m>prev)out.push({tab:s.tab,name:e.name,w:last.m,delta:last.m-prev,date:last.date});
+  }
+  out.sort((a,b)=>b.delta-a.delta);
+  return out[0]||null;
+}
+function dataHealthHTML(snap){
+  const bs=backupState();
+  const mirror=snap&&snap.t?{tone:'ok',label:'Miroir IndexedDB actif',detail:'Instantané local : '+fmtDateShort(isoOf(new Date(snap.t)))}:{tone:'warn',label:'Miroir à vérifier',detail:'Force une synchronisation si tu viens d’importer.'};
+  return '<div class="datahealth">'
+   +'<div class="healthrow '+bs.tone+'"><span><b>'+esc(bs.label)+'</b><small>'+esc(bs.detail)+'</small></span><i></i></div>'
+   +'<div class="healthrow '+mirror.tone+'"><span><b>'+esc(mirror.label)+'</b><small>'+esc(mirror.detail)+'</small></span><i></i></div>'
+   +'<div class="healthrow ok"><span><b>'+DB.workouts.length+' séance'+(DB.workouts.length>1?'s':'')+' suivie'+(DB.workouts.length>1?'s':'')+'</b><small>'+PROGRAMS.length+' programme'+(PROGRAMS.length>1?'s':'')+' · '+storageSizeKB()+' Ko local</small></span><i></i></div>'
+   +'</div><div class="sbtns dataactions"><button class="sbtn pri" id="fileBackup">Télécharger une sauvegarde</button><button class="sbtn" id="forceMirror">Synchroniser miroir</button></div>';
+}
+function renderDataHealth(snap){
+  const el=document.getElementById('dataHealth');if(!el)return;
+  el.innerHTML=dataHealthHTML(snap);
+  const fb=document.getElementById('fileBackup');if(fb)fb.addEventListener('click',downloadBackup);
+  const fm=document.getElementById('forceMirror');if(fm)fm.addEventListener('click',()=>{mirrorSnapshot();toast('Miroir local synchronisé');setTimeout(refreshDataHealth,500)});
+}
+function refreshDataHealth(){const el=document.getElementById('dataHealth');if(!el)return;idbGet('snapshot').then(renderDataHealth)}
+function suiviSummaryHTML(){
+  const now=new Date(),weekIso=isoOf(weekStart(now));
+  const week=DB.workouts.filter(w=>w.date>=weekIso),wt=totalsOfWorkouts(week);
+  const last=DB.workouts.length?DB.workouts[DB.workouts.length-1]:null;
+  const bs=backupState();
+  const title=last?'Dernière séance '+fmtDateShort(last.date):'Pas encore de séance validée';
+  const sub=last?(SEANCE[last.seance]?SEANCE[last.seance].tab+' · '+SEANCE[last.seance].title:last.seance):'Démarre une séance pour alimenter ton suivi.';
+  return '<div class="suivihero"><div class="suivi-k">Tableau de bord</div><div class="suivi-title">'+esc(title)+'</div><div class="suivi-sub">'+esc(sub)+'</div>'
+   +'<div class="suivigrid"><div><b class="num">'+wt.sessions+'</b><span>Séances cette sem.</span></div><div><b class="num">'+wt.sets+'</b><span>Séries cette sem.</span></div><div><b class="num">'+fmtKg(wt.vol)+'</b><span>Kg cette sem.</span></div></div>'
+   +'<div class="suivi-safe '+bs.tone+'"><span>'+esc(bs.label)+'</span><small>'+esc(bs.detail)+'</small></div></div>';
+}
+function statsInsightHTML(isMonth,winW,winVol,prevW,prevVol,grp,rng){
+  const unit=isMonth?'mois':'semaine';
+  const sessDelta=winW.length-prevW.length,volDelta=winVol-prevVol;
+  const low=grp.filter(g=>g.v>0&&g.v<rng.low),miss=grp.filter(g=>g.v===0);
+  const focus=low[0]||miss[0]||grp[0];
+  const pr=bestRecentProgress();
+  const volTxt=prevVol?signedKg(volDelta)+' vs période précédente':(winVol?'Première période chargée':'Aucune donnée cette période');
+  const focusTxt=focus?(focus.v>=rng.low?'Volume solide sur '+focus.label+'.':'À remonter : '+focus.label+' ('+focus.v+'/'+rng.low+' séries).'):'Valide des séries pour voir les priorités.';
+  const prTxt=pr?esc(pr.tab+' · '+pr.name)+' · +'+fmtN(pr.delta)+' kg':'Aucun nouveau record récent détecté.';
+  return '<div class="coachpulse"><div class="pulsehead"><span>Résumé coach</span><b>'+esc(unit)+'</b></div><div class="pulsegrid">'
+   +'<div class="pulsecard"><div class="pulsek">Rythme</div><div class="pulsev num">'+signed(sessDelta)+'</div><div class="pulses">séance'+(Math.abs(sessDelta)>1?'s':'')+' vs période précédente</div></div>'
+   +'<div class="pulsecard"><div class="pulsek">Tonnage</div><div class="pulsev">'+esc(volTxt)+'</div><div class="pulses">sur les séries avec kg + reps</div></div>'
+   +'<div class="pulsecard"><div class="pulsek">Priorité</div><div class="pulsev">'+esc(focusTxt)+'</div><div class="pulses">équilibre volume / muscle</div></div>'
+   +'<div class="pulsecard"><div class="pulsek">Progression</div><div class="pulsev">'+prTxt+'</div><div class="pulses">record récent</div></div>'
+   +'</div></div>';
 }
 
 /* ---------- volume par muscle + progression par exercice ---------- */
@@ -1572,6 +1664,10 @@ function statsHTML(embed){
   const unit=isMonth?'mois':'sem.';
   const winW=DB.workouts.filter(w=>w.date>=sinceIso);
   let winVol=0,winSets=0;winW.forEach(w=>{const st=workoutStats(w);winVol+=st.vol;winSets+=st.sets;});
+  const prevW=workoutsInRange(periodStartIso(isMonth,-1),periodEndIso(isMonth,-1));
+  const prevT=totalsOfWorkouts(prevW);
+  const mvol=volumeByMuscle(sinceIso);
+  const grp=muscleGroupScores(mvol);
   h+='<div class="subdate">Depuis le '+fmtDateShort(DB.workouts[0].date)+'</div>'
    +'<div class="seg"><button class="segb'+(!isMonth?' on':'')+'" data-act="srange" data-r="week">Semaine</button>'
    +'<button class="segb'+(isMonth?' on':'')+'" data-act="srange" data-r="month">Mois</button></div>'
@@ -1579,10 +1675,9 @@ function statsHTML(embed){
    +'<div class="statbox"><div class="v num">'+winSets+'</div><div class="l">Séries · '+unit+'</div></div>'
    +'<div class="statbox"><div class="v num">'+winW.length+'</div><div class="l">Séances · '+unit+'</div></div>'
    +'<div class="statbox"><div class="v num">'+fmtKg(winVol)+'</div><div class="l">kg · '+unit+'</div></div>'
-   +'</div>';
+   +'</div>'
+   +statsInsightHTML(isMonth,winW,winVol,prevW,prevT.vol,grp,rng);
   /* volume par muscle (séries / muscle sur la fenêtre) */
-  const mvol=volumeByMuscle(sinceIso);
-  const grp=STAT_MUSCLE_GROUPS.map(g=>{let v=0;g[1].forEach(m=>v+=mvol[m]||0);return{label:g[0],v:Math.round(v)}}).sort((a,b)=>b.v-a.v);
   h+='<div class="chartcard"><div class="charttitle">Volume par muscle · séries / '+unit+'</div>';
   if(grp.some(g=>g.v>0)){
     grp.forEach(g=>{
@@ -2269,6 +2364,7 @@ function exportPayload(){
 function showData(){
   sheet.innerHTML='<h2>Données</h2>'
    +'<div class="sp">Lance ton coach IA gratuit (app Claude / claude.ai), ou sauvegarde / restaure ton suivi.</div>'
+   +'<div class="rectitle">État de protection</div><div id="dataHealth"></div>'
    +'<div class="rectitle">Coach IA · gratuit</div>'
    +'<div class="sp" style="margin-bottom:10px"><b>1.</b> Copie le prompt coach et colle-le dans Claude. <b>2.</b> Colle ensuite ton programme et/ou ton historique quand il les demande.</div>'
    +'<div class="sbtns"><button class="sbtn pri" id="cPrompt">1 · Prompt coach</button></div>'
@@ -2277,6 +2373,7 @@ function showData(){
    +'<textarea class="io" id="shArea" spellcheck="false" placeholder="Coller ici le JSON à importer…"></textarea>'
    +'<div class="sbtns"><button class="sbtn" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
+  refreshDataHealth();
   document.getElementById('cPrompt').addEventListener('click',()=>clipCopy(COACH_PROMPT,'Prompt coach copié — colle-le dans Claude'));
   document.getElementById('cProg').addEventListener('click',()=>clipCopy(coachProgramText(),'Programme copié — colle-le après le prompt'));
   document.getElementById('cHist').addEventListener('click',()=>clipCopy(coachHistoryText(),'Historique copié — colle-le après le prompt'));
@@ -2386,6 +2483,9 @@ function doImport(){
     if(act){act.seances=data.programme;normalizePrograms();savePrograms();}
   }
   if(Array.isArray(data.bilan_forme)){BODY=data.bilan_forme.filter(b=>b&&b.date&&b.vals);BODY.sort((x,y)=>x.date<y.date?-1:1);saveBody();}
+  if(data.reglages&&typeof data.reglages==='object'&&!Array.isArray(data.reglages)){
+    SETTINGS=Object.assign({},SETTINGS,data.reglages);saveSettings();applyTheme();
+  }
   let workouts=null;
   if(Array.isArray(data.seances))workouts=data.seances;
   else if(Array.isArray(data.workouts))workouts=data.workouts;
@@ -2439,6 +2539,8 @@ if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
     }).catch(()=>{});
   });
 }
+window.addEventListener('online',()=>toast('Connexion revenue · mises à jour actives'));
+window.addEventListener('offline',()=>toast('Hors ligne · suivi conservé sur cet appareil'));
 
 function initDragSort(){
   let drag=null,pid=null,kind=null,cont=null;

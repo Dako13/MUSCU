@@ -15,6 +15,7 @@
   --on-ac:#ffffff;
   --ac-glow:rgba(225,29,42,.45);
   --ac-soft:rgba(225,29,42,.14);
+  --ok:#32d583; --ok-glow:rgba(50,213,131,.35);
   --danger:#ff5a4d;
   /* polish premium */
   --ac-veil:rgba(225,29,42,.07);
@@ -37,6 +38,7 @@
   --txt:#f7eef3; --dim:#cdb4c1; --faint:#9c8791;
   --ac:#ec4899; --ac-hi:#f472b6; --ac-deep:#be185d; --on-ac:#ffffff;
   --ac-glow:rgba(236,72,153,.45); --ac-soft:rgba(236,72,153,.16); --danger:#fb7185;
+  --ok:#5eead4; --ok-glow:rgba(94,234,212,.32);
   --ac-veil:rgba(236,72,153,.08);
   --glass:rgba(255,220,236,.052);
   --glass2:rgba(255,220,236,.086);
@@ -273,6 +275,37 @@ details[open] summary::before{transform:rotate(45deg)}
 .seg{display:flex;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:4px;margin:6px 0 16px}
 .segb{flex:1;font-family:var(--font-head);font-size:.86rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border-radius:10px;padding:10px 0;transition:color .18s,background .18s}
 .segb.on{color:var(--on-ac);background:var(--ac);box-shadow:0 6px 16px -8px var(--ac-glow)}
+.suivihero{background:linear-gradient(180deg,var(--glass),transparent 68%),var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin:4px 0 14px;box-shadow:var(--shadow-soft)}
+.suivi-k,.pulsek{font-family:var(--font-head);font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ac)}
+.suivi-title{font-family:var(--font-head);font-size:1.45rem;font-weight:700;line-height:1.02;color:var(--txt);text-transform:uppercase;margin-top:5px}
+.suivi-sub{font-size:.84rem;color:var(--dim);line-height:1.45;margin-top:6px}
+.suivigrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.suivigrid div{background:var(--card2);border:.5px solid var(--line);border-radius:13px;padding:11px 8px;text-align:center}
+.suivigrid b{display:block;font-family:var(--font-head);font-size:1.28rem;line-height:1;color:var(--txt)}
+.suivigrid span{display:block;font-size:.66rem;color:var(--faint);text-transform:uppercase;letter-spacing:.045em;line-height:1.2;margin-top:5px}
+.suivi-safe{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:.82rem;color:var(--dim)}
+.suivi-safe span{font-weight:700;color:var(--txt)}
+.suivi-safe small{color:var(--faint);text-align:right}
+.suivi-safe.warn span{color:var(--ac)}
+.suiviseg{position:sticky;top:calc(env(safe-area-inset-top) + 4px);z-index:5;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.coachpulse{background:linear-gradient(180deg,var(--ac-veil),transparent 70%),var(--card);border:1px solid var(--line);border-radius:18px;padding:17px;margin-bottom:16px}
+.pulsehead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.pulsehead span{font-family:var(--font-head);font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt)}
+.pulsehead b{font-family:var(--font-head);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ac)}
+.pulsegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.pulsecard{min-height:112px;background:var(--card2);border:.5px solid var(--line);border-radius:14px;padding:12px}
+.pulsev{font-size:.9rem;font-weight:700;line-height:1.35;color:var(--txt);margin-top:7px}
+.pulsev.num{font-family:var(--font-head);font-size:1.75rem;line-height:1;color:var(--txt)}
+.pulses{font-size:.74rem;line-height:1.35;color:var(--faint);margin-top:7px}
+.datahealth{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+.healthrow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card2);border:.5px solid var(--line);border-radius:13px;padding:12px}
+.healthrow span{min-width:0}
+.healthrow b{display:block;font-size:.9rem;color:var(--txt);line-height:1.25}
+.healthrow small{display:block;font-size:.76rem;color:var(--dim);line-height:1.35;margin-top:3px}
+.healthrow i{flex:0 0 10px;width:10px;height:10px;border-radius:999px;background:var(--ac);box-shadow:0 0 12px var(--ac-glow)}
+.healthrow.ok i{background:var(--ok);box-shadow:0 0 12px var(--ok-glow)}
+.healthrow.warn b{color:var(--ac)}
+.dataactions{margin:0 0 18px}
 .vrow{display:flex;align-items:center;gap:10px;margin-bottom:11px}
 .vlabel{flex:0 0 88px;font-size:.82rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vtrack{flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
@@ -1112,6 +1145,7 @@ summary{border-radius:10px}
   .strow{gap:5px}
   .stpb{flex-basis:29px}
   .coachgrid{grid-template-columns:1fr}
+  .pulsegrid{grid-template-columns:1fr}
   .machineviz{grid-template-columns:1fr}
   .machineviz-demo{min-height:126px}
 }
