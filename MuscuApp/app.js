@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.10';
+const APP_VERSION='4.18.11';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -726,6 +726,31 @@ function suggestTargets(e){
   }
   return out;
 }
+function setShort(s){return s?(s.w!=null?fmtN(s.w):'—')+'×'+(s.r!=null?s.r:'—'):'—'}
+function firstUsefulSet(a){return(a||[]).find(s=>s&&(s.w!=null||s.r!=null))||null}
+function targetCue(e){
+  const targets=suggestTargets(e),prev=prevSets(e.id)||[];
+  const t=firstUsefulSet(targets),p=firstUsefulSet(prev);
+  if(!t)return{tone:'base',title:'Cible à construire',body:'Valide une première séance pour générer une cible automatique.',target:'—'};
+  let title='Consolider';
+  if(e.ceiling)title='Monter les reps';
+  else if(p&&t.w!=null&&p.w!=null&&t.w>p.w)title='Augmenter la charge';
+  else if(p&&t.r!=null&&p.r!=null&&t.r>p.r)title='Ajouter une rep';
+  const body=p?'Dernière fois '+setShort(p)+' · vise '+setShort(t):'Départ conseillé '+setShort(t);
+  return{tone:title==='Consolider'?'base':'hot',title,body,target:setShort(t)};
+}
+function activeExerciseScore(sets){
+  const done=(sets||[]).filter(s=>s.done),best=maxW(done);
+  return{done:done.length,total:(sets||[]).length,best};
+}
+function workoutCoachHTML(e,sets){
+  const cue=targetCue(e),score=activeExerciseScore(sets);
+  const btn=cue.target==='—'?'<button class="wcoach-btn ghost" disabled>Auto</button>':'<button class="wcoach-btn" data-act="filltarget">Appliquer</button>';
+  return '<div class="wcoach '+cue.tone+'"><div><div class="wcoach-k">Cible du jour</div><div class="wcoach-v">'+esc(cue.title)+' · <span class="num">'+esc(cue.target)+'</span></div>'
+   +'<div class="wcoach-s">'+esc(cue.body)+'</div></div>'
+   +'<div class="wcoach-r"><span class="num">'+score.done+'/'+score.total+'</span><small>Séries</small>'+(score.best!=null?'<b class="num">'+fmtN(score.best)+' kg</b>':'')+'</div>'
+   +btn+'</div>';
+}
 
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
@@ -889,6 +914,7 @@ function exCardHTML(e,idx,active){
   if(active){
     const sets=active.ex[e.id]||[];
     const targets=suggestTargets(e);
+    h+=workoutCoachHTML(e,sets);
     h+='<div class="stable"><div class="sthead"><span>SÉR.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
     sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
     h+='</div><button class="addset" data-act="addset">+ série</button>';
@@ -1997,6 +2023,10 @@ function updateProgress(){
   if(pd)pd.textContent=p.done+' / '+p.total+' séries';
   if(pf)pf.style.width=(p.total?Math.round(100*p.done/p.total):0)+'%';
 }
+function refreshWorkoutCoach(card,exId){
+  const old=card&&card.querySelector('.wcoach');
+  if(old&&DB.active&&EXO[exId]&&DB.active.ex[exId])old.outerHTML=workoutCoachHTML(EXO[exId],DB.active.ex[exId]);
+}
 function finishWorkout(){
   const a=DB.active;if(!a)return;
   const stats=workoutStats(a);
@@ -2090,6 +2120,19 @@ app.addEventListener('click',ev=>{
     if(act==='eup'&&card.previousElementSibling)card.previousElementSibling.before(card);
     if(act==='edown'&&card.nextElementSibling)card.nextElementSibling.after(card);
   }
+  else if(act==='filltarget'){
+    const card=actEl.closest('.card');const exId=card&&card.dataset.ex,e=EXO[exId];
+    if(!DB.active||!e||!DB.active.ex[exId])return;
+    const targets=suggestTargets(e);
+    DB.active.ex[exId].forEach((st,i)=>{
+      if(st.done)return;
+      const t=targets[i]||targets[targets.length-1]||null;
+      if(!t)return;
+      if(t.w!=null)st.w=t.w;
+      if(t.r!=null)st.r=t.r;
+    });
+    persist();render();toast('Cible appliquée');
+  }
   else if(act==='addset'){
     const card=actEl.closest('.card');const exId=card.dataset.ex;
     if(!DB.active||!DB.active.ex[exId])return;
@@ -2100,6 +2143,7 @@ app.addEventListener('click',ev=>{
       setRowHTML(e,i,{w:null,r:null,done:false},e?suggestTargets(e):null));
     card.classList.remove('complete');
     updateProgress();
+    refreshWorkoutCoach(card,exId);
   }
   else if(act==='stepw'||act==='stepr'){
     const row=actEl.closest('.strow'),card=actEl.closest('.card');
@@ -2148,6 +2192,7 @@ app.addEventListener('click',ev=>{
     persist();
     card.classList.toggle('complete',DB.active.ex[exId].every(s=>s.done));
     updateProgress();
+    refreshWorkoutCoach(card,exId);
     const prog=card.querySelector('.dprog .hist');if(prog&&EXO[exId])prog.innerHTML=progHTML(EXO[exId]);
   }
 });
