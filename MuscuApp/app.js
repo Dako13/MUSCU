@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.7';
+const APP_VERSION='4.18.8';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -733,19 +733,20 @@ let route={view:'home',seance:null};
 let MFILTER={g:null,b:null,c:null,l:null,q:''};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
+let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
 function go(view,seance){route={view,seance:seance||null};render();window.scrollTo({top:0});}
 
 function render(){
-  const tabFor={home:'home',seance:'home',edit:'programs',history:'history',stats:'stats',programs:'programs',machines:'programs'};
+  const tabFor={home:'home',seance:'home',edit:'programs',suivi:'suivi',stats:'suivi',history:'suivi',programs:'programs',machines:'programs'};
   document.querySelectorAll('.tabbtn').forEach(b=>
     b.classList.toggle('on',b.dataset.v===tabFor[route.view]));
   if(route.view==='home')app.innerHTML=homeHTML();
   else if(route.view==='machines')app.innerHTML=machinesHTML();
   else if(route.view==='seance')app.innerHTML=seanceHTML(route.seance);
   else if(route.view==='edit')app.innerHTML=editHTML(route.seance);
-  else if(route.view==='stats')app.innerHTML=statsHTML();
+  else if(route.view==='suivi'||route.view==='stats'||route.view==='history')app.innerHTML=suiviHTML();
   else if(route.view==='programs')app.innerHTML=programsHTML();
-  else app.innerHTML=historyHTML();
+  else app.innerHTML=homeHTML();
   app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
 }
 
@@ -941,8 +942,15 @@ function workoutMusclesHTML(w){
 }
 
 /* ---------- historique ---------- */
-function historyHTML(){
-  let h='<div class="top"><h1>Historique</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
+function suiviHTML(){
+  let h='<div class="top"><h1>Suivi</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>'
+   +'<div class="seg">'
+   +'<button class="segb'+(SUIVI==='stats'?'':' on')+'" data-act="suivitab" data-t="history">Historique</button>'
+   +'<button class="segb'+(SUIVI==='stats'?' on':'')+'" data-act="suivitab" data-t="stats">Stats</button></div>';
+  return h+(SUIVI==='stats'?statsHTML(true):historyHTML(true));
+}
+function historyHTML(embed){
+  let h=embed?'':'<div class="top"><h1>Historique</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
   const arr=DB.workouts.slice().reverse();
   if(!arr.length)return h+'<div class="empty">Aucune séance terminée.<br>Démarre une séance dans l’onglet Entraîner.</div>';
   const tot=arr.length;
@@ -1556,8 +1564,8 @@ function plateauCard(){
 }
 
 /* ---------- stats ---------- */
-function statsHTML(){
-  let h='<div class="top"><h1>Stats</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
+function statsHTML(embed){
+  let h=embed?'':'<div class="top"><h1>Stats</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
   if(!DB.workouts.length)return h+bilanHTML()+'<div class="empty">Pas encore de séance.<br>Les statistiques d’entraînement apparaîtront après ta première séance.</div>';
   const now=new Date();
   const isMonth=STATSRANGE==='month';
@@ -1946,6 +1954,7 @@ app.addEventListener('click',ev=>{
   else if(act==='data')showData();
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
+  else if(act==='suivitab'){SUIVI=actEl.dataset.t;render();}
   else if(act==='expick')showExPicker();
   else if(act==='settings')showSettings();
   else if(act==='exinfo')showExercise(actEl.dataset.ex);
