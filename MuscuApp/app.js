@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.2';
+const APP_VERSION='4.18.3';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -485,15 +485,31 @@ const MACHINE_GROUPS=[['pecs','Pecs',['pecs']],['dos','Dos',['dos','lombaires']]
 const CHAINS=['On Air','Basic-Fit','Fitness Park'];
 const BRAND_CHAINS={'Technogym':['On Air','Basic-Fit','Fitness Park'],'Matrix':['Basic-Fit'],'Hammer Strength':['Fitness Park','On Air'],'Gym80':['On Air'],'Eleiko':['Fitness Park','On Air'],'Life Fitness':['Basic-Fit','On Air'],'Charge libre':['On Air','Basic-Fit','Fitness Park']};
 const TIP_BY_PATTERN={
- press:'Coudes à ~45°, descends jusqu’à l’étirement, pousse sans verrouiller. Tempo contrôlé.',
- pulldown:'Tire les coudes vers les hanches, poitrine haute, étire complètement en haut sans balancer.',
- row:'Tire le coude vers l’arrière, serre les omoplates en fin, buste fixe.',
- lateral:'Léger et strict : épaule basse, initie au coude, stop à l’horizontale, pas d’élan.',
- curl:'Coudes fixes au corps, supination complète en haut, contrôle la descente.',
- triceps:'Coudes fixes, verrouille en bas, garde la tension sur tout le mouvement.',
- legext:'Contraction 1s en haut, descente contrôlée, ne relâche pas la charge.',
- legcurl:'Amplitude complète, contraction en fin de mouvement, pas d’à-coups.',
- calf:'Amplitude complète avec étirement en bas, pause 1s en haut, pas de rebond.'
+ cardio:'Échauffe-toi progressivement, buste droit et regard loin ; règle l’intensité selon ta zone d’effort.',
+ chestpress:'Règle l’assise pour avoir les poignées à hauteur de poitrine, coudes ~45°, pousse sans verrouiller et contrôle le retour.',
+ benchpress:'Omoplates serrées, pieds ancrés, descends au niveau des pectoraux poignets solides, pousse sans rebond sur la poitrine.',
+ inclinepress:'Banc à ~30°, descends en haut des pectoraux, coudes ~45°, pousse sans creuser le bas du dos.',
+ shoulderpress:'Gaine les abdos, pousse au-dessus de la tête sans cambrer, descends jusqu’au niveau des oreilles.',
+ fly:'Léger fléchissement des coudes maintenu, ouvre en grand pour étirer les pectoraux, resserre en les contractant.',
+ pullover:'Bras quasi tendus, va chercher l’étirement derrière la tête, ramène en pensant « grand dorsal », pas les bras.',
+ pulldown:'Poitrine haute, tire les coudes vers les hanches, étire complètement en haut sans te balancer.',
+ rowhoriz:'Buste fixe, tire le coude vers l’arrière et serre les omoplates en fin de course, sans à-coups.',
+ reardelt:'Buste penché ou poulie à hauteur du visage : ouvre vers l’arrière en serrant les épaules, sans tirer avec les bras.',
+ lateral:'Léger et strict : épaule basse, initie au coude, monte jusqu’à l’horizontale sans élan.',
+ shrug:'Monte les épaules droit vers les oreilles, pause en haut, redescends lentement sans rouler les épaules.',
+ curl:'Coudes fixes contre le corps, supination complète en haut, retiens la descente.',
+ triceps:'Coudes fixes le long du corps, verrouille en bas, garde la tension sur tout le mouvement.',
+ legpress:'Pieds largeur d’épaules, descends jusqu’à ~90° aux genoux, pousse sans verrouiller, genoux dans l’axe des pieds.',
+ squat:'Talons au sol, dos gainé, descends genoux dans l’axe des pieds, remonte en poussant le sol.',
+ hipthrust:'Appui sur les talons, monte le bassin jusqu’à l’alignement, contracte les fessiers 1-2 s en haut sans cambrer.',
+ hinge:'Charnière de hanche : fessiers en arrière, dos plat, descends jusqu’à l’étirement des ischios, remonte en serrant les fessiers.',
+ lunge:'Grand pas, descends le genou arrière vers le sol, buste droit, pousse sur le talon avant pour remonter.',
+ legext:'Contraction 1 s en haut, descente contrôlée, ne relâche jamais complètement la charge.',
+ legcurl:'Amplitude complète, contracte les ischios en fin de mouvement, pas d’à-coups.',
+ adductor:'Resserre les cuisses en contrôlant, courte pause en position fermée, retiens l’ouverture.',
+ abductor:'Écarte les cuisses en contractant les fessiers, pause à l’ouverture, reviens en contrôlant.',
+ calf:'Amplitude complète avec étirement en bas, pause 1 s en haut, pas de rebond.',
+ abs:'Enroule la colonne en soufflant, contracte les abdos sans tirer sur la nuque, déroule lentement.'
 };
 function machineTip(m){return TIP_BY_PATTERN[exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
 function machineChains(m){return BRAND_CHAINS[m.b]||[];}
@@ -1054,20 +1070,33 @@ function bodyMapHTML(){
 /* ---------- démonstrations animées (SVG/SMIL) ---------- */
 function exPattern(e){
   const n=String(e&&e.name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  /* jambes d'abord (sinon "leg curl" -> curl, "presse" -> press) */
+  /* du plus spécifique au plus générique — l'ordre compte */
+  if(/cardio|tapis|velo|rameur|elliptique|skillmill|stair|climb|course/.test(n))return 'cardio';
+  if(/abdo|crunch|oblique|rotary|gainage|chaise romaine|releve de jambe|sit.?up/.test(n))return 'abs';
   if(/mollet|calf|sural/.test(n))return 'calf';
-  if(/leg extension|leg-extension/.test(n))return 'legext';
-  if(/leg curl|leg-curl|ischio/.test(n))return 'legcurl';
-  if(/presse|squat|hack|fente|leg press|soulev|hip thrust|fessier/.test(n))return 'legext';
-  if(/curl/.test(n))return 'curl';
+  if(/leg extension|leg-extension|extension de jambe/.test(n))return 'legext';
+  if(/leg curl|leg-curl|ischio|curl assis|curl allonge|curl jambe/.test(n))return 'legcurl';
+  if(/fente|bulgare|lunge|split squat/.test(n))return 'lunge';
+  if(/hip thrust|fessier|glute/.test(n))return 'hipthrust';
+  if(/soulev|roumain|good morning|deadlift/.test(n))return 'hinge';
+  if(/hack|squat/.test(n))return 'squat';
+  if(/presse|leg press/.test(n))return 'legpress';
+  if(/abducteur/.test(n))return 'abductor';
+  if(/adducteur/.test(n))return 'adductor';
+  if(/shrug|haussement|trapeze/.test(n))return 'shrug';
   if(/elevation laterale|laterale/.test(n))return 'lateral';
-  if(/face pull|rear delt|oiseau|reverse/.test(n))return 'row';
-  if(/tirage vertical|pull-over|pull over|pulldown|traction|pulover/.test(n))return 'pulldown';
-  if(/row|tirage horizontal|tirage triangle|rowing|seated row|tirage/.test(n))return 'row';
-  if(/press epaules|developpe epaules|shoulder|militaire|overhead press|elevation frontale/.test(n))return 'press';
-  if(/pushdown|dips|overhead triceps|extension triceps|triceps|skull/.test(n))return 'triceps';
-  if(/developpe|couche|incline|press|pec fly|crossover|cable croise|chest|ecarte|fly|pompe/.test(n))return 'press';
-  return 'press';
+  if(/face pull|rear delt|oiseau|reverse|arriere/.test(n))return 'reardelt';
+  if(/militaire|overhead press|shoulder|developpe epaules|press epaules|elevation frontale/.test(n))return 'shoulderpress';
+  if(/curl/.test(n))return 'curl';
+  if(/pushdown|dips|extension triceps|triceps|skull|barre au front/.test(n))return 'triceps';
+  if(/pull-over|pull over|pullover|pulover/.test(n))return 'pullover';
+  if(/tirage vertical|pulldown|traction|lat pull/.test(n))return 'pulldown';
+  if(/pec fly|pec deck|ecarte|fly|crossover|cable croise|butterfly/.test(n))return 'fly';
+  if(/row|tirage|rowing|t-bar/.test(n))return 'rowhoriz';
+  if(/incline/.test(n))return 'inclinepress';
+  if(/couche|bench/.test(n))return 'benchpress';
+  if(/developpe|chest|press|pompe/.test(n))return 'chestpress';
+  return 'chestpress';
 }
 const REDUCED=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches);
 function demoSVG(p){
