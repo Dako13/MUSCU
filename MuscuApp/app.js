@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.18.12';
+const APP_VERSION='4.19.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -626,6 +626,70 @@ function sessionProgress(a){
   return{done,total};
 }
 function ytURL(e){return 'https://www.youtube.com/results?search_query='+encodeURIComponent(e.yt||e.name+' technique')}
+/* Photos reelles des exercices — source free-exercise-db (Unlicense, domaine public), via CDN jsDelivr. Mapping fait main FR vers base. */
+const EXIMG_BASE='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/';
+function exImgKey(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
+const EXIMG={
+ 'row appui poitrine unilateral neutre':'Seated_Cable_Rows/0.jpg',
+ 'tirage triangle serre':'Seated_Cable_Rows/0.jpg',
+ 'diverging seated row unilateral':'Seated_Cable_Rows/0.jpg',
+ 'seated row':'Seated_Cable_Rows/0.jpg',
+ 'tirage horizontal':'Seated_Cable_Rows/0.jpg',
+ 'face pull corde':'Face_Pull/0.jpg',
+ 'face pull poulie corde':'Face_Pull/0.jpg',
+ 'rear delt fly cable poulies croisees':'Reverse_Machine_Flyes/0.jpg',
+ 'rear delt fly halteres penche':'Seated_Bent-Over_Rear_Delt_Raise/0.jpg',
+ 'oiseau reverse fly halteres':'Seated_Bent-Over_Rear_Delt_Raise/0.jpg',
+ 'developpe couche halteres':'Dumbbell_Bench_Press/0.jpg',
+ 'press matrix':'Leverage_Chest_Press/0.jpg',
+ 'chest press':'Leverage_Chest_Press/0.jpg',
+ 'iso lateral bench press':'Leverage_Chest_Press/0.jpg',
+ 'press incline machine':'Leverage_Incline_Chest_Press/0.jpg',
+ 'iso lateral incline press':'Leverage_Incline_Chest_Press/0.jpg',
+ 'developpe incline halteres':'Incline_Dumbbell_Press/0.jpg',
+ 'pec fly cable allonge sur banc':'Cable_Crossover/0.jpg',
+ 'cable croise poulie haute':'Cable_Crossover/0.jpg',
+ 'cable crossover technogym':'Cable_Crossover/0.jpg',
+ 'ecarte incline halteres':'Cable_Crossover/0.jpg',
+ 'pec fly':'Cable_Crossover/0.jpg',
+ 'elevation laterale unilaterale cable poulie bassin':'Side_Lateral_Raise/0.jpg',
+ 'elevation laterale haltere lean away':'Side_Lateral_Raise/0.jpg',
+ 'elevation laterale cable':'Side_Lateral_Raise/0.jpg',
+ 'elevations laterales halteres':'Side_Lateral_Raise/0.jpg',
+ 'elevations laterales poulie':'Side_Lateral_Raise/0.jpg',
+ 'press epaules machine':'Machine_Shoulder_Military_Press/0.jpg',
+ 'developpe militaire halteres':'Seated_Dumbbell_Press/0.jpg',
+ 'pushdown barre':'Triceps_Pushdown/0.jpg',
+ 'extension triceps corde poulie':'Triceps_Pushdown/0.jpg',
+ 'overhead triceps corde':'Cable_Rope_Overhead_Triceps_Extension/0.jpg',
+ 'overhead triceps':'Standing_Dumbbell_Triceps_Extension/0.jpg',
+ 'tirage vertical barre pronation':'Wide-Grip_Lat_Pulldown/0.jpg',
+ 'tirage vertical unilateral cable banc assis':'Wide-Grip_Lat_Pulldown/0.jpg',
+ 'lat pulldown':'Wide-Grip_Lat_Pulldown/0.jpg',
+ 'pull over cable finisher':'Straight-Arm_Pulldown/0.jpg',
+ 'curl alterne haltere':'Dumbbell_Alternate_Bicep_Curl/0.jpg',
+ 'curl pupitre matrix unilateral':'Preacher_Curl/0.jpg',
+ 'curl pupitre larry scott machine':'Preacher_Curl/0.jpg',
+ 'curl marteau halteres':'Hammer_Curls/0.jpg',
+ 'curl incline halteres':'Dumbbell_Bicep_Curl/0.jpg',
+ 'dips machine matrix':'Dips_-_Triceps_Version/0.jpg',
+ 'presse a cuisses':'Leg_Press/0.jpg',
+ 'leg extension':'Leg_Extensions/0.jpg',
+ 'leg curl':'Lying_Leg_Curls/0.jpg',
+ 'hack squat':'Hack_Squat/0.jpg',
+ 'souleve de terre roumain barre':'Romanian_Deadlift/0.jpg',
+ 'hip thrust barre':'Barbell_Hip_Thrust/0.jpg',
+ 'hip thrust machine':'Barbell_Hip_Thrust/0.jpg',
+ 'rowing buste penche barre':'Reverse_Grip_Bent-Over_Rows/0.jpg',
+ 'rowing unilateral haltere banc':'Bent_Over_Two-Dumbbell_Row/0.jpg',
+ 'mollets machine squat guide':'Standing_Calf_Raises/0.jpg',
+ 'mollets debout standing calf':'Standing_Calf_Raises/0.jpg',
+ 'abdominal crunch machine':'Cable_Crunch/0.jpg',
+ 'crunch poulie haute corde':'Cable_Crunch/0.jpg'
+};
+function exImage(name){const k=exImgKey(name);return EXIMG[k]?EXIMG_BASE+EXIMG[k]:null;}
+function exPhotoHTML(name){const u=exImage(name);return u?'<div class="exphoto" style="margin:0 0 14px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--card2)"><img src="'+u+'" alt="" loading="lazy" style="display:block;width:100%;height:auto"></div>':'';}
+function bindExPhoto(){sheet.querySelectorAll('.exphoto img').forEach(im=>im.addEventListener('error',()=>{const w=im.closest('.exphoto');if(w)w.remove();}));}
 function weekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x}
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 
@@ -1364,13 +1428,14 @@ function showExercise(exId){
   else ref=fmtN(e.ref)+' '+esc(e.unit||'kg');
   sheet.innerHTML='<h2>'+esc(e.name)+'</h2>'
    +'<div class="sp">'+esc(patternLabel(p))+(e.ceiling?' · <span class="badge">'+esc(e.ceiling)+'</span>':'')+'</div>'
+   +exPhotoHTML(e.name)
    +'<div class="sbtns" style="margin-bottom:16px"><a class="sbtn pri" href="'+ytURL(e)+'" target="_blank" rel="noopener">Voir la démonstration vidéo ›</a></div>'
    +exMuscleMapHTML(musP,musS)
    +(chips?'<div class="mchips">'+chips+'</div>':'')
    +'<div class="sumgrid"><div class="sumbox"><div class="v num">'+ref+'</div><div class="l">Charge réf.</div></div>'
    +'<div class="sumbox"><div class="v num">'+e.sets+' × '+esc(e.reps)+'</div><div class="l">Objectif</div></div></div>'
    +exerciseGuideHTML(p,steps);
-  openSheet();
+  openSheet();bindExPhoto();
 }
 
 /* ---------- bilan forme ---------- */
@@ -1901,6 +1966,7 @@ function showMachine(i){
   const p=exPattern({name:m.n});
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
    +'<div class="sp">'+esc(m.b)+' · '+esc(LOAD_SHORT[load])+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +exPhotoHTML(m.n)
    +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir la machine en photos ›</a></div>'
    +machineVisualHTML(m,p,load)
    +'<div class="mchips">'+chips+'</div>'
@@ -1909,7 +1975,7 @@ function showMachine(i){
    +machineCoachHTML(p,load)
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
-  openSheet();
+  openSheet();bindExPhoto();
 }
 function addMachineToSeance(i,sid){
   const m=MACHINES[i],s=SEANCE[sid];if(!m||!s)return;
