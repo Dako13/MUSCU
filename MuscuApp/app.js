@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.19.0';
+const APP_VERSION='4.19.1';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -688,8 +688,8 @@ const EXIMG={
  'crunch poulie haute corde':'Cable_Crunch/0.jpg'
 };
 function exImage(name){const k=exImgKey(name);return EXIMG[k]?EXIMG_BASE+EXIMG[k]:null;}
-function exPhotoHTML(name){const u=exImage(name);return u?'<div class="exphoto" style="margin:0 0 14px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--card2)"><img src="'+u+'" alt="" loading="lazy" style="display:block;width:100%;height:auto"></div>':'';}
-function bindExPhoto(){sheet.querySelectorAll('.exphoto img').forEach(im=>im.addEventListener('error',()=>{const w=im.closest('.exphoto');if(w)w.remove();}));}
+function exPhotoHTML(name){const u=exImage(name);return u?'<div class="exphoto"><img src="'+u+'" alt="" loading="lazy" decoding="async"></div>':'';}
+function bindExPhoto(){sheet.querySelectorAll('.exphoto img').forEach(im=>{const w=im.closest('.exphoto');const ok=()=>{if(w)w.classList.add('loaded')};if(im.complete&&im.naturalWidth)ok();im.addEventListener('load',ok,{once:true});im.addEventListener('error',()=>{if(w)w.remove();},{once:true});});}
 function weekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x}
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 
