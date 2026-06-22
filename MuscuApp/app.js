@@ -1,13 +1,13 @@
 'use strict';
 /* =====================================================
-   DAKO — suivi d'entraînement
+   DKO — suivi d'entraînement
    v4.0.0 : sauvegarde fichier + rappel, édition/suppression
    historique, calculateurs 1RM/plaques, conseils+enseigne
    par machine, repos par exercice, profil éditable.
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.19.1';
+const APP_VERSION='4.19.2';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -1099,7 +1099,7 @@ function showEditWorkout(i){
 }
 
 /* ---------- carte corporelle ---------- */
-/* Mappe les muscles Dako sur les tracés de la carte musculaire (slugs
+/* Mappe les muscles Dko sur les tracés de la carte musculaire (slugs
    body-highlighter, cf. bodymap.js), par côté. Muscle non listé = reste gris. */
 const SLUG_FRONT={pecs:['chest'],abdos:['abs'],delt_ant:['deltoids'],delt_lat:['deltoids'],
  biceps:['biceps'],triceps:['triceps'],avant_bras:['forearm'],quadriceps:['quadriceps'],
@@ -2367,7 +2367,7 @@ function showLibPicker(){
 function showOnboarding(){
   const salles=['On Air','Basic-Fit','Fitness Park','Autre'],objs=['Prise de masse','Recomposition','Force','Forme'],nivs=['Débutant','Intermédiaire','Avancé'];
   const row=(g,arr,sel)=>arr.map(v=>'<button class="chip'+(sel===v?' on':'')+'" data-ob="'+g+'" data-v="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('');
-  sheet.innerHTML='<h2>Bienvenue sur Dako</h2>'
+  sheet.innerHTML='<h2>Bienvenue sur Dko</h2>'
    +'<div class="sp">Trois infos pour personnaliser ton suivi — modifiable à tout moment dans Réglages.</div>'
    +'<div class="efield"><label>Ta salle</label><div class="chips" style="flex-wrap:wrap">'+row('salle',salles,SETTINGS.salle)+'</div></div>'
    +'<div class="efield"><label>Ton objectif</label><div class="chips" style="flex-wrap:wrap">'+row('obj',objs,SETTINGS.objectif)+'</div></div>'
@@ -2409,7 +2409,7 @@ function showSettings(){
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
    +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
    +'<div class="sbtns"><button class="sbtn pri" id="setOk">Fermer</button></div>'
-   +'<div class="about">Dako v'+APP_VERSION+' · '+esc((activeProgram()||{}).name||'')+'</div>';
+   +'<div class="about">Dko v'+APP_VERSION+' · '+esc((activeProgram()||{}).name||'')+'</div>';
   openSheet();
   document.getElementById('restChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
@@ -2517,7 +2517,7 @@ const COACH_PROMPT=
  +'MATÉRIEL / SALLES : je m’entraîne en salle commerciale et j’ALTERNE entre On Air Fitness et Basic-Fit (le matériel diffère). Propose TOUJOURS des exercices réalisables avec le matériel réellement disponible dans ma salle du jour, et donne des SUBSTITUTIONS (machine ⇄ haltères ⇄ poulie ⇄ charge libre) si une machine manque. Demande-moi dans quelle salle je suis si je ne l’ai pas précisé.\n\n'
  +'CE QUE TU FAIS :\n'
  +'1) D’abord, pose-moi des questions AVANT de prescrire : ma phase actuelle (prise de masse / sèche / maintien) et ma tendance de poids ; mon niveau et mon ancienneté ; ma fréquence, mes jours et le temps par séance ; mes BLESSURES, douleurs et limitations (j’en ai — demande-les et adapte) ; ma salle du jour et le matériel ; mes préférences alimentaires et d’exercices.\n'
- +'2) Juste après ce message, je peux te coller la STRUCTURE DE MON PROGRAMME et/ou mon HISTORIQUE de séances (export de mon app Dako). Analyse-les : volume par muscle, équilibre, progression, plateaux — et propose des ajustements concrets et chiffrés.\n'
+ +'2) Juste après ce message, je peux te coller la STRUCTURE DE MON PROGRAMME et/ou mon HISTORIQUE de séances (export de mon app Dko). Analyse-les : volume par muscle, équilibre, progression, plateaux — et propose des ajustements concrets et chiffrés.\n'
  +'3) Dans la durée, suis-moi comme un vrai coach : programmation, surcharge, détection de plateau, décharges, en expliquant brièvement le POURQUOI de chaque choix.\n\n'
  +'SÉCURITÉ : pas de conseil médical ; en cas de douleur articulaire ou tendineuse, propose une adaptation ou oriente vers un professionnel.\n\n'
  +'Réponds en français, de façon structurée et actionnable. Commence par te présenter en UNE phrase, puis pose-moi tes premières questions (ou, si je t’ai déjà donné mes infos et mes données, lance directement l’analyse).';

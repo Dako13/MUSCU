@@ -1,7 +1,7 @@
 {
-  "name": "Dako — Suivi d'entraînement",
-  "short_name": "Dako",
-  "description": "Dako : suivi d'entraînement musculation — séances, progression, records.",
+  "name": "Dko — Suivi d'entraînement",
+  "short_name": "Dko",
+  "description": "Dko : suivi d'entraînement musculation — séances, progression, records.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
