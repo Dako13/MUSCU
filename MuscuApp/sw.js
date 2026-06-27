@@ -1,10 +1,12 @@
 /* Service worker — cache hors ligne.
-   Pour publier une mise à jour : incrémenter CACHE (v1 → v2). */
-const CACHE='dako-v45';
+   La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
+   Changer APP_VERSION dans app.js suffit à invalider le cache. */
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'0');
 const ASSETS=[
   './',
   './index.html',
   './app.css',
+  './app.overrides.css',
   './app.js',
   './bodymap.js',
   './manifest.webmanifest',
@@ -28,7 +30,7 @@ self.addEventListener('fetch',e=>{
   const url=new URL(e.request.url);
   if(url.origin!==location.origin)return; /* liens externes (YouTube) : réseau direct */
   const p=url.pathname;
-  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/app.css');
+  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
   if(shell){
     /* réseau d'abord : la dernière version s'affiche dès qu'on est en ligne (repli cache hors-ligne) */
     e.respondWith(

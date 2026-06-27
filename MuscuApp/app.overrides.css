@@ -1,0 +1,229 @@
+/* =====================================================
+   DAKO — Visual Overrides (drop-in after app.css)
+   À inclure dans index.html APRÈS app.css :
+     <link rel="stylesheet" href="app.css">
+     <link rel="stylesheet" href="app.overrides.css">
+   ===================================================== */
+
+/* 1) Tokens normalisés ------------------------------------------------ */
+:root{
+  /* radius : 3 valeurs seulement, on aligne tout dessus */
+  --radius-sm:12px;
+  --radius-md:16px;
+  --radius-lg:20px;
+  --radius-xl:20px;          /* alias = lg, on supprime l'incohérence 22px */
+
+  /* lignes : on normalise sur .14 (au lieu de .09 / .17 mélangés) */
+  --line:  rgba(255,255,255,.14);
+  --line2: rgba(255,255,255,.22);
+
+  /* élévation OLED : la card est plus claire que le fond, pas d'ombre lourde */
+  --card:#101010;
+  --card2:#0b0b0b;
+  --elev:#181818;
+  --shadow-card: 0 0 0 1px rgba(255,255,255,.04);   /* trait fin au lieu de blur */
+  --shadow-soft: 0 0 0 1px rgba(255,255,255,.04);
+
+  /* rouge : on garde l'accent vif, on baisse le veil ambiant */
+  --ac-veil: rgba(225,29,42,.04);
+  --ac-soft: rgba(225,29,42,.10);
+}
+
+/* Thème Rosé désaturé d'un cran + glow réduit */
+:root[data-theme="rose"]{
+  --ac:#d6488f;
+  --ac-hi:#e06aa6;
+  --ac-deep:#a32d6b;
+  --ac-glow:rgba(214,72,143,.30);
+  --ac-soft:rgba(214,72,143,.10);
+  --ac-veil:rgba(214,72,143,.05);
+}
+
+/* 2) Body : retirer le letter-spacing parasite ------------------------ */
+body{ letter-spacing:0 !important; }
+
+/* 3) Hiérarchie typo : 3 niveaux nets -------------------------------- */
+.top h1{
+  font-size:2.6rem;          /* DISPLAY */
+  line-height:1;
+  letter-spacing:.005em;
+}
+.shead h2{
+  font-size:1.6rem;          /* TITLE */
+  line-height:1.05;
+}
+.scard .stag,
+.shead .stag{
+  font-size:.7rem;           /* EYEBROW / TAG */
+  letter-spacing:.14em;
+  color:var(--dim);          /* on enlève le rouge des tags */
+}
+.scard .sname{ font-size:1.18rem; font-weight:700; }
+.scard{ padding:20px 20px 22px; margin-bottom:14px; }
+
+/* 4) Rouge contrôlé : RÉSERVÉ aux PR / CTA / état actif --------------- */
+/* Les "stag" (groupe musculaire) repassent en neutre */
+.scard .stag,
+.shead .stag{ color:var(--dim) !important; }
+
+/* Le set validé : on garde la couleur mais on adoucit le glow */
+[class*="set"][class*="done"],
+[class*="set"][class*="valid"],
+[data-done="1"]{
+  box-shadow: inset 0 0 0 1px var(--ac), 0 0 0 0 transparent !important;
+}
+
+/* Les sparklines / graphes : neutre par défaut, rouge UNIQUEMENT pour PR */
+svg [stroke="#e11d2a"]:not(.is-pr),
+svg [fill="#e11d2a"]:not(.is-pr){
+  stroke: var(--dim);
+  fill: var(--dim);
+  opacity:.85;
+}
+
+/* 5) Boutons : aplats premium, fin du gradient 2018 ------------------ */
+.resume,
+.bigbtn,
+button.primary,
+.btn-primary,
+[class*="cta"]{
+  background: var(--ac) !important;
+  background-image: none !important;
+  box-shadow:
+    inset 0 0 0 1px var(--ac-hi),
+    0 18px 40px -22px var(--ac-glow) !important;
+  border-radius: var(--radius-lg);
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+.resume:active,
+.bigbtn:active,
+button.primary:active{
+  transform: scale(.985);
+  background: var(--ac-deep) !important;
+}
+
+/* Boutons secondaires : ghost + bordure nette */
+button.secondary,
+.btn-ghost,
+.editbtn{
+  background: transparent;
+  border:1px solid var(--line2);
+  border-radius: var(--radius-md);
+  color: var(--txt);
+  padding: 10px 14px;
+}
+
+/* 6) Cards : trait + surface, pas d'ombre flottante ------------------- */
+.scard{
+  background: var(--card);
+  border:1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+.scard:active{ background: var(--elev); }
+
+/* 7) Tabbar : état actif lisible (pastille + icône filled) ----------- */
+#tabbar{
+  border-top:1px solid var(--line);
+  background: rgba(7,7,7,.92);
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+}
+#tabbar button,
+#tabbar a{
+  position: relative;
+  color: var(--faint);
+  transition: color .18s ease;
+}
+#tabbar svg{ stroke-width: 1.6; }
+#tabbar .active,
+#tabbar .on,
+#tabbar [aria-current="page"],
+#tabbar [data-active="true"]{
+  color: var(--ac);
+}
+#tabbar .active::after,
+#tabbar .on::after,
+#tabbar [aria-current="page"]::after,
+#tabbar [data-active="true"]::after{
+  content:"";
+  position:absolute;
+  left:50%; bottom:6px;
+  width:4px; height:4px;
+  border-radius:50%;
+  background: var(--ac);
+  box-shadow: 0 0 8px var(--ac-glow);
+  transform: translateX(-50%);
+}
+
+/* 8) Timer bar : état repos discret ---------------------------------- */
+#timerbar:not(.is-active):not(.on){
+  background: var(--card);
+  border-top:1px solid var(--line);
+  color: var(--dim);
+  box-shadow: none;
+}
+#timerbar.on,
+#timerbar.is-active{
+  background: linear-gradient(180deg, var(--card), var(--card2));
+  border-top:1px solid var(--ac);
+  box-shadow: 0 -12px 30px -18px var(--ac-glow);
+}
+
+/* 9) Inputs : champ neutre, focus rouge net -------------------------- */
+input, textarea, select{
+  background: var(--input);
+  border:1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus, textarea:focus, select:focus{
+  outline: none;
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px var(--ac-soft);
+}
+
+/* 10) Empty states : centrer + souffle ------------------------------- */
+.empty,
+[class*="empty"]{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+  padding:48px 24px;
+  color: var(--dim);
+  text-align:center;
+}
+.empty svg,
+[class*="empty"] svg{
+  width:48px; height:48px;
+  stroke: var(--faint);
+  stroke-width: 1.4;
+  fill: none;
+  opacity:.7;
+}
+
+/* 11) Splash → fondu propre vers l'app ------------------------------- */
+@keyframes splashOut{
+  to{ opacity:0; transform: scale(1.04); visibility:hidden; }
+}
+#splash.hide,
+#splash.is-leaving{
+  animation: splashOut .45s cubic-bezier(.4,0,.2,1) forwards;
+  pointer-events:none;
+}
+
+/* 12) Cibles tactiles 44px min (a11y) -------------------------------- */
+button, a, .hbtn, .editbtn, .back{
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 13) Focus visible global (clavier) --------------------------------- */
+:focus-visible{
+  outline: 2px solid var(--ac);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

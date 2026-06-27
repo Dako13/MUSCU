@@ -51,7 +51,7 @@ const MUSCLES=[
 const MUSCLE_BY_ID={};MUSCLES.forEach(m=>MUSCLE_BY_ID[m.id]=m);
 function normMuscle(tok){
   const t=String(tok||'').trim().toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[\s-]+/g,'_');
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s-]+/g,'_');
   if(MUSCLE_BY_ID[t])return t;
   const alias={pectoraux:'pecs',poitrine:'pecs',dorsaux:'dos',lats:'dos',
     epaules:'delt_lat',deltoide_anterieur:'delt_ant',deltoide_lateral:'delt_lat',
@@ -269,8 +269,6 @@ function resetProgram(){ /* réinitialise le programme ACTIF au modèle par déf
   act.seances=regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)),true);
   normalizePrograms();savePrograms();
 }
-function isCustomProgram(){return true}
-
 /* ---- gestion des programmes ---- */
 function regenIds(seances,keepDefault){
   for(const s of seances){
@@ -566,7 +564,7 @@ function loadDB(){
   db.workouts.sort((a,b)=>a.date<b.date?-1:1);
   return db;
 }
-var _storeWarned=false;
+let _storeWarned=false;
 function storeFailed(){if(_storeWarned)return;_storeWarned=true;try{toast('⚠ Sauvegarde impossible — pense à exporter tes données (Réglages › Données)')}catch(e){}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
 
@@ -581,7 +579,7 @@ function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open(IDB
 function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})).catch(()=>{})}
 function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})).catch(()=>null)}
 function mirrorSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}idbSet('snapshot',snap)}
-var _mirT=null; /* var : hoisté → pas de zone morte si appelé pendant le chargement (migration d'un nouvel utilisateur) */
+let _mirT=null;
 function mirrorSoon(){clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400)}
 function maybeRestoreFromIDB(){
   const hasLocal=!!localStorage.getItem(KEY)||!!localStorage.getItem(KEY_PROGRAMS);
@@ -628,7 +626,7 @@ function sessionProgress(a){
 function ytURL(e){return 'https://www.youtube.com/results?search_query='+encodeURIComponent(e.yt||e.name+' technique')}
 /* Photos reelles des exercices — source free-exercise-db (Unlicense, domaine public), via CDN jsDelivr. Mapping fait main FR vers base. */
 const EXIMG_BASE='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/';
-function exImgKey(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
+function exImgKey(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
 const EXIMG={
  'row appui poitrine unilateral neutre':'Seated_Cable_Rows/0.jpg',
  'tirage triangle serre':'Seated_Cable_Rows/0.jpg',
@@ -1174,7 +1172,7 @@ function bodyMapHTML(){
 }
 /* ---------- démonstrations animées (SVG/SMIL) ---------- */
 function exPattern(e){
-  const n=String(e&&e.name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const n=String(e&&e.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   /* du plus spécifique au plus générique — l'ordre compte */
   if(/cardio|tapis|velo|rameur|elliptique|skillmill|stair|climb|course/.test(n))return 'cardio';
   if(/abdo|crunch|oblique|rotary|gainage|chaise romaine|releve de jambe|sit.?up/.test(n))return 'abs';
@@ -2118,8 +2116,17 @@ function finishWorkout(){
   go('home');
 }
 function cancelWorkout(){
-  if(!window.confirm('Annuler la séance en cours ? Les saisies seront perdues.'))return;
+  const saved=DB.active;
+  if(!saved)return;
   DB.active=null;persist();stopTimer();go('home');
+  /* toast avec bouton Annuler pendant 5 s */
+  const t=document.getElementById('toast');
+  t.innerHTML='Séance annulée — <button id="_undo" style="background:none;border:none;color:var(--ac);font-weight:700;font-size:inherit;cursor:pointer;padding:0">Annuler</button>';
+  t.classList.add('on');
+  clearTimeout(t._h);
+  const undo=()=>{DB.active=saved;persist();go('seance',saved.seance);t.classList.remove('on')};
+  const btn=document.getElementById('_undo');if(btn)btn.addEventListener('click',undo,{once:true});
+  t._h=setTimeout(()=>{t.classList.remove('on');t.textContent='';},5000);
 }
 
 /* ================== ÉVÉNEMENTS ================== */
@@ -2617,14 +2624,28 @@ function doImport(){
   }
   if(!clean.length){toast('Aucune séance trouvée dans le JSON');return}
   clean.sort((a,b)=>a.date<b.date?-1:1);
-  DB.workouts=clean;persist();closeSheet();render();
-  toast(clean.length+' séance'+(clean.length>1?'s':'')+' importée'+(clean.length>1?'s':''));
+  const existing=new Set(DB.workouts.map(w=>w.date+'|'+w.seance));
+  const toMerge=clean.filter(w=>!existing.has(w.date+'|'+w.seance));
+  const finish=(list,msg)=>{DB.workouts=list.sort((a,b)=>a.date<b.date?-1:1);persist();closeSheet();render();toast(msg)};
+  if(!DB.workouts.length||toMerge.length===clean.length){
+    /* aucun doublon : importer sans demander */
+    finish(clean,clean.length+' séance'+(clean.length>1?'s':'')+' importée'+(clean.length>1?'s':''));
+  }else if(!toMerge.length){
+    finish(clean,'Remplacement de '+clean.length+' séance'+(clean.length>1?'s':''));
+  }else{
+    const dup=clean.length-toMerge.length;
+    if(window.confirm('Fusionner '+toMerge.length+' nouvelle'+(toMerge.length>1?'s':'')+' séance'+(toMerge.length>1?'s':'')+' avec l\'existant ?\n('+dup+' doublon'+(dup>1?'s':'')+' ignoré'+(dup>1?'s':'')+')\n\nOK = Fusionner · Annuler = Tout remplacer')){
+      finish([...DB.workouts,...toMerge],toMerge.length+' séance'+(toMerge.length>1?'s':'')+' ajoutée'+(toMerge.length>1?'s':'')+' · '+dup+' doublon'+(dup>1?'s':'')+' ignoré'+(dup>1?'s':''));
+    }else{
+      finish(clean,clean.length+' séance'+(clean.length>1?'s':'')+' importée'+(clean.length>1?'s':'')+' (remplacement)');
+    }
+  }
 }
 
 /* ================== SERVICE WORKER ================== */
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').then(reg=>{
+    navigator.serviceWorker.register('./sw.js?v='+APP_VERSION).then(reg=>{
       reg.addEventListener('updatefound',()=>{
         const nw=reg.installing;
         if(!nw)return;
@@ -2672,6 +2693,7 @@ function initDragSort(){
 }
 initDragSort();
 render();
+document.dispatchEvent(new Event('app:ready'));
 backupReminder();
 try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
 /* miroir de secours + restauration si le stockage a été purgé */
@@ -2689,5 +2711,6 @@ maybeRestoreFromIDB().then(restored=>{
   const sp=document.getElementById('splash');
   if(!sp)return;
   const hide=()=>{sp.classList.add('hide');setTimeout(()=>{if(sp&&sp.parentNode)sp.parentNode.removeChild(sp)},600)};
-  setTimeout(hide,1100);
+  document.addEventListener('app:ready',hide,{once:true});
+  setTimeout(hide,2000); /* filet de sécurité */
 })();
