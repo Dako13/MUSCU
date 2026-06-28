@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.19.5';
+const APP_VERSION='4.19.6';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -978,7 +978,7 @@ function exCardHTML(e,idx,active){
     h+=workoutCoachHTML(e,sets);
     h+='<div class="stable"><div class="sthead"><span>SÉR.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
     sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
-    h+='</div><button class="addset" data-act="addset">+ série</button>';
+    h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
   }
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
@@ -2201,6 +2201,19 @@ app.addEventListener('click',ev=>{
     card.querySelector('.stable').insertAdjacentHTML('beforeend',
       setRowHTML(e,i,{w:null,r:null,done:false},e?suggestTargets(e):null));
     card.classList.remove('complete');
+    updateProgress();
+    refreshWorkoutCoach(card,exId);
+  }
+  else if(act==='delset'){
+    const card=actEl.closest('.card');const exId=card.dataset.ex;
+    if(!DB.active||!DB.active.ex[exId])return;
+    const arr=DB.active.ex[exId];
+    if(arr.length<=1){toast('Au moins une série');return}
+    const last=arr[arr.length-1];
+    if((last.w!=null||last.r!=null||last.done)&&!window.confirm('Retirer la dernière série (saisie perdue) ?'))return;
+    arr.pop();persist();
+    const rows=card.querySelectorAll('.strow');if(rows.length)rows[rows.length-1].remove();
+    card.classList.toggle('complete',arr.length>0&&arr.every(s=>s.done));
     updateProgress();
     refreshWorkoutCoach(card,exId);
   }
