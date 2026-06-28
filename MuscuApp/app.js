@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.19.4';
+const APP_VERSION='4.19.5';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -564,7 +564,7 @@ function loadDB(){
   db.workouts.sort((a,b)=>a.date<b.date?-1:1);
   return db;
 }
-let _storeWarned=false;
+var _storeWarned=false; /* var volontaire (anti-TDZ) : storeFailed peut être appelé pendant la migration au chargement, AVANT cette ligne — ne pas repasser en let */
 function storeFailed(){if(_storeWarned)return;_storeWarned=true;try{toast('⚠ Sauvegarde impossible — pense à exporter tes données (Réglages › Données)')}catch(e){}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
 
@@ -579,7 +579,7 @@ function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open(IDB
 function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})).catch(()=>{})}
 function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})).catch(()=>null)}
 function mirrorSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}idbSet('snapshot',snap)}
-let _mirT=null;
+var _mirT=null; /* var volontaire (anti-TDZ) : mirrorSoon peut être appelé pendant la migration au chargement (loadProgram->savePrograms), AVANT cette ligne — ne pas repasser en let */
 function mirrorSoon(){clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400)}
 function maybeRestoreFromIDB(){
   const hasLocal=!!localStorage.getItem(KEY)||!!localStorage.getItem(KEY_PROGRAMS);
