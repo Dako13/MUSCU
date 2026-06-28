@@ -47,7 +47,6 @@
   --photo-bg:#fff3f8; --photo-bg2:#ffffff;
 }
 :root[data-theme="rose"] body{background:radial-gradient(120% 70% at 50% -10%, rgba(236,72,153,.13), transparent 60%), var(--bg);}
-:root[data-theme="rose"] #tabbar{background:rgba(18,10,15,.9);}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:16px}
 body{
@@ -365,17 +364,38 @@ details[open] summary::before{transform:rotate(45deg)}
 
 /* ---------- tab bar ---------- */
 #tabbar{
-  position:fixed;left:0;right:0;bottom:0;z-index:40;
-  display:flex;background:rgba(9,9,9,.88);
-  -webkit-backdrop-filter:blur(22px) saturate(1.2);backdrop-filter:blur(22px) saturate(1.2);
-  border-top:1px solid var(--line);
-  padding:8px 0 calc(9px + env(safe-area-inset-bottom));
+  position:fixed;
+  left:calc(50% + (env(safe-area-inset-left) - env(safe-area-inset-right))/2);
+  right:auto;bottom:0;z-index:40;
+  width:min(calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)),520px);
+  max-width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;
+  box-sizing:border-box;overflow:hidden;
+  transform:translateX(-50%);
+  background:rgba(7,7,7,.88);
+  -webkit-backdrop-filter:saturate(140%) blur(18px);backdrop-filter:saturate(140%) blur(18px);
+  border:.5px solid var(--line);
+  border-bottom:none;border-radius:22px 22px 0 0;
+  padding:8px 6px calc(9px + env(safe-area-inset-bottom));
+  box-shadow:0 -12px 34px rgba(0,0,0,.48);
 }
-.tabbtn{flex:1;text-align:center;padding:8px 0 2px;color:var(--faint);transition:color .18s;position:relative}
-.tabbtn.on{color:var(--ac)}
+.tabbtn{
+  min-width:0;min-height:56px;text-align:center;padding:7px 4px 3px;
+  color:var(--faint);transition:color .18s,background .18s;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  border-radius:16px;overflow:hidden;
+}
+.tabbtn.on{color:var(--ac);background:linear-gradient(180deg,var(--ac-soft),transparent)}
+.tabbtn.on::before{
+  content:"";position:absolute;left:28%;right:28%;top:3px;height:2px;
+  border-radius:999px;background:var(--ac);box-shadow:0 0 10px var(--ac-glow);
+}
 .tabbtn.on svg{filter:drop-shadow(0 0 6px var(--ac-glow))}
-.tabbtn svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.7;fill:none;display:block;margin:0 auto 4px}
-.tabbtn span{font-family:var(--font-head);font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tabbtn svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.85;fill:none;display:block;flex:0 0 auto}
+.tabbtn span{
+  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--font-head);font-size:.7rem;font-weight:600;letter-spacing:.045em;text-transform:uppercase;
+}
 
 /* ---------- minuteur repos ---------- */
 #timerbar{
@@ -1070,35 +1090,6 @@ summary{border-radius:10px}
 .sbtn.danger,.pa.danger,.wrow .wsetdel{
   background:linear-gradient(180deg, rgba(255,90,77,.08), transparent);
 }
-#tabbar{
-  left:50%;
-  right:auto;
-  width:min(100%,520px);
-  transform:translateX(-50%);
-  background:rgba(7,7,7,.82);
-  border:.5px solid var(--line);
-  border-bottom:none;
-  border-radius:22px 22px 0 0;
-  box-shadow:0 -12px 34px rgba(0,0,0,.48);
-}
-:root[data-theme="rose"] #tabbar{background:rgba(17,10,14,.84)}
-.tabbtn{
-  border-radius:16px;
-  padding:9px 0 4px;
-}
-.tabbtn.on::before{
-  content:"";
-  position:absolute;
-  left:24%;
-  right:24%;
-  top:3px;
-  height:2px;
-  border-radius:999px;
-  background:var(--ac);
-  box-shadow:0 0 10px var(--ac-glow);
-}
-.tabbtn svg{stroke-width:1.85}
-.tabbtn span{letter-spacing:.045em}
 #timerbar{
   left:50%;
   right:auto;

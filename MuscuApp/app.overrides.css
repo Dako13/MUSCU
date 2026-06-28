@@ -122,41 +122,7 @@ button.secondary,
 }
 .scard:active{ background: var(--elev); }
 
-/* 7) Tabbar : état actif lisible (pastille + icône filled) ----------- */
-#tabbar{
-  border-top:1px solid var(--line);
-  background: rgba(7,7,7,.92);
-  backdrop-filter: saturate(140%) blur(14px);
-  -webkit-backdrop-filter: saturate(140%) blur(14px);
-}
-#tabbar button,
-#tabbar a{
-  position: relative;
-  color: var(--faint);
-  transition: color .18s ease;
-}
-#tabbar svg{ stroke-width: 1.6; }
-#tabbar .active,
-#tabbar .on,
-#tabbar [aria-current="page"],
-#tabbar [data-active="true"]{
-  color: var(--ac);
-}
-#tabbar .active::after,
-#tabbar .on::after,
-#tabbar [aria-current="page"]::after,
-#tabbar [data-active="true"]::after{
-  content:"";
-  position:absolute;
-  left:50%; bottom:6px;
-  width:4px; height:4px;
-  border-radius:50%;
-  background: var(--ac);
-  box-shadow: 0 0 8px var(--ac-glow);
-  transform: translateX(-50%);
-}
-
-/* 8) Timer bar : état repos discret ---------------------------------- */
+/* 7) Timer bar : état repos discret ---------------------------------- */
 #timerbar:not(.is-active):not(.on){
   background: var(--card);
   border-top:1px solid var(--line);
