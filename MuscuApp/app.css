@@ -192,6 +192,13 @@ summary::-webkit-details-marker{display:none}
 summary::before{content:"";width:5px;height:5px;border-right:1px solid var(--faint);border-bottom:1px solid var(--faint);transform:rotate(-45deg);transition:transform .18s;flex:0 0 auto}
 details[open] summary::before{transform:rotate(45deg)}
 .notes{font-size:.86rem;color:var(--dim);line-height:1.6;padding:2px 0 8px;white-space:pre-line}
+.workout-note{display:flex;flex-direction:column;gap:8px;margin:14px 0;color:var(--dim);font-size:.86rem;letter-spacing:0}
+.workout-note textarea{display:block;width:100%;min-height:82px;resize:vertical;padding:12px;background:var(--input);color:var(--txt);border:1px solid var(--line2);border-radius:8px;font-size:1rem;line-height:1.5;letter-spacing:0}
+.workout-note textarea::placeholder{color:var(--faint);opacity:1}
+.workout-note textarea:focus{outline:2px solid var(--ac);outline-offset:2px}
+.workout-note-read{margin:8px 0 14px;padding-left:10px;border-left:2px solid var(--ac);font-size:.86rem;line-height:1.5;letter-spacing:0;overflow-wrap:anywhere}
+.workout-note-read span{color:var(--dim);font-size:.78rem}
+.workout-note-read p{color:var(--txt);white-space:pre-wrap;margin:3px 0 0}
 .vlink{
   display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--faint);
   padding:7px 0;margin-left:34px;text-decoration:none;transition:color .18s;

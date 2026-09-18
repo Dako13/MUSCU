@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.20.0';
+const APP_VERSION='4.21.0';
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -568,6 +568,28 @@ var _storeWarned=false; /* var volontaire (anti-TDZ) : storeFailed peut être ap
 function storeFailed(){if(_storeWarned)return;_storeWarned=true;try{toast('⚠ Sauvegarde impossible — pense à exporter tes données (Réglages › Données)')}catch(e){}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
 
+/* Les ressentis appartiennent a une seance realisee, jamais au programme. */
+function workoutNote(w,exId){
+  const note=w&&w.exNotes&&w.exNotes[exId];
+  return typeof note==='string'?note.slice(0,2000):'';
+}
+function cleanWorkoutNotes(notes){
+  return Object.fromEntries(Object.entries(notes&&typeof notes==='object'?notes:{})
+    .filter(([id,note])=>typeof note==='string'&&note.trim())
+    .map(([id,note])=>[id,note.slice(0,2000).trim()]));
+}
+function workoutExerciseIds(w){
+  return [...new Set([...Object.keys(w.ex||{}),...Object.keys(cleanWorkoutNotes(w.exNotes))])];
+}
+function workoutNoteField(w,exId,editing){
+  return '<label class="workout-note"><span>Note · ressenti du jour</span>'
+    +'<textarea class="'+(editing?'we-note':'session-note')+'" data-ex="'+esc(exId)+'" rows="2" maxlength="2000" placeholder="Isolation bonne, ressenti correct…">'
+    +esc(workoutNote(w,exId))+'</textarea></label>';
+}
+function workoutNoteHTML(note){
+  return note?'<div class="workout-note-read"><span>Ressenti</span><p>'+esc(note)+'</p></div>':'';
+}
+
 /* ===== Sauvegarde durable — miroir IndexedDB (anti-purge iOS) =====
    localStorage reste le stockage de travail (synchrone). À chaque
    écriture, on recopie un instantané dans IndexedDB, plus résistant
@@ -598,7 +620,7 @@ function exHistory(exId){
   for(const w of DB.workouts){
     if(!w.ex||!w.ex[exId])continue;
     const sets=w.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null));
-    if(sets.length)out.push({date:w.date,sets});
+    if(sets.length)out.push({date:w.date,sets,note:workoutNote(w,exId)});
   }
   return out;
 }
@@ -979,6 +1001,7 @@ function exCardHTML(e,idx,active){
     h+='<div class="stable"><div class="sthead"><span>SÉR.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
     sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
     h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
+    h+=workoutNoteField(active,e.id,false);
   }
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
@@ -1016,6 +1039,7 @@ function progHTML(e){
   for(const en of h.slice(-8).reverse()){
     out+='<div class="hrow"><span class="hdate num">'+(en.date===todayISO()?'Aujourd’hui':fmtDateShort(en.date))+'</span>'
      +'<span class="hsets num">'+en.sets.map(s=>(s.w!=null?fmtN(s.w):'—')+'×'+(s.r!=null?s.r:'—')).join(' · ')+'</span></div>';
+    out+=workoutNoteHTML(en.note);
   }
   return out;
 }
@@ -1046,11 +1070,13 @@ function historyHTML(embed){
   DB.workouts.slice().map((w,i)=>({w,i})).reverse().forEach(({w,i})=>{
     const s=SEANCE[w.seance];const st=workoutStats(w);const musHTML=workoutMusclesHTML(w);
     let det='';
-    for(const exId in (w.ex||{})){
-      const sets=w.ex[exId].filter(x=>x.done&&(x.w!=null||x.r!=null));
-      if(!sets.length)continue;
+    for(const exId of workoutExerciseIds(w)){
+      const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
+      const note=workoutNote(w,exId);
+      if(!sets.length&&!note)continue;
       det+='<div class="hxrow"><span class="hxname">'+esc(EXO[exId]?EXO[exId].name:exId)+'</span>'
        +'<span class="hxsets num">'+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'</span></div>';
+      det+=workoutNoteHTML(note);
     }
     det+='<div class="sbtns" style="margin-top:12px"><button class="sbtn" data-act="wedit" data-w="'+i+'">Modifier</button>'
       +'<button class="sbtn danger" data-act="wdel" data-w="'+i+'">Supprimer</button></div>';
@@ -1069,7 +1095,7 @@ function historyHTML(embed){
 function showEditWorkout(i){
   const w=DB.workouts[i];if(!w)return;
   let body='';
-  for(const exId in (w.ex||{})){
+  for(const exId of workoutExerciseIds(w)){
     body+='<div class="rectitle">'+esc(EXO[exId]?EXO[exId].name:exId)+'</div>';
     (w.ex[exId]||[]).forEach((st,j)=>{
       body+='<div class="wrow" data-ex="'+esc(exId)+'">'
@@ -1078,6 +1104,7 @@ function showEditWorkout(i){
         +'<input class="we num" data-k="r" inputmode="numeric" placeholder="reps" value="'+(st.r==null?'':st.r)+'">'
         +'<button class="ebtn wsetdel">✕</button></div>';
     });
+    body+=workoutNoteField(w,exId,true);
   }
   sheet.innerHTML='<h2>Modifier la séance</h2><div class="sp">'+fmtDateShort(w.date)+' · '+esc((SEANCE[w.seance]||{}).tab||'')+' — corrige ou supprime des séries.</div>'
    +body+'<div class="sbtns"><button class="sbtn pri" id="wsave">Enregistrer</button></div>';
@@ -1092,6 +1119,7 @@ function showEditWorkout(i){
       if(wv==null&&rv==null)return;
       (ex[exId]=ex[exId]||[]).push({w:wv,r:rv,done:true});
     });
+    w.exNotes=cleanWorkoutNotes(Object.fromEntries([...sheet.querySelectorAll('.we-note')].map(input=>[input.dataset.ex,input.value])));
     w.ex=ex;persist();closeSheet();render();toast('Séance modifiée');
   });
 }
@@ -2063,7 +2091,7 @@ function startWorkout(sid){
       ex[e.id].push({w:p&&p.w!=null?p.w:null,r:p&&p.r!=null?p.r:null,done:false});
     }
   }
-  DB.active={seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex};
+  DB.active={seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{}};
   persist();render();
 }
 function elapsedStr(){
@@ -2108,7 +2136,7 @@ function finishWorkout(){
     const sets=a.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null)).map(s=>({w:s.w,r:s.r,done:true}));
     if(sets.length)ex[exId]=sets;
   }
-  DB.workouts.push({date:a.date,seance:a.seance,dur,ex});
+  DB.workouts.push({date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)});
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
   stopTimer();
@@ -2269,6 +2297,12 @@ app.addEventListener('click',ev=>{
   }
 });
 app.addEventListener('input',ev=>{
+  if(ev.target.matches('.session-note')){
+    const exId=ev.target.dataset.ex;
+    if(!DB.active||!Object.hasOwn(DB.active.ex,exId))return;
+    DB.active.exNotes={...cleanWorkoutNotes(DB.active.exNotes),[exId]:ev.target.value.slice(0,2000)};
+    persist();return;
+  }
   if(ev.target.id==='mq'){
     MFILTER.q=ev.target.value;
     const q=ev.target.value.toLowerCase();
@@ -2578,10 +2612,12 @@ function coachHistoryText(){
   for(const w of arr){
     const s=SEANCE[w.seance];
     t+='\n'+fmtDateShort(w.date)+' · '+(s?s.tab+' '+s.title:w.seance)+(w.dur?' · '+fmtDur(w.dur):'')+'\n';
-    for(const exId in (w.ex||{})){
-      const sets=w.ex[exId].filter(x=>x.done&&(x.w!=null||x.r!=null));
-      if(!sets.length)continue;
+    for(const exId of workoutExerciseIds(w)){
+      const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
+      const note=workoutNote(w,exId);
+      if(!sets.length&&!note)continue;
       t+='  '+(EXO[exId]?EXO[exId].name:exId)+' : '+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'\n';
+      if(note)t+='    Ressenti : '+note+'\n';
     }
   }
   return t;
@@ -2633,7 +2669,8 @@ function doImport(){
         .filter(x=>x.w!=null||x.r!=null);
       if(sets.length)ex[exId]=sets;
     }
-    if(Object.keys(ex).length)clean.push({date:w.date,seance:w.seance||(EXO[Object.keys(ex)[0]]||{}).seance,dur:w.dur??null,ex});
+    const exNotes=cleanWorkoutNotes(w.exNotes);
+    if(Object.keys(ex).length||Object.keys(exNotes).length)clean.push({date:w.date,seance:w.seance||(EXO[Object.keys(ex)[0]]||{}).seance,dur:w.dur??null,ex,exNotes});
   }
   if(!clean.length){toast('Aucune séance trouvée dans le JSON');return}
   clean.sort((a,b)=>a.date<b.date?-1:1);
