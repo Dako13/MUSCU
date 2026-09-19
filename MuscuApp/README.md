@@ -13,6 +13,10 @@ Application web installable (PWA), hors ligne, sans serveur ni base de données.
 | `sw.js` | Service worker — cache hors ligne |
 | `manifest.webmanifest` | Manifeste PWA (nom, icônes, plein écran) |
 | `icons/` | Icônes 180 / 192 / 512 + maskable |
+| `icons/ui.svg` | Icônes d’interface Lucide, disponibles hors ligne |
+
+Les icônes d’interface proviennent de [Lucide](https://lucide.dev).
+Leurs licences ISC et MIT sont conservées dans [icons/lucide-LICENSE](icons/lucide-LICENSE).
 
 ## Déploiement gratuit — GitHub Pages (~10 min)
 

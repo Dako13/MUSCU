@@ -1,7 +1,7 @@
 /* Service worker — cache hors ligne.
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.22.0');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.23.0');
 const ASSETS=[
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS=[
   './app.js',
   './data-integrity.js',
   './bodymap.js',
+  './icons/ui.svg',
   './manifest.webmanifest',
   './icons/icon-180.png',
   './icons/icon-32.png',

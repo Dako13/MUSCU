@@ -28,7 +28,7 @@
   <div class="sptag">TRAINING</div>
 </div>
 
-<div id="app"></div>
+<main id="app"></main>
 
 <div id="timerbar">
   <div id="tleft" class="num">3:00</div>
@@ -37,17 +37,17 @@
   <button class="tact" id="tskip">Passer</button>
 </div>
 
-<nav id="tabbar">
+<nav id="tabbar" aria-label="Navigation principale">
   <button class="tabbtn on" data-v="home">
-    <svg viewBox="0 0 24 24"><path d="M4 9v6M8 6v12M16 6v12M20 9v6M8 12h8"/></svg>
+    <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><use href="./icons/ui.svg#dumbbell"></use></svg>
     <span>Entraîner</span>
   </button>
   <button class="tabbtn" data-v="programs">
-    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg>
+    <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><use href="./icons/ui.svg#layout-list"></use></svg>
     <span>Programmes</span>
   </button>
   <button class="tabbtn" data-v="suivi">
-    <svg viewBox="0 0 24 24"><path d="M4 19V11M10 19V5M16 19v-9M22 19H2"/></svg>
+    <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><use href="./icons/ui.svg#chart-no-axes-combined"></use></svg>
     <span>Suivi</span>
   </button>
 </nav>

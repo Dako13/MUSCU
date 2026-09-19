@@ -12,7 +12,7 @@ const server=http.createServer(async(req,res)=>{
   if(file!==root&&!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
   const target=file===root?path.join(root,'index.html'):file;
   try{
-    res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.webmanifest':'application/manifest+json'})[path.extname(target)]||'application/octet-stream');
+    res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[path.extname(target)]||'application/octet-stream');
     res.end(await fs.readFile(target));
   }catch{res.writeHead(404).end();}
 });
@@ -27,6 +27,7 @@ async function open(serviceWorkers='block'){
 async function ready(page){
   await page.waitForFunction(()=>typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
   await page.locator('#splash').waitFor({state:'detached'});
+  await page.waitForFunction(()=>[...document.querySelectorAll('#tabbar svg')].every(svg=>svg.getBBox().width>0));
 }
 async function importPreview(page,data){
   await page.evaluate(data=>{showData();document.getElementById('shArea').value=JSON.stringify(data);doImport();},data);
@@ -42,6 +43,14 @@ async function importMerge(page){
     browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL||'msedge'});
     let p=await open();
     const ids=await p.evaluate(()=>({sid:PROGRAM[0].id,ex:PROGRAM[0].ex[0].id}));
+
+    // The refreshed home controls retain their real actions and visible assets.
+    assert.equal(await p.locator('.wk-n').count(),7);
+    await p.locator('[data-act="settings"]').click();
+    assert(await p.locator('#sheet').isVisible());await p.keyboard.press('Escape');
+    await p.locator('[data-act="quickstart"]').click();
+    assert(await p.evaluate(()=>!!DB.active&&route.view==='seance'));
+    await p.evaluate(()=>{DB.active=null;persist();go('home');});
 
     // Library search remains complete after changing filters and clearing a query.
     await p.evaluate(()=>go('machines'));
@@ -142,8 +151,8 @@ async function importMerge(page){
     for(const width of [320,390,1440])for(const theme of ['dark','rose']){
       await p.setViewportSize({width,height:900});
       await p.evaluate(theme=>{SETTINGS.theme=theme;applyTheme();},theme);
-      for(const view of ['home','machines','seance','edit','suivi']){
-        await p.evaluate(view=>{closeSheet();if(view==='edit'&&DB.active){DB.active=null;stopTimer();}go(view,['seance','edit'].includes(view)?PROGRAM[0].id:null);if(view==='seance')startWorkout(PROGRAM[0].id);if(view==='machines'){MFILTER.open=false;render();}},view);
+      for(const view of ['home','programs','machines','seance','edit','suivi','stats']){
+        await p.evaluate(view=>{closeSheet();document.getElementById('toast').classList.remove('on');if(view==='edit'&&DB.active){DB.active=null;stopTimer();}SUIVI=view==='stats'?'stats':'history';go(view,['seance','edit'].includes(view)?PROGRAM[0].id:null);if(view==='seance')startWorkout(PROGRAM[0].id);if(view==='machines'){MFILTER.open=false;render();}},view);
         await p.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
         assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),view+' overflows at '+width);
         metrics.push(await p.evaluate(({view,width,theme})=>({view,width,theme,firstSeries:document.querySelector('.strow')?.getBoundingClientRect().y,firstResult:document.querySelector('.mrow:not([hidden])')?.getBoundingClientRect().y}),{view,width,theme}));
@@ -155,9 +164,10 @@ async function importMerge(page){
       await p.addScriptTag({path:process.env.AXE_PATH});
       const accessibility={};
       await p.setViewportSize({width:390,height:844});
-      for(const theme of ['dark','rose'])for(const view of ['home','machines','seance','edit','settings']){
+      for(const theme of ['dark','rose'])for(const view of ['home','programs','machines','seance','edit','stats','settings']){
         await p.evaluate(({theme,view})=>{
           closeSheet();DB.active=null;stopTimer();SETTINGS.theme=theme;applyTheme();
+          SUIVI=view==='stats'?'stats':'history';
           if(view==='settings'){go('home');showSettings();}
           else{go(view,['seance','edit'].includes(view)?PROGRAM[0].id:null);if(view==='seance')startWorkout(PROGRAM[0].id);}
         },{theme,view});

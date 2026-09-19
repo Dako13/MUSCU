@@ -13,7 +13,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(403).end(); return;
   }
   const target = file === root ? path.join(root, 'index.html') : file;
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
   try {
     res.setHeader('Content-Type', types[path.extname(target)] || 'application/octet-stream');
     res.end(await fs.readFile(target));

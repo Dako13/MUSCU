@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.22.0';
+const APP_VERSION='4.23.0';
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
 
@@ -17,6 +17,8 @@ function esc(s){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+function uiIcon(name){return '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><use href="./icons/ui.svg#'+name+'"></use></svg>';}
+function toolButton(action,icon,label){return '<button class="icon-button" data-act="'+action+'" aria-label="'+label+'" data-tooltip="'+label+'">'+uiIcon(icon)+'</button>';}
 function numOrNull(v){if(v==null||String(v).trim()==='')return null;const n=Number(String(v).trim().replace(',','.'));return Number.isFinite(n)?n:null}
 function intOrNull(v){const n=numOrNull(v);return Number.isInteger(n)?n:null}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -886,8 +888,11 @@ window.addEventListener('beforeunload',ev=>{if(editorDirty()){ev.preventDefault(
 
 function render(){
   const tabFor={home:'home',seance:'home',edit:'programs',suivi:'suivi',stats:'suivi',history:'suivi',programs:'programs',machines:'programs'};
-  document.querySelectorAll('.tabbtn').forEach(b=>
-    b.classList.toggle('on',b.dataset.v===tabFor[route.view]));
+  document.querySelectorAll('.tabbtn').forEach(b=>{
+    const active=b.dataset.v===tabFor[route.view];b.classList.toggle('on',active);
+    if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+  });
+  app.dataset.view=route.view;
   if(route.view==='home')app.innerHTML=homeHTML();
   else if(route.view==='machines')app.innerHTML=machinesHTML();
   else if(route.view==='seance')app.innerHTML=seanceHTML(route.seance);
@@ -911,7 +916,7 @@ function sessionMuscles(s){
 function weekStripHTML(now){
   /* bande de la semaine en cours : 7 pastilles (entraîné = rouge, aujourd'hui surligné) */
   const ws=weekStart(now);
-  const labels=['L','M','M','J','V','S','D'];
+  const labels=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const today=todayISO();
   const trained=new Set(DB.workouts.map(w=>w.date));
   let cells='';
@@ -919,7 +924,7 @@ function weekStripHTML(now){
     const d=new Date(ws);d.setDate(ws.getDate()+i);
     const iso=isoOf(d);
     const cls=(trained.has(iso)?' on':'')+(iso===today?' today':'')+(iso>today?' fut':'');
-    cells+='<div class="wk-cell'+cls+'"><span class="wk-d">'+labels[i]+'</span><span class="wk-dot"></span></div>';
+    cells+='<div class="wk-cell'+cls+'" aria-label="'+esc(d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+(trained.has(iso)?' · entraînement enregistré':'')+'"'+(iso===today?' aria-current="date"':'')+'><span class="wk-d">'+labels[i]+'</span><span class="wk-n num">'+d.getDate()+'</span><span class="wk-dot"></span></div>';
   }
   return '<div class="weekstrip">'+cells+'</div>';
 }
@@ -930,12 +935,8 @@ function homeHTML(){
   let weekVol=0,weekSets=0;weekW.forEach(w=>{const st=workoutStats(w);weekVol+=st.vol;weekSets+=st.sets;});
   const reco=recommendSeance();
   const ap=activeProgram();
-  const hour=now.getHours();
-  const greet=hour<12?'Bonjour':(hour<18?'Bon après-midi':'Bonsoir');
-  let h='<div class="dash-top"><div class="dash-hi"><div class="greet">'+greet+'</div>'
-   +'<div class="dash-date">'+now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'</div></div>'
-   +'<div class="hbtns"><button class="hbtn" data-act="settings">Réglages</button>'
-   +'<button class="hbtn" data-act="data">Données</button></div></div>';
+  let h='<div class="dash-top"><div class="dash-brand"><h1>Dko<span>.</span></h1><div class="dash-date">'+now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'</div></div>'
+   +'<div class="hbtns">'+toolButton('data','database','Données et sauvegardes')+toolButton('settings','settings-2','Réglages')+'</div></div>';
   let _ba=null;try{const _lb=localStorage.getItem('dako_lastbackup');_ba=_lb?diffDays(_lb):null}catch(e){}
   if(DB.workouts.length&&(_ba===null||_ba>=7)){
     h+='<button class="backupbanner" data-act="backup"><span class="bb-i">⤓</span>'
@@ -952,16 +953,15 @@ function homeHTML(){
     const sm=sessionMuscles(heroS);
     const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
     const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
-    h+='<button class="hero" data-act="quickstart" data-s="'+esc(heroS.id)+'">'
-     +'<div class="hero-fig">'+silhouette(dominantSide(heroS),val)+'</div>'
-     +'<div class="hero-main"><div class="hero-k">'+(reco?'SÉANCE DU JOUR':'À L’AFFICHE')+'</div>'
-     +'<div class="hero-title">'+esc(heroS.title)+'</div>'
-     +'<div class="hero-sub">'+esc(heroS.tab)+' · '+heroS.ex.length+' exercices'+(mlist?' · '+esc(mlist):'')+'</div>'
-     +'<div class="hero-row"><span class="hero-cta">Démarrer maintenant ›</span>'
-     +'<span class="hero-recup num">récup. '+seanceRecoveryScore(heroS)+' %</span></div>'
-     +'</div></button>';
+    h+='<section class="today-session" aria-labelledby="todayTitle">'
+     +'<div class="today-copy"><div class="today-k">Séance du jour <span>'+esc(heroS.tab)+'</span></div>'
+     +'<h2 id="todayTitle">'+esc(heroS.title)+'</h2>'
+     +'<div class="today-meta">'+heroS.ex.length+' exercices · récupération estimée '+seanceRecoveryScore(heroS)+' %</div>'
+     +'<p class="today-muscles">'+esc(mlist)+'</p></div>'
+     +'<div class="today-anatomy" aria-hidden="true">'+silhouette(dominantSide(heroS),val)+'</div>'
+     +'<button class="bigbtn today-start" data-act="quickstart" data-s="'+esc(heroS.id)+'">'+uiIcon('play')+'<span>Démarrer la séance</span>'+uiIcon('arrow-right')+'</button></section>';
   }
-  h+=weekStripHTML(now);
+  h+='<div class="week-heading"><h2>Cette semaine</h2><span>'+weekW.length+' séance'+(weekW.length>1?'s':'')+'</span></div>'+weekStripHTML(now);
   h+='<div class="statgrid">'
    +'<div class="statbox"><div class="v num">'+weekSets+'</div><div class="l">Séries · sem.</div></div>'
    +'<div class="statbox"><div class="v num">'+weekW.length+'</div><div class="l">Séances · sem.</div></div>'
@@ -1997,9 +1997,9 @@ function machinesHTML(){
   const brands=[];MACHINES.forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
   let h='<button class="back" data-act="programs">‹ Programmes</button>'
    +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Exercices</h2></div></div>'
-   +'<input id="mq" class="msearch" type="search" aria-label="Rechercher un exercice" placeholder="Rechercher un exercice…" value="'+esc(MFILTER.q||'')+'">';
+   +'<div class="search-field">'+uiIcon('search')+'<input id="mq" class="msearch" type="search" aria-label="Rechercher un exercice" placeholder="Rechercher un exercice…" value="'+esc(MFILTER.q||'')+'"></div>';
   const activeFilters=[MFILTER.g,MFILTER.b,MFILTER.c,MFILTER.l].filter(Boolean).length;
-  h+='<details id="machineFilters" class="machine-filters"'+(MFILTER.open?' open':'')+'><summary>Filtres'+(activeFilters?' · '+activeFilters+' actifs':'')+'</summary><div class="mfilters">'
+  h+='<details id="machineFilters" class="machine-filters"'+(MFILTER.open?' open':'')+'><summary>'+uiIcon('sliders-horizontal')+'Filtres'+(activeFilters?' · '+activeFilters+' actifs':'')+'</summary><div class="mfilters">'
    +'<button class="mfchip'+(!MFILTER.g?' on':'')+'" data-act="mfg" data-g="">Tous muscles</button>';
   MACHINE_GROUPS.forEach(g=>{h+='<button class="mfchip'+(MFILTER.g===g[0]?' on':'')+'" data-act="mfg" data-g="'+g[0]+'">'+esc(g[1])+'</button>'});
   h+='</div><div class="mfilters">'
@@ -2071,8 +2071,8 @@ function addMachineToSeance(i,sid){
 function programsHTML(){
   const ap=activeProgram();
   let h='<div class="top"><h1>Programmes</h1></div>'
-   +'<div class="subdate">'+PROGRAMS.length+' programme'+(PROGRAMS.length>1?'s':'')+' · glisse, crée, duplique</div>'
-   +'<button class="progpill" data-act="machines"><span class="ppl">BIBLIOTHÈQUE</span><span class="ppn">Machines par muscle / marque</span><span class="ppx">Ouvrir ›</span></button>';
+   +'<div class="subdate">'+PROGRAMS.length+' programme'+(PROGRAMS.length>1?'s personnels':' personnel')+'</div>'
+   +'<button class="progpill" data-act="machines"><span class="ppl">Bibliothèque</span><span class="ppn">Explorer les exercices</span><span class="ppx">Ouvrir ›</span></button>';
   for(const p of PROGRAMS){
     const on=p.id===ACTIVE_PID;
     const nS=p.seances.length,nE=p.seances.reduce((a,s)=>a+(s.ex?s.ex.length:0),0);
