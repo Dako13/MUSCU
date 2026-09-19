@@ -193,3 +193,49 @@ button, a, .hbtn, .editbtn, .back{
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+
+/* Workout controls and dialogs: readable at narrow mobile widths. */
+:root{--button-ac:#c91b29}
+:root[data-theme="rose"]{--button-ac:#b72f75}
+[hidden]{display:none !important}
+.bigbtn,.resume,.hero-cta,.finish,.sbtn.pri,.pa.pri,.addbilan{
+  background:var(--button-ac) !important;color:var(--on-ac);
+}
+.bigbtn.ghost,.bigbtn.ghost:active{
+  background:transparent !important;color:var(--dim);border:1px solid var(--line2);box-shadow:none !important;
+}
+input:focus-visible,textarea:focus-visible,select:focus-visible,.stp input:focus-visible{
+  outline:2px solid var(--ac-hi);outline-offset:2px;
+}
+.machine-filters{border-bottom:1px solid var(--line);margin-bottom:16px;padding-bottom:10px}
+.machine-filters>summary{min-height:44px;cursor:pointer;padding:10px 0;color:var(--txt);font-weight:600}
+.machine-filters .sbtn{margin:6px 0}
+.mrow-main,.mrow-n{min-width:0;overflow-wrap:anywhere}
+.mrow-b{flex-shrink:0;max-width:30%;white-space:normal}
+#sheet{overscroll-behavior:contain;overflow-x:hidden}
+#sheet h2{padding-right:48px;overflow-wrap:anywhere;line-height:1.2}
+.sheet-close{position:absolute;right:14px;top:16px;width:44px;height:44px;justify-content:center;font-size:26px;color:var(--dim);border:1px solid var(--line2);border-radius:8px;background:var(--card)}
+#sheet .sbtns{flex-wrap:wrap;margin-top:10px}
+#sheet .sbtn{min-width:0;overflow-wrap:anywhere;white-space:normal;justify-content:center}
+#sheet .lib-option{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;text-align:left;margin:0 0 8px;line-height:1.35}
+.lib-option>span,.lib-option>small{max-width:100%;overflow-wrap:anywhere}
+.lib-option>small{font-size:13px;color:var(--dim);font-weight:400}
+.expicklist .sbtn,.machadd .sbtn{width:100%;text-align:left}
+.editor-save{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));background:var(--bg);padding:10px 0;z-index:10}
+.editor-save .bigbtn{margin:0;justify-content:center}
+.wcoach{background:none;box-shadow:none !important;border:0;border-left:2px solid var(--line2);padding:4px 10px;margin:10px 0 12px}
+.wcoach-k{color:var(--dim);letter-spacing:0}
+.wcoach-s{font-size:13px}
+.card .howbtn{margin:10px 0 0;width:100%;text-align:left;color:var(--dim)}
+.stp input::placeholder{color:var(--dim);opacity:1}
+.stp input{padding-left:0;padding-right:0}
+.stpb{padding:0;min-height:44px}
+@media(max-width:360px){
+  .stpb{flex-basis:25px}
+  .stp{gap:3px}
+  .strow{gap:5px}
+  .wcoach{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+}

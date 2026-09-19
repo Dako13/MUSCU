@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -53,9 +53,10 @@
 </nav>
 
 <div id="overlay"></div>
-<div id="sheet"></div>
-<div id="toast"></div>
+<div id="sheet" role="dialog" aria-modal="true" aria-hidden="true" inert></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
+<script src="./data-integrity.js" defer></script>
 <script src="./bodymap.js" defer></script>
 <script src="./app.js" defer></script>
 </body>

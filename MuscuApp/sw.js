@@ -1,13 +1,14 @@
 /* Service worker — cache hors ligne.
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.21.0');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.22.0');
 const ASSETS=[
   './',
   './index.html',
   './app.css',
   './app.overrides.css',
   './app.js',
+  './data-integrity.js',
   './bodymap.js',
   './manifest.webmanifest',
   './icons/icon-180.png',
@@ -21,7 +22,7 @@ self.addEventListener('install',e=>{
 });
 self.addEventListener('activate',e=>{
   e.waitUntil(
-    caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))
+    caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('dako-')&&k!==CACHE).map(k=>caches.delete(k))))
       .then(()=>self.clients.claim())
   );
 });
@@ -30,7 +31,7 @@ self.addEventListener('fetch',e=>{
   const url=new URL(e.request.url);
   if(url.origin!==location.origin)return; /* liens externes (YouTube) : réseau direct */
   const p=url.pathname;
-  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
+  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/data-integrity.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
   if(shell){
     /* réseau d'abord : la dernière version s'affiche dès qu'on est en ligne (repli cache hors-ligne) */
     e.respondWith(

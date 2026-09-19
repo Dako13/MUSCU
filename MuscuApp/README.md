@@ -9,6 +9,7 @@ Application web installable (PWA), hors ligne, sans serveur ni base de données.
 | `index.html` | Structure de l'application |
 | `app.css` | Styles |
 | `app.js` | Logique complète (séances, minuteur, stats, éditeur de programme, export) |
+| `data-integrity.js` | Validation des sauvegardes et fusion des historiques |
 | `sw.js` | Service worker — cache hors ligne |
 | `manifest.webmanifest` | Manifeste PWA (nom, icônes, plein écran) |
 | `icons/` | Icônes 180 / 192 / 512 + maskable |
@@ -32,7 +33,7 @@ Alternative équivalente : Cloudflare Pages ou Netlify (glisser-déposer le doss
 ## Mettre à jour l'application
 
 1. Modifier les fichiers dans le dépôt GitHub (bouton crayon ou ré-upload).
-2. Dans `sw.js`, incrémenter la version du cache : `const CACHE='muscu-v1'` → `'muscu-v2'`. Sans cela, les utilisateurs gardent l'ancienne version en cache.
+2. Incrémenter `APP_VERSION` dans `app.js` et la version de secours dans `sw.js`. Le cache est versionné avec cette valeur lors de l’enregistrement du service worker.
 3. À la prochaine ouverture, l'app affiche « Mise à jour disponible ».
 
 ## Récupérer les données de l'ancienne version (fichier local)
@@ -41,6 +42,9 @@ Le stockage est lié au domaine : le fichier local et la version hébergée ne p
 Dans l'ancienne version : **Données** → **Exporter (copier)**. Dans la nouvelle : **Données** → coller → **Importer**. L'import accepte tous les formats antérieurs (v2, v3) et l'export complet v4 (programme inclus).
 
 ## Limites connues (web/iOS)
+
+Les corrections, tests et limites relevées lors du dernier audit sont décrits dans
+[le bilan de qualité 4.22](../docs/quality-4.22.md).
 
 - Pas de vibration sur iPhone (API non supportée par Safari iOS) — signal sonore à la place.
 - Le minuteur ne sonne pas si l'app est fermée ou l'écran verrouillé (limitation web). L'app reste utilisable écran allumé.

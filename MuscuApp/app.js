@@ -7,7 +7,9 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.21.0';
+const APP_VERSION='4.22.0';
+let STORAGE_READY=false;
+let STORAGE_WRITABLE=true;
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -15,8 +17,8 @@ function esc(s){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-function numOrNull(v){if(v==null)return null;const n=parseFloat(String(v).trim().replace(',','.'));return isNaN(n)?null:n}
-function intOrNull(v){if(v==null)return null;const n=parseInt(String(v).trim(),10);return isNaN(n)?null:n}
+function numOrNull(v){if(v==null||String(v).trim()==='')return null;const n=Number(String(v).trim().replace(',','.'));return Number.isFinite(n)?n:null}
+function intOrNull(v){const n=numOrNull(v);return Number.isInteger(n)?n:null}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function fmtN(n){return String(n).replace('.',',')}
 function fmtKg(n){return n.toLocaleString('fr-FR')}
@@ -46,7 +48,10 @@ const MUSCLES=[
  {id:'quadriceps',label:'Quadriceps',rec:72},
  {id:'ischios',label:'Ischio-jambiers',rec:72},
  {id:'fessiers',label:'Fessiers',rec:72},
- {id:'mollets',label:'Mollets',rec:48}
+ {id:'mollets',label:'Mollets',rec:48},
+ {id:'abdos',label:'Abdominaux',rec:48},
+ {id:'adducteurs',label:'Adducteurs',rec:48},
+ {id:'lombaires',label:'Lombaires',rec:48}
 ];
 const MUSCLE_BY_ID={};MUSCLES.forEach(m=>MUSCLE_BY_ID[m.id]=m);
 function normMuscle(tok){
@@ -262,12 +267,14 @@ function buildMaps(){
   const act=activeProgram();
   PROGRAM=act?act.seances:[]; /* PROGRAM = séances du programme actif (accueil, reco, records) */
 }
-function savePrograms(){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){storeFailed()}mirrorSoon();buildMaps()}
+function savePrograms(){if(STORAGE_READY){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){storeFailed()}mirrorSoon();}buildMaps()}
 const saveProgram=savePrograms; /* compat : édition de séance */
 function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
-  const act=activeProgram();if(!act)return;
-  act.seances=regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)),true);
+  const act=activeProgram();if(!act)return false;
+  if(DB.active&&act.seances.some(s=>s.id===DB.active.seance)){toast('Termine la séance en cours avant de réinitialiser');return false;}
+  act.seances=regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
   normalizePrograms();savePrograms();
+  return true;
 }
 /* ---- gestion des programmes ---- */
 function regenIds(seances,keepDefault){
@@ -291,6 +298,7 @@ function duplicateProgram(pid){
   PROGRAMS.push(copy);ACTIVE_PID=copy.id;normalizePrograms();savePrograms();
 }
 function deleteProgram(pid){
+  if(DB.active&&(PROGRAMS.find(p=>p.id===pid)?.seances||[]).some(s=>s.id===DB.active.seance)){toast('Termine la séance en cours avant de supprimer ce programme');return false;}
   if(PROGRAMS.length<=1){toast('Au moins un programme requis');return false}
   PROGRAMS=PROGRAMS.filter(p=>p.id!==pid);
   if(ACTIVE_PID===pid)ACTIVE_PID=PROGRAMS[0].id;
@@ -298,7 +306,7 @@ function deleteProgram(pid){
 }
 function renameProgram(pid,name){const p=PROGRAMS.find(x=>x.id===pid);if(p&&name){p.name=name;savePrograms()}}
 function addSeance(){const act=activeProgram();if(!act)return null;const s=blankSeance();act.seances.push(s);savePrograms();return s.id;}
-function deleteSeance(sid){const act=activeProgram();if(!act)return;act.seances=act.seances.filter(s=>s.id!==sid);savePrograms();}
+function deleteSeance(sid){if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la supprimer');return;}const act=activeProgram();if(!act)return;act.seances=act.seances.filter(s=>s.id!==sid);savePrograms();}
 function moveSeance(sid,dir){const act=activeProgram();if(!act)return;const a=act.seances;const i=a.findIndex(s=>s.id===sid);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;const t=a[i];a[i]=a[j];a[j]=t;savePrograms();}
 
 /* ================== RÉGLAGES ================== */
@@ -565,7 +573,7 @@ function loadDB(){
   return db;
 }
 var _storeWarned=false; /* var volontaire (anti-TDZ) : storeFailed peut être appelé pendant la migration au chargement, AVANT cette ligne — ne pas repasser en let */
-function storeFailed(){if(_storeWarned)return;_storeWarned=true;try{toast('⚠ Sauvegarde impossible — pense à exporter tes données (Réglages › Données)')}catch(e){}}
+function storeFailed(){STORAGE_WRITABLE=false;if(_storeWarned)return;_storeWarned=true;try{toast('Sauvegarde impossible : exporte tes données avant de fermer l’app')}catch(e){}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
 
 /* Les ressentis appartiennent a une seance realisee, jamais au programme. */
@@ -598,19 +606,41 @@ function workoutNoteHTML(note){
 const IDB_NAME='dako_store',IDB_STORE='kv';
 const MIRROR_KEYS=[KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY,'dako_lastbackup'];
 function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open(IDB_NAME,1)}catch(e){return rej(e)}r.onupgradeneeded=()=>{try{r.result.createObjectStore(IDB_STORE)}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
-function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})).catch(()=>{})}
-function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})).catch(()=>null)}
-function mirrorSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}idbSet('snapshot',snap)}
+function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>{db.close();res(true)};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)}})).catch(()=>false)}
+function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);tx.oncomplete=()=>db.close()})).catch(()=>null)}
+function storageSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}return snap;}
+function mirrorSnapshot(){if(!STORAGE_READY||!STORAGE_WRITABLE)return Promise.resolve(false);try{return idbSet('snapshot',storageSnapshot())}catch(e){return Promise.resolve(false)}}
 var _mirT=null; /* var volontaire (anti-TDZ) : mirrorSoon peut être appelé pendant la migration au chargement (loadProgram->savePrograms), AVANT cette ligne — ne pas repasser en let */
-function mirrorSoon(){clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400)}
+function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400)}
 function maybeRestoreFromIDB(){
-  const hasLocal=!!localStorage.getItem(KEY)||!!localStorage.getItem(KEY_PROGRAMS);
   return idbGet('snapshot').then(snap=>{
     if(!snap||!snap.data)return false;
-    if(hasLocal||!(snap.data[KEY]||snap.data[KEY_PROGRAMS]))return false;
-    for(const k in snap.data){try{localStorage.setItem(k,snap.data[k])}catch(e){}}
-    return true;
+    let restored=false;
+    for(const k of MIRROR_KEYS){
+      if(localStorage.getItem(k)==null&&typeof snap.data[k]==='string'){
+        try{localStorage.setItem(k,snap.data[k]);restored=true;}catch(e){storeFailed();}
+      }
+    }
+    return restored;
   }).catch(()=>false);
+}
+
+function snapshotWorkout(w){
+  if(!w.id)w.id=uid('w_');
+  return snapshotMetadata(w,EXO,SEANCE);
+}
+function snapshotMetadata(w,exercises,sessions){
+  const s=sessions[w.seance];
+  if(!w.session)w.session={title:s?.title||w.seance,tab:s?.tab||''};
+  w.exMeta=w.exMeta||{};
+  for(const id of workoutExerciseIds(w))if(!w.exMeta[id]){const e=exercises[id];w.exMeta[id]={name:e?.name||id,unit:e?.unit||'kg',musP:(e?.musP||[]).slice(),musS:(e?.musS||[]).slice()};}
+  return w;
+}
+function workoutExercise(w,id){return w.exMeta?.[id]||EXO[id];}
+function historicalExercises(){
+  const all={...EXO};
+  for(const w of DB.workouts)for(const id of workoutExerciseIds(w))all[id]={id,...workoutExercise(w,id)};
+  return all;
 }
 
 /* requêtes */
@@ -732,7 +762,7 @@ function muscleFatigue(mid){
     if(ageH>=rec)continue;
     let load=0;
     for(const exId in (w.ex||{})){
-      const e=EXO[exId];if(!e)continue;
+      const e=workoutExercise(w,exId);if(!e)continue;
       const sets=w.ex[exId].filter(s=>s.done).length;
       if((e.musP||[]).includes(mid))load+=sets;
       else if((e.musS||[]).includes(mid))load+=sets*0.5;
@@ -820,7 +850,7 @@ function targetCue(e){
   if(e.ceiling)title='Monter les reps';
   else if(p&&t.w!=null&&p.w!=null&&t.w>p.w)title='Augmenter la charge';
   else if(p&&t.r!=null&&p.r!=null&&t.r>p.r)title='Ajouter une rep';
-  const body=p?'Dernière fois '+setShort(p)+' · vise '+setShort(t):'Départ conseillé '+setShort(t);
+  const body=p?'Dernière fois '+setShort(p)+' · vise '+setShort(t):'Référence du programme · à adapter à ton niveau';
   return{tone:title==='Même cible'?'base':'hot',title,body,target:setShort(t)};
 }
 function activeExerciseScore(sets){
@@ -838,11 +868,21 @@ function workoutCoachHTML(e,sets){
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
 let route={view:'home',seance:null};
-let MFILTER={g:null,b:null,c:null,l:null,q:''};
+let MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
-function go(view,seance){route={view,seance:seance||null};render();window.scrollTo({top:0});}
+let editBaseline=null;
+function editorState(){return JSON.stringify([...app.querySelectorAll('#es-title,#es-tab,#es-sub,#es-warn,#exlist .ecard')].map(el=>el.matches('.ecard')?[el.dataset.exid,...[...el.querySelectorAll('input,textarea,select')].map(input=>input.value)]:el.value));}
+function editorDirty(){return route.view==='edit'&&editBaseline!==null&&editorState()!==editBaseline;}
+function go(view,seance){
+  if(view==='edit'&&DB.active?.seance===seance){toast('Termine la séance en cours avant de la modifier');return;}
+  if(editorDirty()&&!window.confirm('Quitter sans enregistrer les modifications de cette séance ?'))return;
+  route={view,seance:seance||null};render();
+  editBaseline=view==='edit'?editorState():null;
+  window.scrollTo({top:0});
+}
+window.addEventListener('beforeunload',ev=>{if(editorDirty()){ev.preventDefault();ev.returnValue='';}});
 
 function render(){
   const tabFor={home:'home',seance:'home',edit:'programs',suivi:'suivi',stats:'suivi',history:'suivi',programs:'programs',machines:'programs'};
@@ -855,6 +895,9 @@ function render(){
   else if(route.view==='suivi'||route.view==='stats'||route.view==='history')app.innerHTML=suiviHTML();
   else if(route.view==='programs')app.innerHTML=programsHTML();
   else app.innerHTML=homeHTML();
+  labelFields(app);
+  const filters=app.querySelector('#machineFilters');
+  if(filters)filters.addEventListener('toggle',()=>{MFILTER.open=filters.open});
   app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
 }
 
@@ -991,9 +1034,8 @@ function exCardHTML(e,idx,active){
    +'<div class="chead"><span class="cnum num">'+(idx+1)+'</span><span class="cname">'+esc(e.name)+'</span>'
    +(e.ceiling?'<span class="badge">'+esc(e.ceiling)+'</span>':'')
    +'<span class="cdone">FAIT</span></div>'
-   +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span></div>'
-   +'<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Comment réaliser · muscles ciblés ›</button>';
-  h+=lastSessionLine(e.id);
+   +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span></div>';
+  if(!active)h+=lastSessionLine(e.id);
   if(active){
     const sets=active.ex[e.id]||[];
     const targets=suggestTargets(e);
@@ -1003,6 +1045,7 @@ function exCardHTML(e,idx,active){
     h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
     h+=workoutNoteField(active,e.id,false);
   }
+  h+='<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Technique et muscles ciblés ›</button>';
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
 }
@@ -1013,10 +1056,10 @@ function setRowHTML(e,i,st,targets){
   return '<div class="strow'+(st.done?' done':'')+'" data-i="'+i+'">'
    +'<span class="sn num">'+(i+1)+'</span>'
    +'<div class="stp"><button class="stpb" data-act="stepw" data-d="-1" tabindex="-1" aria-label="moins">−</button>'
-   +'<input class="w num" type="text" inputmode="decimal" placeholder="'+esc(phW)+'" value="'+(st.w==null?'':fmtN(st.w))+'">'
+   +'<input class="w num" type="text" inputmode="decimal" aria-label="'+esc(e.name)+' · série '+(i+1)+' · charge en kg" placeholder="'+esc(phW)+'" value="'+(st.w==null?'':fmtN(st.w))+'">'
    +'<button class="stpb" data-act="stepw" data-d="1" tabindex="-1" aria-label="plus">+</button></div>'
    +'<div class="stp"><button class="stpb" data-act="stepr" data-d="-1" tabindex="-1" aria-label="moins">−</button>'
-   +'<input class="r num" type="text" inputmode="numeric" placeholder="'+esc(phR)+'" value="'+(st.r==null?'':st.r)+'">'
+   +'<input class="r num" type="text" inputmode="numeric" aria-label="'+esc(e.name)+' · série '+(i+1)+' · répétitions" placeholder="'+esc(phR)+'" value="'+(st.r==null?'':st.r)+'">'
    +'<button class="stpb" data-act="stepr" data-d="1" tabindex="-1" aria-label="plus">+</button></div>'
    +'<button class="chk" data-act="chk" aria-label="valider la série"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></button>'
    +'</div>';
@@ -1047,7 +1090,7 @@ function progHTML(e){
 function workoutMusclesHTML(w){
   /* puces des muscles principaux réellement travaillés dans la séance */
   const p=new Set();
-  for(const exId in (w.ex||{})){const e=EXO[exId];if(e)(e.musP||[]).forEach(m=>p.add(m));}
+  for(const exId in (w.ex||{})){const e=workoutExercise(w,exId);if(e)(e.musP||[]).forEach(m=>p.add(m));}
   if(!p.size)return '';
   return '<div class="hmus">'+[...p].slice(0,5).map(m=>'<span class="hmchip">'+esc((MUSCLE_BY_ID[m]||{}).label||m)+'</span>').join('')+'</div>';
 }
@@ -1055,7 +1098,7 @@ function workoutMusclesHTML(w){
 /* ---------- historique ---------- */
 function suiviHTML(){
   let h='<div class="top"><h1>Suivi</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>'
-   +suiviSummaryHTML()
+   +(SUIVI==='stats'?'':suiviSummaryHTML())
    +'<div class="seg suiviseg">'
    +'<button class="segb'+(SUIVI==='stats'?'':' on')+'" data-act="suivitab" data-t="history">Historique</button>'
    +'<button class="segb'+(SUIVI==='stats'?' on':'')+'" data-act="suivitab" data-t="stats">Stats</button></div>';
@@ -1068,13 +1111,13 @@ function historyHTML(embed){
   const tot=arr.length;
   h+='<div class="subdate">'+tot+' séance'+(tot>1?'s':'')+' enregistrée'+(tot>1?'s':'')+'</div>';
   DB.workouts.slice().map((w,i)=>({w,i})).reverse().forEach(({w,i})=>{
-    const s=SEANCE[w.seance];const st=workoutStats(w);const musHTML=workoutMusclesHTML(w);
+    const s=w.session||SEANCE[w.seance];const st=workoutStats(w);const musHTML=workoutMusclesHTML(w);
     let det='';
     for(const exId of workoutExerciseIds(w)){
       const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
       const note=workoutNote(w,exId);
       if(!sets.length&&!note)continue;
-      det+='<div class="hxrow"><span class="hxname">'+esc(EXO[exId]?EXO[exId].name:exId)+'</span>'
+      det+='<div class="hxrow"><span class="hxname">'+esc(workoutExercise(w,exId)?.name||exId)+'</span>'
        +'<span class="hxsets num">'+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'</span></div>';
       det+=workoutNoteHTML(note);
     }
@@ -1096,7 +1139,7 @@ function showEditWorkout(i){
   const w=DB.workouts[i];if(!w)return;
   let body='';
   for(const exId of workoutExerciseIds(w)){
-    body+='<div class="rectitle">'+esc(EXO[exId]?EXO[exId].name:exId)+'</div>';
+    body+='<div class="rectitle">'+esc(workoutExercise(w,exId)?.name||exId)+'</div>';
     (w.ex[exId]||[]).forEach((st,j)=>{
       body+='<div class="wrow" data-ex="'+esc(exId)+'">'
         +'<span class="sn num">'+(j+1)+'</span>'
@@ -1106,11 +1149,17 @@ function showEditWorkout(i){
     });
     body+=workoutNoteField(w,exId,true);
   }
-  sheet.innerHTML='<h2>Modifier la séance</h2><div class="sp">'+fmtDateShort(w.date)+' · '+esc((SEANCE[w.seance]||{}).tab||'')+' — corrige ou supprime des séries.</div>'
+  sheet.innerHTML='<h2>Modifier la séance</h2><div class="sp">'+fmtDateShort(w.date)+' · '+esc((w.session||SEANCE[w.seance]||{}).tab||'')+' — corrige ou supprime des séries.</div>'
    +body+'<div class="sbtns"><button class="sbtn pri" id="wsave">Enregistrer</button></div>';
   openSheet();
   sheet.querySelectorAll('.wsetdel').forEach(b=>b.addEventListener('click',()=>{b.closest('.wrow').remove()}));
   document.getElementById('wsave').addEventListener('click',()=>{
+    const invalid=[...sheet.querySelectorAll('.we')].find(input=>{
+      if(!input.value.trim())return false;
+      const n=input.dataset.k==='r'?intOrNull(input.value):numOrNull(input.value);
+      return n==null||n<(input.dataset.k==='r'?1:0)||n>100000;
+    });
+    if(invalid){toast('Vérifie les charges et les répétitions');invalid.focus();return;}
     const ex={};
     sheet.querySelectorAll('.wrow').forEach(row=>{
       const exId=row.dataset.ex;
@@ -1190,12 +1239,12 @@ function bodyMapHTML(){
      +'<div class="musbar"><i style="width:'+x.rec+'%"></i></div>'
      +'<span class="musv num">'+x.rec+' %</span></div>';
   }
-  return '<div class="chartcard"><div class="charttitle">Récupération musculaire</div>'
+  return '<div class="chartcard"><div class="charttitle">Récupération musculaire estimée</div>'
    +'<div class="bodymaps">'
    +'<div class="bmap">'+front+'<div class="bcap">Face</div></div>'
    +'<div class="bmap">'+back+'<div class="bcap">Dos</div></div>'
    +'</div>'
-   +'<div class="maplegend">Zone claire = muscle en récupération · % = niveau de fraîcheur</div>'
+   +'<div class="maplegend">Estimation selon tes séries et le temps écoulé. Ton ressenti reste prioritaire.</div>'
    +bars+'</div>';
 }
 /* ---------- démonstrations animées (SVG/SMIL) ---------- */
@@ -1435,8 +1484,7 @@ function machineVisualHTML(m,p,load){
 }
 function machineCoachHTML(p,load){
   const g=guideForPattern(p);
-  const lines=[LOAD_SETUP[load]||'Règle la machine avant la série de travail.',g[0],g[1],g[3]];
-  return '<div class="rectitle">Mode d’emploi rapide</div>'+coachCardsHTML(lines);
+  return '<div class="rectitle">Mode d’emploi rapide</div><p class="sp">'+esc(LOAD_SETUP[load]||'Règle la machine avant la série de travail.')+'</p>'+coachCardsHTML(g);
 }
 
 /* fiche exercice : démo animée + visuel muscles + comment réaliser */
@@ -1700,7 +1748,7 @@ function volumeByMuscle(sinceIso){
   for(const w of DB.workouts){
     if(w.date<sinceIso)continue;
     for(const exId in (w.ex||{})){
-      const e=EXO[exId];if(!e)continue;
+      const e=workoutExercise(w,exId);if(!e)continue;
       const sets=w.ex[exId].filter(s=>s.done).length;
       if(!sets)continue;
       (e.musP||[]).forEach(m=>{vol[m]=(vol[m]||0)+sets});
@@ -1710,12 +1758,12 @@ function volumeByMuscle(sinceIso){
   return vol;
 }
 function exProgressCard(){
-  const list=[];
-  for(const exId in EXO){const hh=exHistory(exId);if(hh.length)list.push({id:exId,n:hh.length});}
+  const list=[],archive=historicalExercises();
+  for(const exId in archive){const hh=exHistory(exId);if(hh.length)list.push({id:exId,n:hh.length});}
   if(!list.length)return '<div class="chartcard"><div class="charttitle">Progression par exercice</div><div class="hempty">Valide des séries pour voir tes courbes de charge.</div></div>';
   list.sort((a,b)=>b.n-a.n);
   if(!STATEX||!list.some(x=>x.id===STATEX))STATEX=list[0].id;
-  const e=EXO[STATEX],best=bestEver(STATEX);
+  const e=archive[STATEX],best=bestEver(STATEX);
   let h='<div class="chartcard"><div class="charttitle">Progression par exercice</div>'
    +'<div class="exprow"><button class="exchip" data-act="expick"><span>'+esc(e.name)+'</span>'
    +'<svg class="exchev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
@@ -1739,8 +1787,8 @@ function exProgressCard(){
   return h+'</div>';
 }
 function showExPicker(){
-  const list=[];
-  for(const exId in EXO){const hh=exHistory(exId);if(hh.length)list.push({id:exId,name:EXO[exId].name,n:hh.length});}
+  const list=[],archive=historicalExercises();
+  for(const exId in archive){const hh=exHistory(exId);if(hh.length)list.push({id:exId,name:archive[exId].name,n:hh.length});}
   list.sort((a,b)=>b.n-a.n);
   sheet.innerHTML='<h2>Choisir un exercice</h2><div class="sp">Exercices avec un historique de séries validées.</div>'
    +'<div class="expicklist">'+list.map(x=>'<button class="sbtn'+(x.id===STATEX?' pri':'')+'" data-act="exsel" data-ex="'+esc(x.id)+'" style="justify-content:space-between">'+esc(x.name)+'<span class="num" style="opacity:.65;margin-left:10px">'+x.n+'</span></button>').join('')+'</div>';
@@ -1891,7 +1939,7 @@ function editHTML(sid){
    +'<div id="exlist" data-dragsort="ex">';
   s.ex.forEach((e,i)=>{h+=editExHTML(e,i)});
   h+='</div><button class="bigbtn" data-act="elib">+ Depuis la bibliothèque</button>'+'<button class="bigbtn ghost" data-act="eadd">+ Exercice vierge</button>'
-   +'<button class="bigbtn" data-act="esave">Enregistrer</button>';
+   +'<div class="editor-save"><button class="bigbtn" data-act="esave">Enregistrer les modifications</button></div>';
   return h;
 }
 function collectEdit(sid){
@@ -1933,17 +1981,25 @@ function collectEdit(sid){
   if(!ex.length){toast('Au moins un exercice requis');return false}
   s.title=title||s.title;s.tab=tab||s.tab;s.sub=sub;s.warn=warn;s.ex=ex;
   saveProgram();
+  editBaseline=editorState();
   return true;
 }
 
 /* ---------- bibliothèque de machines (vue) ---------- */
+function searchKey(text){return String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function filterMachineRows(){
+  const q=searchKey(MFILTER.q);let count=0;
+  document.querySelectorAll('#mlist .mrow').forEach(row=>{const visible=row.dataset.search.includes(q);row.hidden=!visible;if(visible)count++;});
+  const total=document.getElementById('machineCount');if(total)total.textContent=count+' exercice'+(count>1?'s':'');
+  const empty=document.getElementById('machineEmpty');if(empty)empty.hidden=count>0;
+}
 function machinesHTML(){
   const brands=[];MACHINES.forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
   let h='<button class="back" data-act="programs">‹ Programmes</button>'
-   +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Machines</h2>'
-   +'<div class="smeta">'+MACHINES.length+' machines · muscle · marque · salle · chargement</div></div></div>'
-   +'<input id="mq" class="msearch" placeholder="Rechercher une machine…" value="'+esc(MFILTER.q||'')+'">';
-  h+='<div class="mfilters">'
+   +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Exercices</h2></div></div>'
+   +'<input id="mq" class="msearch" type="search" aria-label="Rechercher un exercice" placeholder="Rechercher un exercice…" value="'+esc(MFILTER.q||'')+'">';
+  const activeFilters=[MFILTER.g,MFILTER.b,MFILTER.c,MFILTER.l].filter(Boolean).length;
+  h+='<details id="machineFilters" class="machine-filters"'+(MFILTER.open?' open':'')+'><summary>Filtres'+(activeFilters?' · '+activeFilters+' actifs':'')+'</summary><div class="mfilters">'
    +'<button class="mfchip'+(!MFILTER.g?' on':'')+'" data-act="mfg" data-g="">Tous muscles</button>';
   MACHINE_GROUPS.forEach(g=>{h+='<button class="mfchip'+(MFILTER.g===g[0]?' on':'')+'" data-act="mfg" data-g="'+g[0]+'">'+esc(g[1])+'</button>'});
   h+='</div><div class="mfilters">'
@@ -1955,10 +2011,10 @@ function machinesHTML(){
   h+='</div>';
   h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.l?' on':'')+'" data-act="mfl" data-l="">Tout chargement</button>';
   LOAD_FILTER.forEach(x=>{h+='<button class="mfchip'+(MFILTER.l===x[0]?' on':'')+'" data-act="mfl" data-l="'+x[0]+'">'+esc(x[1])+'</button>'});
-  h+='</div>';
+  h+='</div><button class="sbtn" data-act="mfreset">Réinitialiser les filtres</button></details>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
   const ids=grp?grp[2]:null;
-  const q=(MFILTER.q||'').toLowerCase();
+  const q=searchKey(MFILTER.q);
   let n=0;
   h+='<div id="mlist">';
   MACHINES.forEach((m,i)=>{
@@ -1968,15 +2024,14 @@ function machinesHTML(){
     const all=(m.p||[]).concat(m.s||[]);
     if(ids&&!all.some(x=>ids.indexOf(x)>=0))return;
     const mus=(m.p||[]).map(mLabel).join(', ');
-    const searchStr=(m.n+' '+m.b+' '+all.map(mLabel).join(' ')).toLowerCase();
-    if(q&&searchStr.indexOf(q)<0)return;
-    n++;
-    h+='<button class="mrow" data-act="machine" data-m="'+i+'" data-search="'+esc(searchStr)+'">'
+    const searchStr=searchKey(m.n+' '+m.b+' '+all.map(mLabel).join(' '));
+    const visible=searchStr.includes(q);if(visible)n++;
+    h+='<button class="mrow"'+(visible?'':' hidden')+' data-act="machine" data-m="'+i+'" data-search="'+esc(searchStr)+'">'
      +'<div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(mus)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div>'
      +'<span class="mrow-b">'+esc(m.b)+'</span></button>';
   });
-  if(!n)h+='<div class="hempty">Aucune machine pour ce filtre.</div>';
-  h+='</div>';
+  h+='</div><div class="hempty" id="machineEmpty"'+(n?' hidden':'')+'>Aucun exercice ne correspond à ta recherche.</div>';
+  h=h.replace('<div id="mlist">','<div id="machineCount" class="subdate" role="status">'+n+' exercice'+(n>1?'s':'')+'</div><div id="mlist">');
   return h;
 }
 function showMachine(i){
@@ -2002,9 +2057,11 @@ function showMachine(i){
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
   openSheet();bindExPhoto();
+  sheet.querySelectorAll('[data-act="machadd"]').forEach(button=>button.addEventListener('click',()=>addMachineToSeance(+button.dataset.m,button.dataset.s)));
 }
 function addMachineToSeance(i,sid){
   const m=MACHINES[i],s=SEANCE[sid];if(!m||!s)return;
+  if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la modifier');return;}
   s.ex.push({id:uid('e_'),name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',
     musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])});
   savePrograms();closeSheet();toast('Ajouté à '+s.tab);
@@ -2091,7 +2148,8 @@ function startWorkout(sid){
       ex[e.id].push({w:p&&p.w!=null?p.w:null,r:p&&p.r!=null?p.r:null,done:false});
     }
   }
-  DB.active={seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{}};
+  stopTimer();
+  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{}});
   persist();render();
 }
 function elapsedStr(){
@@ -2136,7 +2194,7 @@ function finishWorkout(){
     const sets=a.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null)).map(s=>({w:s.w,r:s.r,done:true}));
     if(sets.length)ex[exId]=sets;
   }
-  DB.workouts.push({date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)});
+  DB.workouts.push(snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)}));
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
   stopTimer();
@@ -2190,6 +2248,7 @@ app.addEventListener('click',ev=>{
   else if(act==='mfb'){MFILTER.b=actEl.dataset.b||null;render();}
   else if(act==='mfc'){MFILTER.c=actEl.dataset.c||null;render();}
   else if(act==='mfl'){MFILTER.l=actEl.dataset.l||null;render();}
+  else if(act==='mfreset'){MFILTER={g:null,b:null,c:null,l:null,q:'',open:true};render();}
   else if(act==='machadd')addMachineToSeance(+actEl.dataset.m,actEl.dataset.s);
   else if(act==='programs')go('programs');
   else if(act==='pactivate'){setActiveProgram(actEl.dataset.p);toast('Programme activé');go('home');}
@@ -2209,6 +2268,7 @@ app.addEventListener('click',ev=>{
     const list=document.getElementById('exlist');
     const n=list.querySelectorAll('.ecard').length;
     list.insertAdjacentHTML('beforeend',editExHTML({name:'',sets:3,reps:'8–10',unit:'kg',ref:null,notes:'',yt:'',musP:[],musS:[]},n));
+    labelFields(list);
     list.lastElementChild.querySelector('.e-name').focus();
   }
   else if(act==='edel'){
@@ -2259,8 +2319,8 @@ app.addEventListener('click',ev=>{
     let nv;
     if(cur==null&&tv!=null)nv=tv;                       /* 1er appui : cale sur la cible */
     else{const base=cur!=null?cur:0;nv=base+d*(isKg?wInc(base):1);}
-    if(isKg){nv=Math.max(0,Math.round(nv*2)/2);st.w=nv||null;inp.value=nv?fmtN(nv):'';}
-    else{nv=Math.max(0,Math.round(nv));st.r=nv||null;inp.value=nv?nv:'';}
+    if(isKg){nv=Math.min(10000,Math.max(0,Math.round(nv*2)/2));st.w=nv;inp.value=fmtN(nv);}
+    else{nv=Math.min(100000,Math.max(1,Math.round(nv)));st.r=nv;inp.value=nv;}
     persist();
   }
   else if(act==='chk'){
@@ -2269,12 +2329,16 @@ app.addEventListener('click',ev=>{
     if(!DB.active||!DB.active.ex[exId])return;
     const st=DB.active.ex[exId][i];
     if(!st.done){
-      let w=numOrNull(row.querySelector('.w').value);
-      let r=intOrNull(row.querySelector('.r').value);
+      const weight=row.querySelector('.w'),reps=row.querySelector('.r');
+      let w=numOrNull(weight.value);
+      let r=intOrNull(reps.value);
+      if(weight.value.trim()&&(w==null||w<0||w>10000)){toast('Saisis une charge positive ou nulle');weight.focus();return;}
+      if(reps.value.trim()&&(r==null||r<1||r>100000)){toast('Saisis un nombre entier de répétitions supérieur à zéro');reps.focus();return;}
       const e=EXO[exId];
       const t=e?suggestTargets(e)[i]:null;
       if(w==null&&t&&t.w!=null){w=t.w;row.querySelector('.w').value=fmtN(w)}
       if(r==null&&t&&t.r!=null){r=t.r;row.querySelector('.r').value=r}
+      if(r==null||r<1){toast('Ajoute les répétitions avant de valider');reps.focus();return;}
       st.w=w;st.r=r;st.done=true;
       row.classList.add('done');
       const _pb=bestEver(exId),_isPR=st.w!=null&&_pb!=null&&st.w>_pb;
@@ -2305,16 +2369,22 @@ app.addEventListener('input',ev=>{
   }
   if(ev.target.id==='mq'){
     MFILTER.q=ev.target.value;
-    const q=ev.target.value.toLowerCase();
-    document.querySelectorAll('#mlist .mrow').forEach(r=>{r.style.display=r.dataset.search.indexOf(q)>=0?'':'none'});
+    filterMachineRows();
     return;
   }
   const row=ev.target.closest('.strow');if(!row||!ev.target.matches('input'))return;
   const card=row.closest('.card');const exId=card.dataset.ex,i=+row.dataset.i;
   if(!DB.active||!DB.active.ex[exId]||!DB.active.ex[exId][i])return;
   const st=DB.active.ex[exId][i];
-  st.w=numOrNull(row.querySelector('.w').value);
-  st.r=intOrNull(row.querySelector('.r').value);
+  const weight=row.querySelector('.w'),reps=row.querySelector('.r');
+  st.w=numOrNull(weight.value);st.r=intOrNull(reps.value);
+  const invalidW=!!weight.value.trim()&&(st.w==null||st.w<0||st.w>10000);
+  const invalidR=!!reps.value.trim()&&(st.r==null||st.r<1||st.r>100000);
+  weight.setAttribute('aria-invalid',String(invalidW));reps.setAttribute('aria-invalid',String(invalidR));
+  if(st.done&&(invalidW||invalidR||st.r==null)){
+    st.done=false;row.classList.remove('done','pr');row.querySelector('.prtag')?.remove();
+    card.classList.remove('complete');updateProgress();refreshWorkoutCoach(card,exId);
+  }
   persist();
 });
 
@@ -2337,6 +2407,7 @@ function startTimer(label,rest){
   tlabel.textContent=label||'Repos';
   tbar.classList.add('on');tbar.classList.remove('fin');acquireWake();
   tEndAt=Date.now()+sec*1000;
+  if(DB.active){DB.active.restTimer={end:tEndAt,label:label||'Repos'};persist();}
   tleftEl.textContent=fmtT(sec);
   if(!audioCtx){try{audioCtx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();
@@ -2363,16 +2434,57 @@ function timerDone(){
   }catch(e){}
   setTimeout(()=>{if(!tInt)stopTimer()},4000);
 }
-function stopTimer(){clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake()}
+function stopTimer(){
+  clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
+  if(DB.active?.restTimer){delete DB.active.restTimer;persist();}
+}
 document.getElementById('tplus').addEventListener('click',()=>{
   if(!tInt)return;tEndAt+=30000;tleftEl.textContent=fmtT((tEndAt-Date.now())/1000);
+  if(DB.active?.restTimer){DB.active.restTimer.end=tEndAt;persist();}
 });
 document.getElementById('tskip').addEventListener('click',stopTimer);
 
 /* ================== SHEETS ================== */
 const overlay=document.getElementById('overlay'),sheet=document.getElementById('sheet');
-function openSheet(){overlay.classList.add('on');sheet.classList.add('on')}
-function closeSheet(){overlay.classList.remove('on');sheet.classList.remove('on')}
+let sheetReturnFocus=null;
+let labelSequence=0;
+function labelFields(root){
+  root.querySelectorAll('.efield').forEach(field=>{
+    const label=field.querySelector('label'),input=field.querySelector('input,textarea,select');
+    if(label&&input){if(!input.id)input.id='field-'+(++labelSequence);label.htmlFor=input.id;}
+  });
+}
+function openSheet(){
+  if(!sheet.classList.contains('on'))sheetReturnFocus=document.activeElement;
+  sheet.inert=false;sheet.setAttribute('aria-hidden','false');sheet.scrollTop=0;
+  const title=sheet.querySelector('h2');
+  if(title){title.id='sheetTitle';sheet.setAttribute('aria-labelledby',title.id);}
+  if(!sheet.querySelector('.sheet-close')){
+    const close=document.createElement('button');close.className='sheet-close';close.type='button';
+    close.textContent='×';close.setAttribute('aria-label','Fermer');close.addEventListener('click',closeSheet);sheet.prepend(close);
+  }
+  labelFields(sheet);
+  overlay.classList.add('on');sheet.classList.add('on');
+  document.querySelectorAll('#app,#tabbar,#timerbar').forEach(el=>{el.inert=true});
+  sheet.querySelector('.sheet-close')?.focus({preventScroll:true});
+  sheet.scrollTop=0;
+}
+function closeSheet(){
+  overlay.classList.remove('on');sheet.classList.remove('on');
+  document.querySelectorAll('#app,#tabbar,#timerbar').forEach(el=>{el.inert=false});
+  sheet.inert=true;sheet.setAttribute('aria-hidden','true');
+  if(sheetReturnFocus?.isConnected)sheetReturnFocus.focus({preventScroll:true});
+  sheetReturnFocus=null;
+}
+document.addEventListener('keydown',ev=>{
+  if(!sheet.classList.contains('on'))return;
+  if(ev.key==='Escape'){ev.preventDefault();closeSheet();return;}
+  if(ev.key!=='Tab')return;
+  const items=[...sheet.querySelectorAll('button,input,textarea,select,a[href],[tabindex="0"]')].filter(el=>!el.disabled&&el.getClientRects().length);
+  const first=items[0],last=items[items.length-1];
+  if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last?.focus();}
+  else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first?.focus();}
+});
 overlay.addEventListener('click',closeSheet);
 function toast(msg){
   const t=document.getElementById('toast');
@@ -2399,23 +2511,23 @@ function showSummary(o){
 }
 function showLibPicker(){
   let h='<h2>Bibliothèque</h2><div class="sp">Choisis un exercice à ajouter à la séance en cours d’édition.</div>'
-   +'<input id="libq" class="msearch" placeholder="Rechercher un exercice / une machine…" style="margin:0 0 12px">'
+   +'<input id="libq" type="search" aria-label="Rechercher dans la bibliothèque" class="msearch" placeholder="Rechercher un exercice…" style="margin:0 0 12px">'
    +'<div id="liblist">';
   MACHINES.forEach((m,i)=>{
     const mus=(m.p||[]).map(mLabel).join(', ');
-    const ss=(m.n+' '+m.b+' '+mus).toLowerCase();
-    h+='<button class="sbtn" data-m="'+i+'" data-s="'+esc(ss)+'" style="justify-content:space-between;text-align:left;gap:10px;margin-bottom:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m.n)+' · '+esc(m.b)+'</span><span style="opacity:.55;font-size:.78rem;white-space:nowrap">'+esc(LOAD_SHORT[machineLoad(m)])+'</span></button>';
+    const ss=searchKey(m.n+' '+m.b+' '+mus);
+    h+='<button class="sbtn lib-option" data-m="'+i+'" data-s="'+esc(ss)+'"><span>'+esc(m.n)+'</span><small>'+esc(m.b)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</small></button>';
   });
   h+='</div>';
   sheet.innerHTML=h;openSheet();
   const q=document.getElementById('libq');
-  if(q)q.addEventListener('input',()=>{const v=q.value.toLowerCase();document.querySelectorAll('#liblist .sbtn').forEach(b=>{b.style.display=b.dataset.s.indexOf(v)>=0?'':'none'})});
+  if(q)q.addEventListener('input',()=>{const v=searchKey(q.value);document.querySelectorAll('#liblist .sbtn').forEach(b=>{b.hidden=!b.dataset.s.includes(v)})});
   sheet.querySelectorAll('#liblist .sbtn').forEach(b=>b.addEventListener('click',()=>{
     const m=MACHINES[+b.dataset.m],list=document.getElementById('exlist');
     if(!m||!list)return;
     const n=list.querySelectorAll('.ecard').length;
     list.insertAdjacentHTML('beforeend',editExHTML({name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])},n));
-    closeSheet();toast('Exercice ajouté — pense à enregistrer');
+    labelFields(list);closeSheet();toast('Exercice ajouté — pense à enregistrer');
   }));
 }
 function showOnboarding(){
@@ -2493,7 +2605,7 @@ function showSettings(){
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
     if(!window.confirm('Revenir au programme par défaut ? Tes modifications de programme seront perdues (l’historique est conservé).'))return;
-    resetProgram();closeSheet();go('home');toast('Programme réinitialisé');
+    if(resetProgram()){closeSheet();go('home');toast('Programme réinitialisé');}
   });
   document.getElementById('setOk').addEventListener('click',()=>{closeSheet();render()});
 }
@@ -2506,11 +2618,11 @@ function exportPayload(){
       muscles_principaux:e.musP||[],muscles_secondaires:e.musS||[]};
   const recup={};
   for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
-  return{app:'dako',version:6,exporte_le:new Date().toISOString(),
+  return{app:'dako',version:7,exporte_le:new Date().toISOString(),
     profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode,salle:SETTINGS.salle,niveau:SETTINGS.niveau}),
     reglages:SETTINGS,recuperation_musculaire:recup,
     programmes:PROGRAMS,programme_actif:ACTIVE_PID,
-    programme:PROGRAM,exercices:exos,seances:DB.workouts,bilan_forme:BODY};
+    programme:PROGRAM,exercices:exos,seances:DB.workouts,active:DB.active,bilan_forme:BODY};
 }
 function showData(){
   sheet.innerHTML='<h2>Données</h2>'
@@ -2521,7 +2633,9 @@ function showData(){
    +'<div class="sbtns"><button class="sbtn pri" id="cPrompt">1 · Prompt coach</button></div>'
    +'<div class="sbtns" style="margin-top:8px"><button class="sbtn" id="cProg">2 · Mon programme</button><button class="sbtn" id="cHist">2 · Mon historique</button></div>'
    +'<div class="rectitle" style="margin-top:20px">Sauvegarde / restauration</div>'
-   +'<textarea class="io" id="shArea" spellcheck="false" placeholder="Coller ici le JSON à importer…"></textarea>'
+   +'<div class="sbtns"><button class="sbtn pri" id="saveFile">Télécharger la sauvegarde</button><button class="sbtn" id="openFile">Ouvrir un fichier</button></div>'
+   +'<input id="backupFile" type="file" accept=".json,application/json" hidden>'
+   +'<textarea class="io" id="shArea" aria-label="Sauvegarde JSON à importer" spellcheck="false" placeholder="Ou coller ici une sauvegarde JSON…"></textarea>'
    +'<div class="sbtns"><button class="sbtn" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
   refreshDataHealth();
@@ -2530,6 +2644,14 @@ function showData(){
   document.getElementById('cHist').addEventListener('click',()=>clipCopy(coachHistoryText(),'Historique copié — colle-le après le prompt'));
   document.getElementById('doExport').addEventListener('click',doExport);
   document.getElementById('doImport').addEventListener('click',doImport);
+  document.getElementById('saveFile').addEventListener('click',downloadBackup);
+  document.getElementById('openFile').addEventListener('click',()=>document.getElementById('backupFile').click());
+  document.getElementById('backupFile').addEventListener('change',async ev=>{
+    const file=ev.target.files[0];if(!file)return;
+    if(file.size>10*1024*1024){toast('Fichier trop volumineux (10 Mo maximum)');return;}
+    try{const text=await file.text();const area=document.getElementById('shArea');if(area){area.value=text;doImport();}}
+    catch(e){toast('Impossible de lire ce fichier');}
+  });
 }
 async function doExport(){
   const txt=JSON.stringify(exportPayload(),null,1);
@@ -2610,86 +2732,111 @@ function coachHistoryText(){
   const arr=DB.workouts.slice(-15).reverse();
   if(!arr.length)return t+'(aucune séance enregistrée pour l’instant)\n';
   for(const w of arr){
-    const s=SEANCE[w.seance];
+    const s=w.session||SEANCE[w.seance];
     t+='\n'+fmtDateShort(w.date)+' · '+(s?s.tab+' '+s.title:w.seance)+(w.dur?' · '+fmtDur(w.dur):'')+'\n';
     for(const exId of workoutExerciseIds(w)){
       const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
       const note=workoutNote(w,exId);
       if(!sets.length&&!note)continue;
-      t+='  '+(EXO[exId]?EXO[exId].name:exId)+' : '+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'\n';
+      t+='  '+(workoutExercise(w,exId)?.name||exId)+' : '+sets.map(x=>(x.w!=null?fmtN(x.w):'—')+'×'+(x.r!=null?x.r:'—')).join(' · ')+'\n';
       if(note)t+='    Ressenti : '+note+'\n';
     }
   }
   return t;
 }
 function doImport(){
-  let data;
-  try{data=JSON.parse(document.getElementById('shArea').value)}catch(e){toast('JSON invalide');return}
-  if(Array.isArray(data.programmes)&&data.programmes.length&&data.programmes.every(p=>p&&Array.isArray(p.seances))){
-    /* nouveau format multi-programmes */
-    PROGRAMS=data.programmes;
-    ACTIVE_PID=data.programme_actif||PROGRAMS[0].id;
-    normalizePrograms();savePrograms();
-  }else if(Array.isArray(data.programme)&&data.programme.length&&data.programme.every(s=>s&&s.id&&Array.isArray(s.ex))){
-    /* ancien format : remplace les séances du programme actif */
-    const act=activeProgram();
-    if(act){act.seances=data.programme;normalizePrograms();savePrograms();}
-  }
-  if(Array.isArray(data.bilan_forme)){BODY=data.bilan_forme.filter(b=>b&&b.date&&b.vals);BODY.sort((x,y)=>x.date<y.date?-1:1);saveBody();}
-  if(data.reglages&&typeof data.reglages==='object'&&!Array.isArray(data.reglages)){
-    SETTINGS=Object.assign({},SETTINGS,data.reglages);saveSettings();applyTheme();
-  }
-  let workouts=null;
-  if(Array.isArray(data.seances))workouts=data.seances;
-  else if(Array.isArray(data.workouts))workouts=data.workouts;
-  else{
-    const src=data.historique||data.logs||data;
-    if(src&&typeof src==='object'&&!Array.isArray(src)){
-      const byKey={};
-      for(const exId in src){
-        if(!EXO[exId]||!Array.isArray(src[exId]))continue;
-        for(const en of src[exId]){
-          if(!en||!en.d||!Array.isArray(en.s))continue;
-          const k=en.d+'|'+EXO[exId].seance;
-          if(!byKey[k])byKey[k]={date:en.d,seance:EXO[exId].seance,dur:null,ex:{}};
-          byKey[k].ex[exId]=en.s.map(x=>({w:numOrNull(x.w),r:intOrNull(x.r),done:true}));
+  let incoming;
+  try{
+    const data=JSON.parse(document.getElementById('shArea').value);
+    if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Format non reconnu');
+    incoming={};
+    if(data.programmes!=null)incoming.programs=DKO_DATA.programs(data.programmes);
+    else if(data.programme!=null)incoming.programs=DKO_DATA.programs([{id:ACTIVE_PID,name:activeProgram()?.name||'Programme importé',seances:data.programme}]);
+    if(incoming.programs&&!incoming.programs.length)throw new Error('Aucun programme dans la sauvegarde');
+    let workouts=data.seances??data.workouts;
+    if(workouts==null){
+      const src=data.historique||data.logs||data,byKey=new Map();
+      for(const [exId,entries] of Object.entries(src)){
+        if(!EXO[exId]||!Array.isArray(entries))continue;
+        for(const en of entries){
+          if(!en||!en.d||!Array.isArray(en.s))throw new Error('Historique incomplet');
+          const key=en.d+'|'+EXO[exId].seance;
+          if(!byKey.has(key))byKey.set(key,{date:en.d,seance:EXO[exId].seance,dur:null,ex:{}});
+          byKey.get(key).ex[exId]=en.s.map(x=>({w:x.w,r:x.r,done:true}));
         }
       }
-      workouts=Object.values(byKey);
+      if(byKey.size)workouts=[...byKey.values()];
     }
-  }
-  if(!workouts){toast('Format non reconnu');return}
-  const clean=[];
-  for(const w of workouts){
-    if(!w||typeof w.date!=='string'||!w.ex||typeof w.ex!=='object')continue;
-    const ex={};
-    for(const exId in w.ex){
-      if(!Array.isArray(w.ex[exId]))continue;
-      const sets=w.ex[exId].map(x=>({w:numOrNull(x.w),r:intOrNull(x.r),done:x.done!==false}))
-        .filter(x=>x.w!=null||x.r!=null);
-      if(sets.length)ex[exId]=sets;
+    if(workouts!=null){
+      if(!Array.isArray(workouts))throw new Error('Liste de séances invalide');
+      incoming.workouts=workouts.map(w=>DKO_DATA.workout(w));
     }
-    const exNotes=cleanWorkoutNotes(w.exNotes);
-    if(Object.keys(ex).length||Object.keys(exNotes).length)clean.push({date:w.date,seance:w.seance||(EXO[Object.keys(ex)[0]]||{}).seance,dur:w.dur??null,ex,exNotes});
-  }
-  if(!clean.length){toast('Aucune séance trouvée dans le JSON');return}
-  clean.sort((a,b)=>a.date<b.date?-1:1);
-  const existing=new Set(DB.workouts.map(w=>w.date+'|'+w.seance));
-  const toMerge=clean.filter(w=>!existing.has(w.date+'|'+w.seance));
-  const finish=(list,msg)=>{DB.workouts=list.sort((a,b)=>a.date<b.date?-1:1);persist();closeSheet();render();toast(msg)};
-  if(!DB.workouts.length||toMerge.length===clean.length){
-    /* aucun doublon : importer sans demander */
-    finish(clean,clean.length+' séance'+(clean.length>1?'s':'')+' importée'+(clean.length>1?'s':''));
-  }else if(!toMerge.length){
-    finish(clean,'Remplacement de '+clean.length+' séance'+(clean.length>1?'s':''));
-  }else{
-    const dup=clean.length-toMerge.length;
-    if(window.confirm('Fusionner '+toMerge.length+' nouvelle'+(toMerge.length>1?'s':'')+' séance'+(toMerge.length>1?'s':'')+' avec l\'existant ?\n('+dup+' doublon'+(dup>1?'s':'')+' ignoré'+(dup>1?'s':'')+')\n\nOK = Fusionner · Annuler = Tout remplacer')){
-      finish([...DB.workouts,...toMerge],toMerge.length+' séance'+(toMerge.length>1?'s':'')+' ajoutée'+(toMerge.length>1?'s':'')+' · '+dup+' doublon'+(dup>1?'s':'')+' ignoré'+(dup>1?'s':''));
-    }else{
-      finish(clean,clean.length+' séance'+(clean.length>1?'s':'')+' importée'+(clean.length>1?'s':'')+' (remplacement)');
+    if(data.reglages!=null)incoming.settings=DKO_DATA.settings(data.reglages);
+    if(data.bilan_forme!=null)incoming.body=DKO_DATA.body(data.bilan_forme);
+    if(data.active!=null)incoming.active=DKO_DATA.workout(data.active,true);
+    const sessions={...SEANCE},exercises={...EXO};
+    for(const p of incoming.programs||[])for(const s of p.seances){sessions[s.id]=s;for(const e of s.ex)exercises[e.id]=e;}
+    for(const w of incoming.workouts||[])snapshotMetadata(w,exercises,sessions);
+    if(incoming.active)snapshotMetadata(incoming.active,exercises,sessions);
+    incoming.activeId=incoming.programs?.some(p=>p.id===data.programme_actif)?data.programme_actif:incoming.programs?.[0]?.id;
+    if(!incoming.programs&&!incoming.workouts&&!incoming.body&&!incoming.settings&&!incoming.active)throw new Error('Format non reconnu');
+  }catch(e){toast('Import refusé : '+e.message);return;}
+  const added=DKO_DATA.mergeWorkouts(DB.workouts,incoming.workouts||[]).length-DB.workouts.length;
+  sheet.innerHTML='<h2>Vérifier la sauvegarde</h2>'
+    +'<div class="sp">'+(incoming.workouts?.length||0)+' séances · '+(incoming.programs?.length||0)+' programmes · '+(incoming.body?.length||0)+' relevés corporels</div>'
+    +'<p>Ajouter conserve tes données actuelles et ajoute '+added+' nouvelle'+(added>1?'s séances':' séance')+'. Les programmes déjà présents et tes réglages restent inchangés.</p>'
+    +'<div class="sbtns"><button class="sbtn pri" id="importMerge">Ajouter à mes données</button></div>'
+    +'<div class="sbtns"><button class="sbtn danger" id="importReplace">Remplacer mes données</button><button class="sbtn" id="importCancel">Annuler</button></div>';
+  openSheet();
+  document.getElementById('importCancel').addEventListener('click',closeSheet);
+  document.getElementById('importMerge').addEventListener('click',()=>applyImport(incoming,false));
+  document.getElementById('importReplace').addEventListener('click',()=>{
+    if(window.confirm('Remplacer les données présentes dans ce fichier ? Les séances, programmes et mesures correspondants sur cet appareil seront remplacés.'))applyImport(incoming,true);
+  });
+}
+async function applyImport(incoming,replace){
+  if(sheet.dataset.importing==='1')return;
+  sheet.dataset.importing='1';
+  const buttons=[...sheet.querySelectorAll('button')];buttons.forEach(b=>{b.disabled=true});
+  let before;
+  try{
+    const programs=replace&&incoming.programs?incoming.programs:PROGRAMS.concat((incoming.programs||[]).filter(p=>!PROGRAMS.some(current=>current.id===p.id)));
+    // Reject collisions from different programs instead of silently overwriting exercise maps.
+    const ids=new Set();
+    for(const p of programs)for(const item of [p,...p.seances,...p.seances.flatMap(s=>s.ex)]){
+      if(ids.has(item.id))throw new Error('Deux programmes utilisent le même identifiant');ids.add(item.id);
     }
-  }
+    const workouts=(incoming.workouts?(replace?incoming.workouts:DKO_DATA.mergeWorkouts(DB.workouts,incoming.workouts)):DB.workouts).map(w=>snapshotWorkout(structuredClone(w)));
+    const importedActive=incoming.active&&!workouts.some(w=>w.id&&w.id===incoming.active.id)?incoming.active:null;
+    const candidate=replace&&incoming.workouts?importedActive||null:DB.active||importedActive||null;
+    const active=candidate?snapshotWorkout(structuredClone(candidate)):null;
+    if(active&&!programs.some(p=>p.seances.some(s=>s.id===active.seance)))throw new Error('Le programme de la séance en cours manque dans la sauvegarde');
+    const activeSession=active&&programs.flatMap(p=>p.seances).find(s=>s.id===active.seance);
+    if(activeSession&&Object.keys(active.ex).some(id=>!activeSession.ex.some(e=>e.id===id)))throw new Error('La séance en cours ne correspond plus au programme. Restaure sa sauvegarde complète.');
+    const body=incoming.body?(replace?incoming.body:BODY.concat(incoming.body.filter(b=>!BODY.some(current=>current.date===b.date)))):BODY;
+    const settings=replace&&incoming.settings?{...SETTINGS,...incoming.settings}:SETTINGS;
+    const activeId=replace&&incoming.programs?incoming.activeId:ACTIVE_PID;
+    before=storageSnapshot();
+    if(!await idbSet('before-import',before))throw new Error('Impossible de créer une sauvegarde de sécurité');
+    const updates={
+      [KEY_PROGRAMS]:JSON.stringify({programs,activeId}),
+      [KEY]:JSON.stringify({workouts,active,migrated:true}),
+      [KEY_BODY]:JSON.stringify(body.slice().sort((a,b)=>a.date.localeCompare(b.date))),
+      [KEY_SETTINGS]:JSON.stringify(settings)
+    };
+    try{for(const [key,value] of Object.entries(updates))localStorage.setItem(key,value);}
+    catch(error){
+      for(const key of Object.keys(updates)){if(before.data[key]==null)localStorage.removeItem(key);else localStorage.setItem(key,before.data[key]);}
+      throw error;
+    }
+    clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
+    loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();
+    applyTheme();closeSheet();go('home');
+    const timer=DB.active?.restTimer;
+    if(timer&&timer.end>Date.now())startTimer(timer.label,(timer.end-Date.now())/1000);
+    await mirrorSnapshot();toast(replace?'Sauvegarde restaurée':'Données ajoutées, historique conservé');
+  }catch(e){toast('Import non effectué : '+e.message);}
+  finally{delete sheet.dataset.importing;buttons.forEach(b=>{b.disabled=false});}
 }
 
 /* ================== SERVICE WORKER ================== */
@@ -2742,18 +2889,20 @@ function initDragSort(){
   app.addEventListener('pointercancel',onUp);
 }
 initDragSort();
-render();
-document.dispatchEvent(new Event('app:ready'));
-backupReminder();
-try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
-/* miroir de secours + restauration si le stockage a été purgé */
-mirrorSnapshot();
 maybeRestoreFromIDB().then(restored=>{
   if(restored){
     loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();applyTheme();
-    render();
-    toast('Données restaurées depuis la sauvegarde de secours');
   }
+  DB.workouts.forEach(snapshotWorkout);
+  if(DB.active)snapshotWorkout(DB.active);
+  STORAGE_READY=true;savePrograms();persist();render();
+  document.dispatchEvent(new Event('app:ready'));
+  if(restored)toast('Données restaurées depuis la sauvegarde de secours');
+  const timer=DB.active?.restTimer;
+  if(timer&&timer.end>Date.now())startTimer(timer.label,(timer.end-Date.now())/1000);
+  else if(timer){delete DB.active.restTimer;persist();}
+  backupReminder();
+  try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
 });
 
 /* ================== SPLASH ================== */

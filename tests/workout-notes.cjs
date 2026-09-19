@@ -35,7 +35,7 @@ const server = http.createServer(async (req, res) => {
       localStorage.setItem('dako_lastbackup', new Date().toISOString().slice(0, 10));
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForFunction(() => typeof startWorkout === 'function');
+    await page.waitForFunction(() => typeof STORAGE_READY !== 'undefined' && STORAGE_READY);
     const ids = await page.evaluate(() => {
       const s = PROGRAM[0];
       go('seance', s.id); startWorkout(s.id);
@@ -99,6 +99,8 @@ const server = http.createServer(async (req, res) => {
       document.getElementById('shArea').value=JSON.stringify(backup);
       doImport();
     }, backup);
+    await page.locator('#importMerge').click();
+    await page.waitForFunction(() => DB.workouts.length === 2 && !sheet.dataset.importing);
     assert.deepEqual(await page.evaluate(() => DB.workouts), workouts);
     await page.evaluate(() => { showEditWorkout(0); });
     await page.locator('.we-note').first().fill('');
