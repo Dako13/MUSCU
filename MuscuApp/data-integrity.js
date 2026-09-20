@@ -53,6 +53,10 @@ const DKO_DATA=(()=>{
     if(w.exMeta){object(w.exMeta,'Exercices enregistrés');clean.exMeta=Object.fromEntries(Object.entries(w.exMeta).map(([key,e])=>[id(key),meta(object(e,'Exercice enregistré'))]));}
     clean.exNotes=Object.fromEntries(Object.entries(w.exNotes==null?{}:object(w.exNotes,'Ressentis')).map(([key,n])=>[id(key),str(n,'',2000)]).filter(([,n])=>n.trim()));
     if(active){
+      if(w.restByEx!=null)clean.restByEx=Object.fromEntries(Object.entries(object(w.restByEx,'Repos par exercice')).map(([key,value])=>{
+        const exId=id(key);if(!Object.hasOwn(ex,exId))fail('Repos associé à un exercice inconnu');
+        return [exId,number(value,1,86400,null,true)];
+      }).filter(([,value])=>value!=null));
       clean.start=number(w.start,0,8640000000000000,Date.now());
       clean.pt=number(w.pt,0,8640000000000000,0);clean.ps=number(w.ps,0,8640000000000000);
       if(w.restTimer){object(w.restTimer,'Minuteur');clean.restTimer={end:number(w.restTimer.end,0,8640000000000000),label:str(w.restTimer.label)};}

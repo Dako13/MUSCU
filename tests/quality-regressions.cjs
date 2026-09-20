@@ -242,11 +242,13 @@ async function importMerge(page){
     const activeBackup=await p.evaluate(()=>{
       go('seance',PROGRAM[0].id);startWorkout(PROGRAM[0].id);
       DB.active.exNotes[PROGRAM[0].ex[0].id]='Active backup';startTimer('Test repos',120);persist();
+      DB.active.restByEx={[PROGRAM[0].ex[0].id]:45};persist();
       const result=exportPayload();DB.active=null;stopTimer();persist();return result;
     });
     await importPreview(p,activeBackup);p.once('dialog',d=>d.accept());await p.locator('#importReplace').click();
     await p.waitForFunction(()=>!sheet.dataset.importing);
     assert.equal(await p.evaluate(()=>Object.values(DB.active.exNotes)[0]),'Active backup');
+    assert.equal(await p.evaluate(()=>Object.values(DB.active.restByEx)[0]),45);
     assert(await p.evaluate(()=>tInt!==null));
     await p.evaluate(()=>{closeSheet();showData();});
     await p.locator('#backupFile').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(activeBackup))});

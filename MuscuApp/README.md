@@ -52,6 +52,8 @@ Les corrections, tests et limites relevées lors du dernier audit sont décrits 
 [le bilan de qualité 4.22](../docs/quality-4.22.md).
 La refonte rouge et noir et ses tests sont décrits dans
 [le bilan 4.24](../docs/design-4.24.md).
+Les arbitrages et tests des améliorations pendant la séance sont détaillés dans
+[le bilan 4.25](../docs/decisions-4.25.md).
 
 - Pas de vibration sur iPhone (API non supportée par Safari iOS) — signal sonore à la place.
 - Le minuteur ne sonne pas si l'app est fermée ou l'écran verrouillé (limitation web). L'app reste utilisable écran allumé.

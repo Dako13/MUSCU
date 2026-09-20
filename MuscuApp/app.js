@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.24.0';
+const APP_VERSION='4.25.0';
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
 
@@ -666,6 +666,44 @@ function exHistory(exId){
   return out;
 }
 function prevSets(exId){const h=exHistory(exId);return h.length?h[h.length-1].sets:null}
+function previousExercise(e){
+  let previous=null;
+  for(const w of DB.workouts){
+    if(w.date>(DB.active?.date||todayISO())||!(w.ex?.[e.id]||[]).some(s=>s.done&&(s.w!=null||s.r!=null)))continue;
+    if(!previous||w.date>=previous.date)previous=w;
+  }
+  if(!previous)return null;
+  const meta=workoutExercise(previous,e.id);
+  if(meta?.name!==e.name||(meta?.unit||'kg')!==(e.unit||'kg'))return null;
+  return {date:previous.date,sets:previous.ex[e.id].filter(s=>s.done&&(s.w!=null||s.r!=null))};
+}
+function comparisonSummary(current){
+  let previous=null;
+  for(const w of DB.workouts)if(w.seance===current.seance&&w.date<=current.date&&(!previous||w.date>=previous.date))previous=w;
+  if(!previous)return null;
+  const rows=[];
+  for(const id of Object.keys(current.ex)){
+    const now=workoutExercise(current,id),before=workoutExercise(previous,id);
+    if(!now||!before||now.name!==before.name||(now.unit||'kg')!==(before.unit||'kg'))continue;
+    const a=workoutStats({ex:{[id]:current.ex[id]}}),b=workoutStats({ex:{[id]:previous.ex[id]||[]}});
+    if(a.sets&&b.sets){
+      if(!current.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))a.vol=null;
+      if(!previous.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))b.vol=null;
+      rows.push({name:now.name,now:a,before:b});
+    }
+  }
+  return rows.length?{date:previous.date,rows}:null;
+}
+function comparableBest(exId,current,date){
+  let best=null;
+  for(const w of DB.workouts){
+    const meta=workoutExercise(w,exId);
+    if(w.date>date||!meta||!current||meta.name!==current.name||(meta.unit||'kg')!==(current.unit||'kg'))continue;
+    const value=maxW((w.ex[exId]||[]).filter(s=>s.done));
+    if(value!=null&&(best==null||value>best))best=value;
+  }
+  return best;
+}
 function lastSessionLine(exId){
   const p=prevSets(exId);
   if(!p||!p.length)return '';
@@ -1069,14 +1107,17 @@ function exCardHTML(e,idx,active){
    +'<div class="chead"><span class="cnum num">'+(idx+1)+'</span><span class="cname">'+esc(e.name)+'</span>'
    +(e.ceiling?'<span class="badge">'+esc(e.ceiling)+'</span>':'')
    +'<span class="cdone">FAIT</span></div>'
-   +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span></div>';
+   +'<div class="cmeta">'+ref+'<span class="target num">'+e.sets+' × '+esc(e.reps)+'</span>'
+   +(active?'<button class="rest-setting text-link" data-act="restset" data-ex="'+esc(e.id)+'" aria-label="Régler le repos pour cet exercice">'+uiIcon('clock-3')+'<span>Repos '+fmtT(restForExercise(e))+'</span></button>':'')+'</div>';
   if(!active)h+=lastSessionLine(e.id);
   if(active){
     const sets=active.ex[e.id]||[];
     const targets=suggestTargets(e);
+    const previous=previousExercise(e);
     h+=workoutCoachHTML(e,sets);
+    if(previous)h+='<div class="comparison-date">Dernière séance · '+esc(fmtDateShort(previous.date))+'</div>';
     h+='<div class="stable"><div class="sthead"><span>SÉR.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
-    sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
+    sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets,previous)});
     h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
     h+=workoutNoteField(active,e.id,false)+previousNoteHTML(e.id);
   }
@@ -1084,7 +1125,7 @@ function exCardHTML(e,idx,active){
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
 }
-function setRowHTML(e,i,st,targets){
+function setRowHTML(e,i,st,targets,previous=previousExercise(e)){
   const t=targets&&targets[i]?targets[i]:null;
   const phW=t&&t.w!=null?fmtN(t.w):'kg';
   const phR=t&&t.r!=null?String(t.r):'reps';
@@ -1097,6 +1138,7 @@ function setRowHTML(e,i,st,targets){
    +'<input class="r num" type="text" inputmode="numeric" aria-label="'+esc(e.name)+' · série '+(i+1)+' · répétitions" placeholder="'+esc(phR)+'" value="'+(st.r==null?'':st.r)+'">'
    +'<button class="stpb" data-act="stepr" data-d="1" tabindex="-1" aria-label="plus">+</button></div>'
    +'<button class="chk" data-act="chk" aria-label="valider la série"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></button>'
+   +(previous?'<span class="previous-set">'+(previous.sets[i]?'Dernière : <b>'+esc((previous.sets[i].w==null?'—':fmtN(previous.sets[i].w)+' '+(e.unit||'kg'))+' × '+(previous.sets[i].r??'—'))+'</b>':'Pas de série précédente')+'</span>':'')
    +'</div>';
 }
 function progHTML(e){
@@ -2218,10 +2260,11 @@ function finishWorkout(){
   const stats=workoutStats(a);
   if(!stats.sets){toast('Aucune série validée');return}
   const recs=[];
+  const comparison=comparisonSummary(a);
   for(const exId in a.ex){
     const m=maxW(a.ex[exId].filter(s=>s.done));
     if(m==null)continue;
-    const prev=bestEver(exId);
+    const prev=comparableBest(exId,workoutExercise(a,exId),a.date);
     if(prev==null||m>prev)recs.push({name:EXO[exId]?EXO[exId].name:exId,w:m,prev});
   }
   const endRef=a.ps||Date.now();
@@ -2235,7 +2278,7 @@ function finishWorkout(){
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
   stopTimer();
-  showSummary({seance:a.seance,dur,stats,recs});
+  showSummary({seance:a.seance,dur,stats,recs,comparison});
   go('home');
 }
 function cancelWorkout(){
@@ -2279,6 +2322,7 @@ app.addEventListener('click',ev=>{
   else if(act==='finish')finishWorkout();
   else if(act==='cancel')cancelWorkout();
   else if(act==='pause')togglePause();
+  else if(act==='restset')showExerciseRest(actEl.dataset.ex);
   else if(act==='data')showData();
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
@@ -2388,14 +2432,14 @@ app.addEventListener('click',ev=>{
       if(r==null||r<1){toast('Ajoute les répétitions avant de valider');reps.focus();return;}
       st.w=w;st.r=r;st.done=true;
       row.classList.add('done');
-      const _pb=bestEver(exId),_isPR=st.w!=null&&_pb!=null&&st.w>_pb;
+      const _pb=comparableBest(exId,workoutExercise(DB.active,exId),DB.active.date),_isPR=st.w!=null&&_pb!=null&&st.w>_pb;
       if(_isPR){
         row.classList.add('pr');
         if(!row.querySelector('.prtag')){const tg=document.createElement('span');tg.className='prtag';tg.textContent='RECORD';row.appendChild(tg);}
         toast('Record ! '+fmtN(st.w)+' kg');
       }
       if(navigator.vibrate)navigator.vibrate(_isPR?[20,40,20]:10);
-      startTimer(e?e.name:'Repos',e?e.rest:null);
+      startTimer(e?e.name:'Repos',e?restForExercise(e):null);
     }else{
       st.done=false;row.classList.remove('done','pr');
       const _t=row.querySelector('.prtag');if(_t)_t.remove();
@@ -2436,6 +2480,34 @@ app.addEventListener('input',ev=>{
 });
 
 /* ================== MINUTEUR DE REPOS ================== */
+function restForExercise(e){
+  return DB.active?.restByEx?.[e.id]??e.rest??SETTINGS.rest;
+}
+function showExerciseRest(exId){
+  const e=EXO[exId],active=DB.active;
+  if(!e||!active||!Object.hasOwn(active.ex,exId))return;
+  sheet.innerHTML='<h2>Repos pour cette séance</h2><div class="sp">'+esc(e.name)+'</div>'
+    +'<div class="efield"><label for="exerciseRest">Durée en secondes</label><input id="exerciseRest" type="number" inputmode="numeric" min="1" max="86400" step="1" value="'+restForExercise(e)+'"></div>'
+    +'<div class="rest-presets">'+[60,90,120,180].map(n=>'<button class="sbtn" data-rest="'+n+'">'+fmtT(n)+'</button>').join('')+'</div>'
+    +'<p class="rest-scope">Prochains repos de cet exercice, pour cette séance uniquement. Le repos déjà lancé reste inchangé.</p>'
+    +'<div class="sbtns"><button class="sbtn" id="restReset">Valeur du programme</button><button class="sbtn pri" id="restSave">Appliquer</button></div>';
+  openSheet();
+  const input=document.getElementById('exerciseRest');
+  sheet.querySelectorAll('[data-rest]').forEach(b=>b.addEventListener('click',()=>{input.value=b.dataset.rest;input.setAttribute('aria-invalid','false');}));
+  const apply=value=>{
+    if(DB.active!==active)return;
+    active.restByEx={...(active.restByEx||{})};
+    if(value==null)delete active.restByEx[exId];else active.restByEx[exId]=value;
+    persist();closeSheet();
+    app.querySelectorAll('.rest-setting').forEach(b=>{if(b.dataset.ex===exId)b.querySelector('span').textContent='Repos '+fmtT(restForExercise(e));});
+  };
+  document.getElementById('restReset').addEventListener('click',()=>apply(null));
+  document.getElementById('restSave').addEventListener('click',()=>{
+    const n=intOrNull(input.value);
+    if(n==null||n<1||n>86400){input.setAttribute('aria-invalid','true');input.focus();toast('Saisis une durée entière entre 1 et 86400 secondes');return;}
+    apply(n);
+  });
+}
 const tbar=document.getElementById('timerbar'),tleftEl=document.getElementById('tleft'),tlabel=document.getElementById('tlabel');
 let tInt=null,tEndAt=0,audioCtx=null,wakeLock=null;
 /* Wake Lock : garde l'écran allumé pendant le repos (sinon le minuteur
@@ -2452,6 +2524,7 @@ document.addEventListener('visibilitychange',()=>{
 function startTimer(label,rest){
   const sec=(rest!=null&&rest>0)?rest:SETTINGS.rest;
   tlabel.textContent=label||'Repos';
+  tbar.querySelectorAll('#tminus,#tplus').forEach(button=>{button.disabled=false;});
   tbar.classList.add('on');tbar.classList.remove('fin');acquireWake();
   tEndAt=Date.now()+sec*1000;
   if(DB.active){DB.active.restTimer={end:tEndAt,label:label||'Repos'};persist();}
@@ -2466,6 +2539,7 @@ function startTimer(label,rest){
   },250);
 }
 function timerDone(){
+  tbar.querySelectorAll('#tminus,#tplus').forEach(button=>{button.disabled=true;});
   tleftEl.textContent='0:00';tbar.classList.add('fin');tlabel.textContent='Repos terminé';
   if(navigator.vibrate)navigator.vibrate([300,120,300,120,300]);
   if(audioCtx)try{
@@ -2485,10 +2559,13 @@ function stopTimer(){
   clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
   if(DB.active?.restTimer){delete DB.active.restTimer;persist();}
 }
-document.getElementById('tplus').addEventListener('click',()=>{
-  if(!tInt)return;tEndAt+=30000;tleftEl.textContent=fmtT((tEndAt-Date.now())/1000);
+function adjustTimer(seconds){
+  if(!tInt)return;tEndAt+=seconds*1000;tleftEl.textContent=fmtT((tEndAt-Date.now())/1000);
   if(DB.active?.restTimer){DB.active.restTimer.end=tEndAt;persist();}
-});
+  if(tEndAt<=Date.now()){clearInterval(tInt);tInt=null;timerDone();}
+}
+document.getElementById('tplus').addEventListener('click',()=>adjustTimer(30));
+document.getElementById('tminus')?.addEventListener('click',()=>adjustTimer(-30));
 document.getElementById('tskip').addEventListener('click',stopTimer);
 
 /* ================== SHEETS ================== */
@@ -2541,17 +2618,21 @@ function toast(msg){
 function showSummary(o){
   const s=SEANCE[o.seance];
   let recs='';
-  if(o.recs.length){
-    recs='<div class="recwrap"><div class="rectitle">Records</div>'
-     +o.recs.map(r=>'<div class="recline"><b>'+fmtN(r.w)+' kg</b> — '+esc(r.name)+(r.prev!=null?' (préc. '+fmtN(r.prev)+')':'')+'</div>').join('')
-     +'</div>';
+  for(const first of [false,true]){
+    const entries=o.recs.filter(r=>(r.prev==null)===first);
+    if(entries.length)recs+='<div class="recwrap"><div class="rectitle">'+(first?'Premières références':'Records de charge')+'</div>'
+      +entries.map(r=>'<div class="recline"><b>'+fmtN(r.w)+' kg</b> · '+esc(r.name)+(r.prev!=null?' (préc. '+fmtN(r.prev)+')':'')+'</div>').join('')+'</div>';
   }
+  const metric=value=>value.sets+' série'+(value.sets>1?'s':'')+(value.vol!=null?' · '+fmtKg(value.vol)+' kg':'');
+  const comparison=o.comparison?'<section class="summary-comparison"><h3>Par rapport au '+esc(fmtDateShort(o.comparison.date))+'</h3><p>Exercices communs · séries validées</p>'
+    +'<table><thead><tr><th scope="col">Exercice</th><th scope="col">Avant</th><th scope="col">Aujourd’hui</th></tr></thead><tbody>'
+    +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+esc(metric(r.before))+'</td><td>'+esc(metric(r.now))+'</td></tr>').join('')+'</tbody></table></section>':'';
   sheet.innerHTML='<h2>Séance terminée'+(s?' · '+esc(s.tab):'')+'</h2><div class="sp">'+esc(s?s.title:'')+'</div>'
    +'<div class="sumgrid">'
    +'<div class="sumbox"><div class="v num">'+fmtDur(o.dur)+'</div><div class="l">Durée</div></div>'
    +'<div class="sumbox"><div class="v num">'+fmtKg(o.stats.vol)+'</div><div class="l">kg soulevés</div></div>'
    +'<div class="sumbox"><div class="v num">'+o.stats.sets+'</div><div class="l">Séries</div></div>'
-   +'</div>'+recs
+   +'</div>'+comparison+recs
    +'<div class="sbtns"><button class="sbtn pri" id="shOk">OK</button></div>';
   openSheet();
   document.getElementById('shOk').addEventListener('click',closeSheet);
