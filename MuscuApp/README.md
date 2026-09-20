@@ -1,6 +1,6 @@
 # Muscu — PWA de suivi d'entraînement
 
-Application web installable (PWA), hors ligne, sans serveur ni base de données. Données stockées localement sur l'appareil (localStorage), export/import JSON intégré.
+Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
 ## Contenu du dossier
 
@@ -11,6 +11,8 @@ Application web installable (PWA), hors ligne, sans serveur ni base de données.
 | `app.overrides.css` | Direction visuelle et adaptations responsive |
 | `app.js` | Logique complète (séances, minuteur, stats, éditeur de programme, export) |
 | `data-integrity.js` | Validation des sauvegardes et fusion des historiques |
+| `cloud-sync.js`, `cloud-ui.js` | Sauvegarde Supabase privée, connexion et restauration |
+| `supabase-config.js` | Configuration publique optionnelle (aucun secret) |
 | `sw.js` | Service worker — cache hors ligne |
 | `manifest.webmanifest` | Manifeste PWA (nom, icônes, plein écran) |
 | `icons/` | Icônes 180 / 192 / 512 + maskable |
@@ -88,8 +90,14 @@ Les arbitrages et tests des améliorations pendant la séance sont détaillés d
 
 - Pas de vibration sur iPhone (API non supportée par Safari iOS) — signal sonore à la place.
 - Le minuteur ne sonne pas si l'app est fermée ou l'écran verrouillé (limitation web). L'app reste utilisable écran allumé.
-- Données locales à l'appareil : faire un export régulier en sauvegarde. Une synchronisation cloud (Supabase) est l'évolution naturelle si besoin multi-appareils.
+- Données locales à l'appareil : garder des exports réguliers. La sauvegarde Supabase optionnelle permet une restauration sur un autre appareil, sans fusion automatique.
 
 ## Vers une commercialisation
 
 Le code est prêt pour : programme éditable par l'utilisateur (intégré), données isolées par domaine, échappement des entrées (XSS), versionnage du format de données (migrations automatiques v2→v3→v4). Étapes suivantes typiques : comptes utilisateurs + synchronisation (Supabase/Firebase), page d'accueil marketing, analytics respectueux (Plausible), puis éventuellement wrapper natif (Capacitor) pour l'App Store.
+# Sauvegarde Supabase (4.28)
+
+Une sauvegarde cloud privee et optionnelle est disponible dans Reglages > Compte
+et sauvegarde. Elle reste desactivee tant que le projet n'est pas configure.
+Le mode local/hors ligne et les donnees existantes sont conserves.
+Voir [la procedure d'activation et les limites](../supabase/README.md).

@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.27.0';
+const APP_VERSION='4.28.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -616,14 +616,14 @@ function previousNoteHTML(exId){
    à l'effacement automatique d'iOS. Au démarrage, si le localStorage
    a été purgé mais que l'instantané existe, on le restaure. */
 const IDB_NAME='dako_store',IDB_STORE='kv';
-const MIRROR_KEYS=[KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY,'dako_lastbackup'];
+const MIRROR_KEYS=[KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY,'dako_lastbackup','dko_cloud_link'];
 function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open(IDB_NAME,1)}catch(e){return rej(e)}r.onupgradeneeded=()=>{try{r.result.createObjectStore(IDB_STORE)}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>{db.close();res(true)};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)}})).catch(()=>false)}
 function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);tx.oncomplete=()=>db.close()})).catch(()=>null)}
 function storageSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}return snap;}
 function mirrorSnapshot(){if(!STORAGE_READY||!STORAGE_WRITABLE)return Promise.resolve(false);try{return idbSet('snapshot',storageSnapshot())}catch(e){return Promise.resolve(false)}}
 var _mirT=null; /* var volontaire (anti-TDZ) : mirrorSoon peut être appelé pendant la migration au chargement (loadProgram->savePrograms), AVANT cette ligne — ne pas repasser en let */
-function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400)}
+function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400);window.DKOCloudUI?.changed();}
 function maybeRestoreFromIDB(){
   return idbGet('snapshot').then(snap=>{
     if(!snap||!snap.data)return false;
@@ -2764,6 +2764,7 @@ function showSettings(){
    +'<div class="efield"><label>Niveau</label><div class="chips" id="nivChips" style="flex-wrap:wrap">'
    +['Débutant','Intermédiaire','Avancé'].map(v=>'<button class="chip'+(SETTINGS.niveau===v?' on':'')+'" data-niv="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('')
    +'</div></div>'
+   +'<div class="rectitle">Compte</div><div class="sbtns"><button class="sbtn" id="setCloud">Compte et sauvegarde</button></div>'
    +'<div class="rectitle">Outils</div>'
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
    +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
@@ -2795,6 +2796,7 @@ function showSettings(){
     document.querySelectorAll('#nivChips .chip').forEach(x=>x.classList.toggle('on',x===c));
   });
   document.getElementById('setCalc').addEventListener('click',showCalculators);
+  document.getElementById('setCloud').addEventListener('click',()=>window.DKOCloudUI?.show());
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
     if(!window.confirm('Revenir au programme par défaut ? Tes modifications de programme seront perdues (l’historique est conservé).'))return;
@@ -2821,6 +2823,7 @@ function showData(){
   sheet.innerHTML='<h2>Données</h2>'
    +'<div class="sp">Lance ton coach IA gratuit (app Claude / claude.ai), ou sauvegarde / restaure ton suivi.</div>'
    +'<div class="rectitle">État de protection</div><div id="dataHealth"></div>'
+   +'<div class="sbtns"><button class="sbtn" id="dataCloud">Compte et sauvegarde</button></div>'
    +'<div class="rectitle">Coach IA · gratuit</div>'
    +'<div class="sp" style="margin-bottom:10px"><b>1.</b> Copie le prompt coach et colle-le dans Claude. <b>2.</b> Colle ensuite ton programme et/ou ton historique quand il les demande.</div>'
    +'<div class="sbtns"><button class="sbtn pri" id="cPrompt">1 · Prompt coach</button></div>'
@@ -2832,6 +2835,7 @@ function showData(){
    +'<div class="sbtns"><button class="sbtn" id="doExport">Exporter (copier)</button><button class="sbtn" id="doImport">Importer</button></div>';
   openSheet();
   refreshDataHealth();
+  document.getElementById('dataCloud').addEventListener('click',()=>window.DKOCloudUI?.show());
   document.getElementById('cPrompt').addEventListener('click',()=>clipCopy(COACH_PROMPT,'Prompt coach copié — colle-le dans Claude'));
   document.getElementById('cProg').addEventListener('click',()=>clipCopy(coachProgramText(),'Programme copié — colle-le après le prompt'));
   document.getElementById('cHist').addEventListener('click',()=>clipCopy(coachHistoryText(),'Historique copié — colle-le après le prompt'));
@@ -3027,7 +3031,7 @@ async function applyImport(incoming,replace){
     applyTheme();closeSheet();go('home');
     const timer=DB.active?.restTimer;
     if(timer&&timer.end>Date.now())startTimer(timer.label,(timer.end-Date.now())/1000);
-    await mirrorSnapshot();toast(replace?'Sauvegarde restaurée':'Données ajoutées, historique conservé');
+    await mirrorSnapshot();window.DKOCloudUI?.changed();toast(replace?'Sauvegarde restaurée':'Données ajoutées, historique conservé');
   }catch(e){toast('Import non effectué : '+e.message);}
   finally{delete sheet.dataset.importing;buttons.forEach(b=>{b.disabled=false});}
 }

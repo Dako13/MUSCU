@@ -423,3 +423,9 @@ body:has(#timerbar.on) #app{padding-bottom:calc(240px + env(safe-area-inset-bott
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}
 }
+#cloudPanel{min-width:0}
+#cloudPanel .cloud-email,#cloudPanel p{overflow-wrap:anywhere}
+#cloudPanel .sbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:normal;min-width:0}
+#cloudPanel .ui-icon{flex:0 0 18px}
+#cloudPanel form{margin-bottom:18px}
+#cloudPanel .efield{margin-top:12px}

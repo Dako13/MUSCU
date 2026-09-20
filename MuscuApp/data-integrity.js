@@ -90,5 +90,19 @@ const DKO_DATA=(()=>{
     }
     return result.sort((a,b)=>a.date.localeCompare(b.date));
   }
-  return {programs,workout,settings,body,mergeWorkouts};
+  function cloud(value){
+    object(value,'Sauvegarde cloud');
+    if(value.schema!==1)fail('Version de sauvegarde cloud non reconnue');
+    const ps=programs(value.programs);
+    if(!ps.length||!ps.some(p=>p.id===value.activeId))fail('Programme actif manquant');
+    const ws=list(value.workouts,'Historique').map(w=>workout(w));
+    const active=value.active==null?null:workout(value.active,true);
+    if(active){
+      const session=ps.flatMap(p=>p.seances).find(s=>s.id===active.seance);
+      if(!session||Object.keys(active.ex).some(k=>!session.ex.some(e=>e.id===k)))fail('Programme de la séance en cours incomplet');
+      if(ws.some(w=>w.id&&w.id===active.id))fail('Séance déjà terminée dans la sauvegarde');
+    }
+    return {schema:1,programs:ps,activeId:value.activeId,workouts:ws,active,settings:settings(value.settings),body:body(value.body)};
+  }
+  return {programs,workout,settings,body,mergeWorkouts,cloud};
 })();
