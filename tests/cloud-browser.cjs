@@ -48,6 +48,22 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
   });
   await page.goto('http://127.0.0.1:'+server.address().port+'/');
   await page.locator('#splash').waitFor({state:'detached'});
+  // An existing offline user must keep their exact local data on first sign-in.
+  const existing=await page.evaluate(()=>{
+    const session=PROGRAMS[0].seances[0],exercise=session.ex[0];
+    PROGRAMS[0].name='Mon programme avant Supabase';
+    exercise.notes='Consigne personnelle avant creation de compte';
+    DB.workouts=[snapshotWorkout({id:'w_before_cloud',date:'2026-09-01',seance:session.id,dur:2700,
+      ex:{[exercise.id]:[{w:32.5,r:7.5,done:true}]},exNotes:{[exercise.id]:'Bon ressenti avant Supabase'}})];
+    SETTINGS.objectif='Objectif personnel existant';SETTINGS.rest=240;
+    BODY=[{date:'2026-09-01',vals:{poids:78.5,bras:37.5}}];
+    savePrograms();persist();saveSettings();saveBody();
+    return {
+      storage:Object.fromEntries([KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY].map(k=>[k,localStorage.getItem(k)])),
+      payload:DKO_DATA.cloud({schema:1,programs:PROGRAMS,activeId:ACTIVE_PID,workouts:DB.workouts,active:DB.active,settings:SETTINGS,body:BODY})
+    };
+  });
+  const localData=()=>page.evaluate(()=>Object.fromEntries([KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY].map(k=>[k,localStorage.getItem(k)])));
   const original=await page.evaluate(()=>JSON.stringify(PROGRAMS));
   await page.evaluate(()=>DKOCloudUI.show());
   if(process.env.AXE_PATH){
@@ -63,9 +79,12 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
     await page.locator('#cloudSignOut').waitFor();
   };
   await login('alice@example.test');assert.equal(writeRequests,0);
+  assert.deepEqual(await localData(),existing.storage,'sign-in does not modify existing local data');
   await page.locator('#cloudSave').click();
   await page.waitForFunction(()=>document.getElementById('cloudPanel').textContent.includes('Sauvegarde à jour'));
   assert.equal(rows.get(a).revision,1);assert(rows.get(a).payload.programs.length);
+  assert.deepEqual(await localData(),existing.storage,'first cloud backup does not modify existing local data');
+  assert.deepEqual(rows.get(a).payload,existing.payload,'existing programs, history, notes, settings and body measurements are copied to the private backup');
   await page.evaluate(()=>{PROGRAMS[0].name='Programme local';savePrograms();});
   await page.waitForTimeout(3500);assert.equal(rows.get(a).revision,2);assert.equal(rows.get(a).payload.programs[0].name,'Programme local');
   await page.reload();await page.locator('#splash').waitFor({state:'detached'});
@@ -106,6 +125,6 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
   await blank.evaluate(()=>{closeSheet();DKOCloudUI.show();});
   await blank.getByText('Le cloud n’est pas encore activé pour Dko.').waitFor();assert.equal(external,0);
   assert(original.length>0&&requests>0);
-  console.log('PASS browser: bundled Supabase SDK, email OTP, explicit consent, autosave, reload, conflict, remote export, restore/recovery, account switch and unconfigured offline-only mode.');
+  console.log('PASS browser: existing local data preserved at login/first upload, bundled Supabase SDK, email OTP, explicit consent, autosave, reload, conflict, remote export, restore/recovery, account switch and unconfigured offline-only mode.');
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
