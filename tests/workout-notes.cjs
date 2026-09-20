@@ -69,11 +69,20 @@ const server = http.createServer(async (req, res) => {
     }
     const card = page.locator('.card[data-ex]').first();
     await card.locator('.w').first().fill('20');
-    await card.locator('.r').first().fill('10');
+    assert.equal(await card.locator('.r').first().getAttribute('inputmode'),'decimal');
+    await card.locator('.r').first().fill('7,5');
+    assert.equal(await page.evaluate(id=>DB.active.ex[id][0].r,ids.ex),7.5);
+    await card.locator('[data-act="stepr"][data-d="1"]').first().click();
+    assert.equal(await card.locator('.r').first().inputValue(),'8,5');
+    await card.locator('[data-act="stepr"][data-d="-1"]').first().click();
+    assert.equal(await card.locator('.r').first().inputValue(),'7,5');
+    await card.locator('.r').first().fill('7.5');
     await card.locator('.chk').first().click();
     await page.evaluate(() => { finishWorkout(); closeSheet(); go('suivi'); });
     let workouts = await page.evaluate(() => DB.workouts);
     assert.equal(workouts.length, 1);
+    assert.equal(workouts[0].ex[ids.ex][0].r,7.5);
+    assert((await page.evaluate(()=>historyHTML())).includes('7,5'));
     assert.equal(workouts[0].exNotes[ids.ex], note);
     assert.equal(workouts[0].exNotes[ids.other], 'Exercice non realise : fatigue');
     assert.equal(await page.evaluate(id => EXO[id].notes, ids.ex), ids.technical);
@@ -93,9 +102,12 @@ const server = http.createServer(async (req, res) => {
     await card.locator('.chk').first().click();
     await page.evaluate(() => { finishWorkout(); closeSheet(); showEditWorkout(0); });
     await page.locator('.we-note').first().fill('Premiere seance corrigee');
+    assert.equal(await page.locator('.we[data-k="r"]').first().getAttribute('inputmode'),'decimal');
+    await page.locator('.we[data-k="r"]').first().fill('6,5');
     await page.locator('#wsave').click();
     workouts = await page.evaluate(() => DB.workouts);
     assert.equal(workouts[0].exNotes[ids.ex], 'Premiere seance corrigee');
+    assert.equal(workouts[0].ex[ids.ex][0].r,6.5);
     assert.equal(workouts[1].exNotes[ids.ex], 'Deuxieme seance');
 
     // Round-trip through the real backup importer, including note-only exercises.

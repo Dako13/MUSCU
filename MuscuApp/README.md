@@ -43,6 +43,29 @@ ajustement pendant la séance, repos spécifique de l'exercice, repos de la séa
 puis réglages personnels. Les anciennes séances gardent leur comportement ;
 ce réglage reste local et est inclus dans les sauvegardes.
 
+## Répétitions et durée (4.27)
+
+Les répétitions acceptent une virgule ou un point, par exemple 7,5 et 7.5.
+La décimale est conservée dans l'historique, les corrections et les sauvegardes.
+Les boutons plus/moins restent à un pas de 1 et conservent la partie décimale.
+
+Chaque validation de série mémorise le temps écoulé, pauses déduites. La durée
+enregistrée s'arrête à la dernière validation encore conservée. Une fois toutes
+les séries validées, le chronomètre affiché se fige également.
+
+Une séance ouverte est clôturée après 3 heures depuis son démarrage (pauses
+comprises pour ce délai). Si iOS suspend la page, le contrôle est effectué au
+retour ou au rechargement. La durée sauvegardée reste celle de la dernière
+série validée, pas 3 heures. Un brouillon sans série validée est mis en pause,
+sans supprimer ses notes. La clôture n'écrase pas un autre éditeur ouvert.
+
+Les anciennes séances ouvertes sans horodatage de validation sont compatibles :
+leur durée est laissée inconnue lors d'une clôture automatique, plutôt que
+d'inventer l'heure de leur dernière série. Les durées historiques déjà
+enregistrées ne sont pas recalculées.
+
+Tests spécifiques : `tests/workout-duration.cjs` et `tests/workout-notes.cjs`.
+
 ## Mettre à jour l'application
 
 1. Modifier les fichiers dans le dépôt GitHub (bouton crayon ou ré-upload).

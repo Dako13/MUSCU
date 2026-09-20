@@ -45,7 +45,9 @@ const DKO_DATA=(()=>{
     const ex=Object.fromEntries(Object.entries(w.ex).map(([key,sets])=>[id(key),list(sets,'Séries').map(s=>{
       object(s,'Série');
       if(s.done!=null&&typeof s.done!=='boolean')fail('Validation de série invalide');
-      return {w:number(s.w,0,10000),r:number(s.r,0,100000,null,true),done:s.done!==false};
+      const clean={w:number(s.w,0,10000),r:number(s.r,0,100000),done:s.done!==false};
+      if(active&&s.doneElapsedMs!=null)clean.doneElapsedMs=number(s.doneElapsedMs,0,31536000000);
+      return clean;
     }).filter(s=>active||s.w!=null||s.r!=null)]));
     const clean={date:date(w.date),seance:id(w.seance),dur:number(w.dur,0,31536000),ex};
     if(w.id!=null)clean.id=id(w.id);
