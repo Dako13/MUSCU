@@ -32,7 +32,7 @@ const DKO_DATA=(()=>{
       object(p,'Programme');
       return {id:unique(p.id),name:str(p.name,'Programme'),seances:list(p.seances,'Séances').map(s=>{
         object(s,'Séance');
-        return {id:unique(s.id),tab:str(s.tab,'Séance'),title:str(s.title,'Séance'),sub:str(s.sub),warn:str(s.warn),ex:list(s.ex,'Exercices').map(e=>{
+        return {id:unique(s.id),tab:str(s.tab,'Séance'),title:str(s.title,'Séance'),sub:str(s.sub),warn:str(s.warn),rest:number(s.rest,1,86400,null,true),ex:list(s.ex,'Exercices').map(e=>{
           object(e,'Exercice');
           return {id:unique(e.id),...meta(e),sets:number(e.sets,1,100,3,true),reps:str(e.reps,'8–10',80),ref:number(e.ref,0,10000),
             refText:str(e.refText),rest:number(e.rest,1,86400),ceiling:str(e.ceiling),notes:str(e.notes),yt:str(e.yt)};

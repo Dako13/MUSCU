@@ -1,4 +1,4 @@
-/* Dko 4.25: athletic red/black, anatomy stage and focused workouts. */
+/* Dko 4.26: athletic red/black, anatomy stage and focused workouts. */
 :root{
   --bg:#090909;--card:#151515;--card2:#111;--input:#202020;--elev:#292929;
   --txt:#f5f5f5;--dim:#bcbcbc;--faint:#999;
@@ -202,6 +202,12 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,t
 .comparison-date{color:var(--dim);font-size:11px;margin:10px 0 12px}
 .rest-setting{color:var(--dim);font-size:12px;margin-left:auto}
 .rest-setting .ui-icon{color:var(--ac)}
+.session-rest-editor{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}
+.session-rest-presets{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.session-rest-presets .chip{padding:8px 0;min-width:0;min-height:44px}
+.session-rest-presets .chip[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-soft);color:var(--txt)}
+.rest-inherit{margin-top:6px;white-space:normal;text-align:left}
+.rest-inherit[aria-pressed="true"]{color:var(--ac)}
 .rest-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .rest-presets .sbtn{padding:8px 0}
 .rest-scope{font-size:13px;line-height:1.5;color:var(--dim);margin:16px 0}

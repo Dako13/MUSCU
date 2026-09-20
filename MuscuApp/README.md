@@ -35,6 +35,14 @@ Alternative équivalente : Cloudflare Pages ou Netlify (glisser-déposer le doss
 2. Bouton Partager → **Sur l'écran d'accueil**.
 3. L'app s'ouvre en plein écran, fonctionne hors ligne après la première visite.
 
+## Repos des séances
+
+Depuis la version 4.26, la création/édition d'une séance propose son repos
+par défaut, avec raccourcis et durée libre en secondes. La priorité est :
+ajustement pendant la séance, repos spécifique de l'exercice, repos de la séance,
+puis réglages personnels. Les anciennes séances gardent leur comportement ;
+ce réglage reste local et est inclus dans les sauvegardes.
+
 ## Mettre à jour l'application
 
 1. Modifier les fichiers dans le dépôt GitHub (bouton crayon ou ré-upload).

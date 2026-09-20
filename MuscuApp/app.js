@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.25.0';
+const APP_VERSION='4.26.0';
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
 
@@ -924,7 +924,7 @@ let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
 let editBaseline=null;
-function editorState(){return JSON.stringify([...app.querySelectorAll('#es-title,#es-tab,#es-sub,#es-warn,#exlist .ecard')].map(el=>el.matches('.ecard')?[el.dataset.exid,...[...el.querySelectorAll('input,textarea,select')].map(input=>input.value)]:el.value));}
+function editorState(){return JSON.stringify([...app.querySelectorAll('#es-title,#es-tab,#es-sub,#es-warn,#es-rest,#exlist .ecard')].map(el=>el.matches('.ecard')?[el.dataset.exid,...[...el.querySelectorAll('input,textarea,select')].map(input=>input.value)]:el.value));}
 function editorDirty(){return route.view==='edit'&&editBaseline!==null&&editorState()!==editBaseline;}
 function go(view,seance){
   if(view==='edit'&&DB.active?.seance===seance){toast('Termine la séance en cours avant de la modifier');return;}
@@ -1073,7 +1073,7 @@ function seanceHTML(sid){
   const active=DB.active&&DB.active.seance===sid?DB.active:null;
   let h='<button class="back" data-act="home">'+uiIcon('chevron-left')+'<span>Séances</span></button>'
    +'<div class="shead"><div><div class="stag">'+esc(s.tab)+'</div><h2>'+esc(s.title)+'</h2>'
-   +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(SETTINGS.rest)
+   +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(s.rest??SETTINGS.rest)
    +' · <span class="num">récup. '+seanceRecoveryScore(s)+' %</span></div></div>'
    +(active?'':'<button class="editbtn" data-act="edit">Modifier</button>')+'</div>';
   if(active){
@@ -1973,7 +1973,18 @@ function statsHTML(embed){
 }
 
 /* ---------- éditeur de programme ---------- */
-function editExHTML(e,i){
+function editorRestValue(){
+  const input=document.getElementById('es-rest');
+  return (input?intOrNull(input.value):null)??SETTINGS.rest;
+}
+function updateEditorRest(){
+  const input=document.getElementById('es-rest');if(!input)return;
+  const value=input.value.trim(),rest=editorRestValue();
+  input.setAttribute('aria-invalid',String(!!value&&(intOrNull(value)==null||rest<1||rest>86400)));
+  app.querySelectorAll('[data-act="sessionrest"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rest===value)));
+  app.querySelectorAll('.e-rest').forEach(el=>{el.placeholder=rest+' (séance)';});
+}
+function editExHTML(e,i,defaultRest=editorRestValue()){
   const refStr=e.refText?e.refText:(e.ref!=null?fmtN(e.ref):'');
   return '<div class="ecard" data-dragitem data-exid="'+esc(e.id||'')+'">'
    +'<div class="ehead"><div class="ehl"><span class="grip" title="Glisser pour réordonner">⠿</span><span class="en num">EXERCICE '+(i+1)+'</span></div>'
@@ -1988,7 +1999,7 @@ function editExHTML(e,i){
    +'</div>'
    +'<div class="egrid3">'
    +'<div class="efield"><label>Reps cible</label><input class="e-reps" value="'+esc(e.reps||'8–10')+'"></div>'
-   +'<div class="efield"><label>Repos (s)</label><input class="e-rest num" inputmode="numeric" placeholder="défaut" value="'+(e.rest?e.rest:'')+'"></div>'
+   +'<div class="efield"><label>Repos spécifique (s)</label><input class="e-rest num" type="number" min="1" max="86400" step="1" inputmode="numeric" placeholder="'+defaultRest+' (séance)" value="'+(e.rest?e.rest:'')+'"></div>'
    +'<div class="efield"><label>Badge</label><input class="e-ceiling" value="'+esc(e.ceiling||'')+'"></div>'
    +'</div>'
    +'<div class="egrid">'
@@ -2011,16 +2022,25 @@ function editHTML(sid){
    +'<div class="efield"><label>Sous-titre</label><input id="es-sub" value="'+esc(s.sub||'')+'"></div>'
    +'</div>'
    +'<div class="efield"><label>Points de vigilance</label><textarea id="es-warn">'+esc(s.warn||'')+'</textarea></div>'
+   +'<div class="session-rest-editor"><div class="efield"><label for="es-rest">Repos par défaut de la séance (secondes)</label><input id="es-rest" class="num" type="number" inputmode="numeric" min="1" max="86400" step="1" placeholder="'+SETTINGS.rest+'" value="'+(s.rest??'')+'"></div>'
+   +'<div class="session-rest-presets" role="group" aria-label="Durée de repos de la séance">'+[60,90,120,180,240,300].map(n=>'<button class="chip" data-act="sessionrest" data-rest="'+n+'" aria-pressed="'+(s.rest===n)+'">'+fmtT(n)+'</button>').join('')+'</div>'
+   +'<button class="text-link rest-inherit" data-act="sessionrest" data-rest="" aria-pressed="'+(s.rest==null)+'">Mes réglages personnels · '+fmtT(SETTINGS.rest)+'</button></div>'
    +'</div>'
    +'<div class="maplegend" style="margin:0 4px 12px">Muscles reconnus : '+MUSCLES.map(m=>m.id).join(', ')+'</div>'
    +'<div id="exlist" data-dragsort="ex">';
-  s.ex.forEach((e,i)=>{h+=editExHTML(e,i)});
+  s.ex.forEach((e,i)=>{h+=editExHTML(e,i,s.rest??SETTINGS.rest)});
   h+='</div><button class="bigbtn" data-act="elib">+ Depuis la bibliothèque</button>'+'<button class="bigbtn ghost" data-act="eadd">+ Exercice vierge</button>'
    +'<div class="editor-save"><button class="bigbtn" data-act="esave">Enregistrer les modifications</button></div>';
   return h;
 }
 function collectEdit(sid){
   const s=SEANCE[sid];
+  for(const input of app.querySelectorAll('#es-rest,.e-rest')){
+    const n=intOrNull(input.value),invalid=!!input.value.trim()&&(n==null||n<1||n>86400);
+    input.setAttribute('aria-invalid',String(invalid));
+    if(invalid){toast('Repos invalide : entier de 1 à 86400 s');input.focus();return false;}
+  }
+  const sessionRest=intOrNull(document.getElementById('es-rest').value);
   const title=document.getElementById('es-title').value.trim();
   const tab=document.getElementById('es-tab').value.trim();
   const sub=document.getElementById('es-sub').value.trim();
@@ -2056,7 +2076,7 @@ function collectEdit(sid){
     ex.push(e);
   });
   if(!ex.length){toast('Au moins un exercice requis');return false}
-  s.title=title||s.title;s.tab=tab||s.tab;s.sub=sub;s.warn=warn;s.ex=ex;
+  s.title=title||s.title;s.tab=tab||s.tab;s.sub=sub;s.warn=warn;s.rest=sessionRest;s.ex=ex;
   saveProgram();
   editBaseline=editorState();
   return true;
@@ -2323,6 +2343,10 @@ app.addEventListener('click',ev=>{
   else if(act==='cancel')cancelWorkout();
   else if(act==='pause')togglePause();
   else if(act==='restset')showExerciseRest(actEl.dataset.ex);
+  else if(act==='sessionrest'){
+    const input=document.getElementById('es-rest');if(!input)return;
+    input.value=actEl.dataset.rest;input.setAttribute('aria-invalid','false');updateEditorRest();
+  }
   else if(act==='data')showData();
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
@@ -2452,6 +2476,7 @@ app.addEventListener('click',ev=>{
   }
 });
 app.addEventListener('input',ev=>{
+  if(ev.target.id==='es-rest'){updateEditorRest();return;}
   if(ev.target.matches('.session-note')){
     const exId=ev.target.dataset.ex;
     if(!DB.active||!Object.hasOwn(DB.active.ex,exId))return;
@@ -2481,7 +2506,7 @@ app.addEventListener('input',ev=>{
 
 /* ================== MINUTEUR DE REPOS ================== */
 function restForExercise(e){
-  return DB.active?.restByEx?.[e.id]??e.rest??SETTINGS.rest;
+  return DB.active?.restByEx?.[e.id]??e.rest??SEANCE[e.seance||DB.active?.seance]?.rest??SETTINGS.rest;
 }
 function showExerciseRest(exId){
   const e=EXO[exId],active=DB.active;

@@ -138,8 +138,66 @@ async function settled(p){
     assert.match(await p.locator('.recwrap').textContent(),/Premières références/);
     assert.doesNotMatch(await p.locator('.recwrap').textContent(),/Records/);
     assert.equal(await p.locator('.summary-comparison').count(),0);
+    // Creating a session has a durable default, independent of other users
+    // and of per-exercise / current-workout exceptions.
+    await p.evaluate(()=>{closeSheet();go('programs');});
+    const originals=await p.evaluate(()=>JSON.stringify(PROGRAM));
+    const personal=await p.evaluate(()=>SETTINGS.rest);
+    await p.locator('[data-act="saddseance"]').click();
+    const sid=await p.evaluate(()=>route.seance);
+    assert.equal(await p.locator('#es-rest').inputValue(),'');
+    await p.locator('[data-act="sessionrest"][data-rest="90"]').click();
+    p.once('dialog',d=>d.dismiss());await p.locator('[data-v="home"]').click();
+    assert.equal(await p.evaluate(()=>route.view),'edit');
+    await p.locator('[data-act="eadd"]').click();
+    await p.locator('.e-name').first().fill('Exercice repos commun');
+    assert.match(await p.locator('.e-rest').first().getAttribute('placeholder'),/90/);
+    const draft=await p.evaluate(()=>JSON.stringify(PROGRAMS));
+    await p.locator('#es-rest').fill('-1');await p.locator('[data-act="esave"]').click();
+    assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),draft);
+    await p.locator('#es-rest').fill('95');
+    await p.locator('[data-act="eadd"]').click();
+    await p.locator('.e-name').nth(1).fill('Exercice repos specifique');
+    await p.locator('.e-rest').nth(1).fill('240');
+    for(const width of [320,390,1440]){
+      await p.setViewportSize({width,height:900});
+      await p.locator('#es-rest').scrollIntoViewIfNeeded();await settled(p);
+      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await p.screenshot({path:path.join(out,'session-editor-'+width+'.png')});
+    }
+    if(process.env.AXE_PATH){
+      const violations=await p.evaluate(async()=>(await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>v.id));
+      assert.deepEqual(violations,[]);
+    }
+    await p.locator('[data-act="esave"]').click();
+    assert.equal(await p.evaluate(sid=>SEANCE[sid].rest,sid),95);
+    assert.equal(await p.evaluate(()=>SETTINGS.rest),personal);
+    assert.equal(await p.evaluate(sid=>JSON.stringify(PROGRAM.filter(s=>s.id!==sid)),sid),originals);
+    assert.match(await p.locator('.smeta').textContent(),/1:35/);
+    const programs=await p.evaluate(()=>exportPayload().programmes);
+    const cleaned=await p.evaluate(data=>DKO_DATA.programs(data),programs);
+    assert.equal(cleaned.flatMap(p=>p.seances).find(s=>s.id===sid).rest,95);
+    const invalid=structuredClone(programs);invalid.flatMap(p=>p.seances).find(s=>s.id===sid).rest=0;
+    assert(await p.evaluate(data=>{try{DKO_DATA.programs(data);return false;}catch{return true;}},invalid));
+    await p.reload();await p.locator('#splash').waitFor({state:'detached'});
+    await p.evaluate(sid=>{go('seance',sid);startWorkout(sid);},sid);
+    assert.deepEqual(await p.evaluate(sid=>SEANCE[sid].ex.map(e=>restForExercise(e)),sid),[95,240]);
+    await card.locator('.r').first().fill('8');await card.locator('.chk').first().click();
+    assert(await p.evaluate(()=>Math.abs(tEndAt-Date.now()-95000)<2000));
+    await p.evaluate(()=>{DB.active=null;stopTimer();persist();go('edit',PROGRAM[PROGRAM.length-1].id);});
+    await p.locator('[data-act="sessionrest"][data-rest=""]').click();
+    await p.locator('[data-act="esave"]').click();
+    assert.equal(await p.evaluate(sid=>SEANCE[sid].rest,sid),null);
+    assert.equal(await p.evaluate(sid=>restForExercise(EXO[SEANCE[sid].ex[0].id]),sid),personal);
+    const otherUser=await browser.newPage({serviceWorkers:'block'});
+    await otherUser.addInitScript(()=>localStorage.setItem('dako_onboarded','1'));
+    await otherUser.goto('http://127.0.0.1:'+server.address().port+'/');
+    await otherUser.locator('#splash').waitFor({state:'detached'});
+    assert.equal(await otherUser.evaluate(sid=>!!SEANCE[sid],sid),false);
+    assert.equal(await otherUser.evaluate(()=>SETTINGS.rest),180);
+    await otherUser.close();
     assert.deepEqual(errors,[]);
-    console.log('PASS: prior series, unit compatibility, rest scope/validation/reset, timer adjustment/reload, backup round-trip, first references, common-exercise summary, layouts and accessibility.');
+    console.log('PASS: prior series, unit compatibility, workout/session/exercise rest precedence, creation/edit/validation/reset, dirty guard, timer/reload, backup schema, user isolation, records, summary, layouts and accessibility.');
     console.log('Screenshots: '+out);
   }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
