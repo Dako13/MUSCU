@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.23.0';
+const APP_VERSION='4.24.0';
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
 
@@ -599,6 +599,15 @@ function workoutNoteField(w,exId,editing){
 function workoutNoteHTML(note){
   return note?'<div class="workout-note-read"><span>Ressenti</span><p>'+esc(note)+'</p></div>':'';
 }
+function previousNoteHTML(exId){
+  let previous=null;
+  for(const w of DB.workouts){
+    if(workoutNote(w,exId).trim()&&(!previous||w.date>=previous.date))previous=w;
+  }
+  if(!previous)return '';
+  return '<details class="previous-note"><summary>'+uiIcon('notebook-pen')+'<span>Dernier ressenti</span><time datetime="'+esc(previous.date)+'">'+esc(fmtDateShort(previous.date))+'</time></summary>'
+    +'<p>'+esc(workoutNote(previous,exId))+'</p></details>';
+}
 
 /* ===== Sauvegarde durable — miroir IndexedDB (anti-purge iOS) =====
    localStorage reste le stockage de travail (synchrone). À chaque
@@ -870,6 +879,8 @@ function workoutCoachHTML(e,sets){
 /* ================== ROUTAGE / RENDU ================== */
 const app=document.getElementById('app');
 let route={view:'home',seance:null};
+let DASH_SIDE={sid:null,side:'front'};
+let WORKOUT_MODE='focus',FOCUS_EX=null;
 let MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
@@ -893,6 +904,7 @@ function render(){
     if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
   });
   app.dataset.view=route.view;
+  app.dataset.workout=route.view==='seance'&&DB.active?.seance===route.seance?WORKOUT_MODE:'preview';
   if(route.view==='home')app.innerHTML=homeHTML();
   else if(route.view==='machines')app.innerHTML=machinesHTML();
   else if(route.view==='seance')app.innerHTML=seanceHTML(route.seance);
@@ -901,6 +913,7 @@ function render(){
   else if(route.view==='programs')app.innerHTML=programsHTML();
   else app.innerHTML=homeHTML();
   labelFields(app);
+  syncExerciseFocus();
   const filters=app.querySelector('#machineFilters');
   if(filters)filters.addEventListener('toggle',()=>{MFILTER.open=filters.open});
   app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
@@ -928,79 +941,99 @@ function weekStripHTML(now){
   }
   return '<div class="weekstrip">'+cells+'</div>';
 }
+function weeklyTrendHTML(now){
+  const weeks=[];
+  for(let i=5;i>=0;i--){
+    const start=weekStart(now);start.setDate(start.getDate()-i*7);
+    const end=new Date(start);end.setDate(end.getDate()+7);
+    const a=isoOf(start),b=isoOf(end);
+    const vol=DB.workouts.filter(w=>w.date>=a&&w.date<b).reduce((sum,w)=>sum+workoutStats(w).vol,0);
+    weeks.push({date:start,label:start.getDate()+'/'+(start.getMonth()+1),vol});
+  }
+  const max=Math.max(1,...weeks.map(w=>w.vol));
+  return '<div class="weekly-trend"><div class="section-caption">Tonnage · 6 semaines</div><div class="trend-bars">'
+    +weeks.map((w,i)=>'<div class="trend-column" role="img" aria-label="'+esc('Semaine du '+w.label+' : '+fmtKg(w.vol)+' kg')+'" title="'+esc(fmtKg(w.vol)+' kg')+'"><div class="trend-track"><i class="'+(i===5?'current':'')+'" style="height:'+Math.max(w.vol?3:0,w.vol/max*100)+'%"></i></div><span>'+w.label+'</span></div>').join('')
+    +'</div></div>';
+}
 function homeHTML(){
-  const now=new Date();
-  const wIso=isoOf(weekStart(now));
-  const weekW=DB.workouts.filter(w=>w.date>=wIso);
-  let weekVol=0,weekSets=0;weekW.forEach(w=>{const st=workoutStats(w);weekVol+=st.vol;weekSets+=st.sets;});
-  const reco=recommendSeance();
-  const ap=activeProgram();
-  let h='<div class="dash-top"><div class="dash-brand"><h1>Dko<span>.</span></h1><div class="dash-date">'+now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'</div></div>'
-   +'<div class="hbtns">'+toolButton('data','database','Données et sauvegardes')+toolButton('settings','settings-2','Réglages')+'</div></div>';
-  let _ba=null;try{const _lb=localStorage.getItem('dako_lastbackup');_ba=_lb?diffDays(_lb):null}catch(e){}
-  if(DB.workouts.length&&(_ba===null||_ba>=7)){
-    h+='<button class="backupbanner" data-act="backup"><span class="bb-i">⤓</span>'
-     +'<span class="bb-t"><b>Sauvegarde conseillée</b><small>'+(_ba===null?'Aucune sauvegarde fichier exportée':'Dernière sauvegarde il y a '+_ba+' j')+'</small></span>'
-     +'<span class="bb-x">Sauvegarder</span></button>';
+  const now=new Date(),weekW=DB.workouts.filter(w=>w.date>=isoOf(weekStart(now)));
+  const weekVol=weekW.reduce((sum,w)=>sum+workoutStats(w).vol,0);
+  const weekSets=weekW.reduce((sum,w)=>sum+workoutStats(w).sets,0);
+  const reco=recommendSeance(),ap=activeProgram();
+  const next=DB.active?SEANCE[DB.active.seance]:(reco?SEANCE[reco.id]:PROGRAM[0]);
+  let h='<header class="dash-top"><div class="dash-brand"><h1>Dko<span>.</span></h1><span class="brand-caption">Journal d’entraînement</span></div>'
+    +'<div class="hbtns">'+toolButton('data','database','Données et sauvegardes')+toolButton('settings','settings-2','Réglages')+'</div></header>';
+  h+='<div class="home-date">'+esc(now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'</div><div class="home-layout">';
+  if(next){
+    const sm=sessionMuscles(next),val=m=>sm.p.has(m)?1:(sm.s.has(m)?.45:0);
+    const side=DASH_SIDE.sid===next.id?DASH_SIDE.side:dominantSide(next);
+    const muscles=[...sm.p].slice(0,3);
+    const sets=next.ex.reduce((sum,e)=>sum+(Number(e.sets)||0),0);
+    const active=!!DB.active;
+    h+='<section class="session-stage" aria-labelledby="todayTitle">'
+      +'<div class="stage-heading"><span class="eyebrow">'+(active?(DB.active.ps?'Séance en pause':'Séance en cours'):'Prochaine séance')+'</span><span class="stage-tag">'+esc(next.tab)+'</span></div>'
+      +'<h2 id="todayTitle">'+esc(next.title)+'</h2>'
+      +'<div class="stage-scene"><div class="stage-muscles">'+muscles.map(m=>'<div class="muscle-callout"><span></span><b>'+esc(mLabel(m))+'</b></div>').join('')+'</div>'
+      +'<div class="stage-anatomy" role="img" aria-label="Muscles ciblés, vue '+(side==='front'?'de face':'de dos')+'">'+silhouette(side,val)+'</div>'
+      +'<div class="stage-numbers"><div><b class="num">'+next.ex.length+'</b><span>exercices</span></div><div><b class="num">'+sets+'</b><span>séries prévues</span></div></div></div>'
+      +'<div class="stage-foot"><span class="stage-readiness"><i></i>Récup. estimée <b>'+seanceRecoveryScore(next)+' %</b></span>'
+      +'<div class="body-side" role="group" aria-label="Vue anatomique">'+['front','back'].map(v=>'<button data-act="bodyside" data-s="'+esc(next.id)+'" data-side="'+v+'" aria-pressed="'+(side===v)+'">'+(v==='front'?'Face':'Dos')+'</button>').join('')+'</div></div>'
+      +'<button class="bigbtn stage-start" data-act="'+(active?'open':'quickstart')+'" data-s="'+esc(next.id)+'">'+uiIcon('play')+'<span>'+(active?'Reprendre la séance':'Commencer')+'</span>'
+      +(active?'<span id="elapsed" class="num">'+elapsedStr()+'</span>':uiIcon('arrow-right'))+'</button></section>';
+  }else{
+    h+='<section class="session-stage"><div class="eyebrow">Ton entraînement</div><h2>À toi de jouer.</h2><button class="bigbtn" data-act="programs">Créer une séance '+uiIcon('arrow-right')+'</button></section>';
   }
-  if(DB.active){
-    const s=SEANCE[DB.active.seance];
-    if(s)h+='<button class="resume" data-act="open" data-s="'+esc(s.id)+'"><span>'+(DB.active.ps?'Séance en pause':'Séance en cours')+' · '+esc(s.tab)
-      +'<small>'+esc(s.title)+'</small></span><span class="num" id="elapsed">'+elapsedStr()+'</span></button>';
-  }
-  const heroS=reco?SEANCE[reco.id]:(PROGRAM[0]||null);
-  if(heroS&&!DB.active){
-    const sm=sessionMuscles(heroS);
-    const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
-    const mlist=[...sm.p].slice(0,4).map(m=>(MUSCLE_BY_ID[m]||{}).label||m).join(' · ');
-    h+='<section class="today-session" aria-labelledby="todayTitle">'
-     +'<div class="today-copy"><div class="today-k">Séance du jour <span>'+esc(heroS.tab)+'</span></div>'
-     +'<h2 id="todayTitle">'+esc(heroS.title)+'</h2>'
-     +'<div class="today-meta">'+heroS.ex.length+' exercices · récupération estimée '+seanceRecoveryScore(heroS)+' %</div>'
-     +'<p class="today-muscles">'+esc(mlist)+'</p></div>'
-     +'<div class="today-anatomy" aria-hidden="true">'+silhouette(dominantSide(heroS),val)+'</div>'
-     +'<button class="bigbtn today-start" data-act="quickstart" data-s="'+esc(heroS.id)+'">'+uiIcon('play')+'<span>Démarrer la séance</span>'+uiIcon('arrow-right')+'</button></section>';
-  }
-  h+='<div class="week-heading"><h2>Cette semaine</h2><span>'+weekW.length+' séance'+(weekW.length>1?'s':'')+'</span></div>'+weekStripHTML(now);
-  h+='<div class="statgrid">'
-   +'<div class="statbox"><div class="v num">'+weekSets+'</div><div class="l">Séries · sem.</div></div>'
-   +'<div class="statbox"><div class="v num">'+weekW.length+'</div><div class="l">Séances · sem.</div></div>'
-   +'<div class="statbox"><div class="v num">'+fmtKg(weekVol)+'</div><div class="l">kg · sem.</div></div>'
-   +'</div>';
-  h+='<button class="progpill" data-act="programs"><span class="ppl">PROGRAMME</span>'
-   +'<span class="ppn">'+esc(ap?ap.name:'—')+'</span>'
-   +'<span class="ppx">Gérer ›</span></button>';
-  if(!PROGRAM.length){
-    h+='<div class="empty">Ce programme n’a pas encore de séance.<br>Ajoute-en une depuis l’onglet Programmes.'
-     +'<div style="margin-top:18px"><button class="bigbtn" data-act="programs" style="display:inline-block;width:auto;padding:14px 24px">Gérer les programmes</button></div></div>';
-    return h;
-  }
-  h+='<div class="sectitle">Tes séances</div>';
-  for(const s of PROGRAM){
-    const last=lastWorkoutOf(s.id);
-    const isReco=reco&&reco.id===s.id;
-    const sm=sessionMuscles(s);
-    const val=mid=>sm.p.has(mid)?1:(sm.s.has(mid)?0.45:0);
-    h+='<button class="scard withfig'+(isReco?' reco':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
-     +'<div class="scard-fig">'+silhouette(dominantSide(s),val)+'</div>'
-     +'<div class="scard-body">'
-     +'<div class="srow"><span class="stag">'+esc(s.tab)
-     +(isReco?'<span class="recobadge">RECOMMANDÉE</span>':'')
-     +'</span><span class="slast">'+(last?daysAgo(last.date):'jamais réalisée')+'</span></div>'
-     +'<div class="sname">'+esc(s.title)+'</div>'
-     +'<div class="smeta">'+s.ex.length+' exercices · '+esc(s.sub||'')
-     +(isReco?' · <span class="num">récup. '+reco.score+' %</span>':'')
-     +'</div></div></button>';
-  }
+  h+='<section class="week-panel" aria-labelledby="weekTitle"><div class="section-heading"><h2 id="weekTitle">Ta semaine</h2><button class="text-link" data-act="weeklystats">Tout le suivi '+uiIcon('arrow-up-right')+'</button></div>'
+    +'<div class="weekly-lead"><b class="num">'+String(weekW.length).padStart(2,'0')+'</b><span>séance'+(weekW.length>1?'s':'')+'<br>réalisée'+(weekW.length>1?'s':'')+'</span></div>'
+    +weekStripHTML(now)
+    +'<div class="weekly-metrics"><div><b class="num">'+weekSets+'</b><span>séries validées</span></div><div><b class="num">'+fmtKg(weekVol)+'</b><span>kg soulevés</span></div></div>'
+    +weeklyTrendHTML(now)+'</section></div>';
+  h+='<section class="program-section"><div class="section-heading"><div><div class="eyebrow">Ton programme</div><h2>'+esc(ap?ap.name:'Mes séances')+'</h2></div><button class="text-link" data-act="programs">Gérer '+uiIcon('arrow-up-right')+'</button></div><div class="session-library">';
+  PROGRAM.forEach((s,i)=>{
+    const last=lastWorkoutOf(s.id),isReco=next&&next.id===s.id,sm=sessionMuscles(s);
+    h+='<button class="session-tile'+(isReco?' recommended':'')+'" data-act="open" data-s="'+esc(s.id)+'">'
+      +'<span class="session-index num">'+String(i+1).padStart(2,'0')+'</span><span class="session-tile-body"><span class="session-tile-meta">'+esc(s.tab)+' · '+s.ex.length+' exercices'+(isReco?' <b>À suivre</b>':'')+'</span>'
+      +'<strong>'+esc(s.title)+'</strong><span class="session-last">'+(last?daysAgo(last.date):'Pas encore réalisée')+'</span></span>'
+      +'<span class="session-tile-figure" aria-hidden="true">'+silhouette(dominantSide(s),m=>sm.p.has(m)?1:(sm.s.has(m)?.45:0))+'</span>'+uiIcon('chevron-right')+'</button>';
+  });
+  if(!PROGRAM.length)h+='<div class="empty">Aucune séance dans ce programme.</div>';
+  h+='</div></section>';
+  let age=null;try{const last=localStorage.getItem('dako_lastbackup');age=last?diffDays(last):null}catch(e){}
+  if(DB.workouts.length&&(age===null||age>=7))h+='<button class="backupbanner" data-act="backup">'+uiIcon('database')+'<span class="bb-t"><b>Sauvegarde conseillée</b><small>'+(age===null?'Aucun fichier exporté':'Dernier export il y a '+age+' j')+'</small></span><span class="bb-x">Exporter</span></button>';
   return h;
 }
 
 /* ---------- séance ---------- */
+function focusControlsHTML(s){
+  if(!s.ex.some(e=>e.id===FOCUS_EX))FOCUS_EX=(s.ex.find(e=>(DB.active.ex[e.id]||[]).some(st=>!st.done))||s.ex[0])?.id;
+  const index=s.ex.findIndex(e=>e.id===FOCUS_EX);
+  return '<div class="workout-browser"><div class="workout-browser-head"><span>Exercice <b>'+String(index+1).padStart(2,'0')+'</b> / '+String(s.ex.length).padStart(2,'0')+'</span>'
+    +'<div class="workout-modes" role="group" aria-label="Affichage des exercices"><button data-act="workoutmode" data-mode="focus" aria-pressed="'+(WORKOUT_MODE==='focus')+'" aria-label="Un exercice à la fois" data-tooltip="Un exercice à la fois">'+uiIcon('dumbbell')+'</button><button data-act="workoutmode" data-mode="list" aria-pressed="'+(WORKOUT_MODE==='list')+'" aria-label="Liste complète" data-tooltip="Liste complète">'+uiIcon('layout-list')+'</button></div></div>'
+    +'<div class="exercise-rail" aria-label="Exercices de la séance">'+s.ex.map((e,i)=>'<button data-act="exfocus" data-ex="'+esc(e.id)+'" aria-label="Exercice '+(i+1)+' : '+esc(e.name)+'" aria-pressed="'+(e.id===FOCUS_EX)+'"><span class="num">'+String(i+1).padStart(2,'0')+'</span>'+uiIcon('check')+'</button>').join('')+'</div></div>';
+}
+function syncExerciseFocus(){
+  if(route.view!=='seance'||DB.active?.seance!==route.seance)return;
+  app.querySelectorAll('.card[data-ex]').forEach(card=>{
+    card.hidden=WORKOUT_MODE==='focus'&&card.dataset.ex!==FOCUS_EX;
+    const next=(DB.active.ex[card.dataset.ex]||[]).findIndex(st=>!st.done);
+    card.querySelectorAll('.strow').forEach(row=>row.classList.toggle('next-set',+row.dataset.i===next));
+  });
+  app.querySelectorAll('.exercise-rail [data-act="exfocus"]').forEach(button=>{
+    const sets=DB.active.ex[button.dataset.ex]||[],done=!!sets.length&&sets.every(st=>st.done);
+    button.classList.toggle('exercise-done',done);
+    button.setAttribute('aria-label',button.getAttribute('aria-label').replace(/ · terminé$/,'')+(done?' · terminé':''));
+  });
+}
+function focusFooterHTML(s){
+  const index=s.ex.findIndex(e=>e.id===FOCUS_EX),previous=s.ex[index-1],next=s.ex[index+1];
+  return '<div class="focus-footer"'+(WORKOUT_MODE==='list'?' hidden':'')+'><button class="focus-prev" data-act="exfocus" data-ex="'+esc(previous?.id||'')+'" aria-label="Exercice précédent"'+(previous?'':' disabled')+'>'+uiIcon('chevron-left')+'</button>'
+    +'<button class="focus-next" data-act="'+(next?'exfocus':'finish')+'"'+(next?' data-ex="'+esc(next.id)+'"':'')+'><span><small>'+(next?'Exercice suivant':'Fin de séance')+'</small><strong>'+esc(next?.name||'Terminer la séance')+'</strong></span>'+uiIcon('arrow-right')+'</button></div>';
+}
 function seanceHTML(sid){
   const s=SEANCE[sid];
   if(!s)return homeHTML();
   const active=DB.active&&DB.active.seance===sid?DB.active:null;
-  let h='<button class="back" data-act="home">‹ Séances</button>'
+  let h='<button class="back" data-act="home">'+uiIcon('chevron-left')+'<span>Séances</span></button>'
    +'<div class="shead"><div><div class="stag">'+esc(s.tab)+'</div><h2>'+esc(s.title)+'</h2>'
    +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(SETTINGS.rest)
    +' · <span class="num">récup. '+seanceRecoveryScore(s)+' %</span></div></div>'
@@ -1010,17 +1043,19 @@ function seanceHTML(sid){
     const paused=!!active.ps;
     h+='<div class="livebar"><div><div class="lt'+(paused?' paused':'')+'">'+(paused?'EN PAUSE':'SÉANCE EN COURS')+'</div>'
      +'<div class="num" id="elapsed">'+elapsedStr()+'</div></div>'
-     +'<div class="lbtns"><button class="pausebtn" data-act="pause">'+(paused?'Reprendre':'Pause')+'</button>'
+     +'<div class="lbtns"><button class="pausebtn" data-act="pause" aria-label="'+(paused?'Reprendre la séance':'Mettre en pause')+'" data-tooltip="'+(paused?'Reprendre':'Pause')+'">'+uiIcon(paused?'play':'pause')+'</button>'
      +'<button class="finish" data-act="finish">Terminer</button></div></div>'
      +'<div class="pmeta"><span>Progression</span><span class="num" id="pdone">'+p.done+' / '+p.total+' séries</span></div>'
      +'<div class="pbar"><i id="pfill" style="width:'+(p.total?Math.round(100*p.done/p.total):0)+'%"></i></div>';
   }else{
     h+='<button class="bigbtn" data-act="start">Démarrer la séance</button>';
   }
+  if(active)h+=focusControlsHTML(s);
   s.ex.forEach((e,i)=>{h+=exCardHTML(e,i,active)});
+  if(active)h+=focusFooterHTML(s);
   if(s.warn)h+='<div class="pwarn">'+esc(s.warn)+'</div>';
-  if(active)h+='<button class="bigbtn" data-act="finish" style="margin-top:16px">Terminer la séance</button>'
-    +'<button class="bigbtn ghost" data-act="cancel">Annuler la séance</button>';
+  if(active)h+='<div class="session-end">'+(WORKOUT_MODE==='list'?'<button class="bigbtn" data-act="finish">Terminer la séance</button>':'')
+    +'<button class="text-link" data-act="cancel">Abandonner la séance</button></div>';
   return h;
 }
 
@@ -1043,7 +1078,7 @@ function exCardHTML(e,idx,active){
     h+='<div class="stable"><div class="sthead"><span>SÉR.</span><span>KG</span><span>REPS</span><span>✓</span></div>';
     sets.forEach((st,i)=>{h+=setRowHTML(e,i,st,targets)});
     h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
-    h+=workoutNoteField(active,e.id,false);
+    h+=workoutNoteField(active,e.id,false)+previousNoteHTML(e.id);
   }
   h+='<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Technique et muscles ciblés ›</button>';
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
@@ -2149,6 +2184,7 @@ function startWorkout(sid){
     }
   }
   stopTimer();
+  FOCUS_EX=null;
   DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{}});
   persist();render();
 }
@@ -2171,6 +2207,7 @@ function updateProgress(){
   const pd=document.getElementById('pdone'),pf=document.getElementById('pfill');
   if(pd)pd.textContent=p.done+' / '+p.total+' séries';
   if(pf)pf.style.width=(p.total?Math.round(100*p.done/p.total):0)+'%';
+  syncExerciseFocus();
 }
 function refreshWorkoutCoach(card,exId){
   const old=card&&card.querySelector('.wcoach');
@@ -2225,6 +2262,16 @@ app.addEventListener('click',ev=>{
   if(!actEl)return;
   const act=actEl.dataset.act;
   if(act==='home')go('home');
+  else if(act==='bodyside'){DASH_SIDE={sid:actEl.dataset.s,side:actEl.dataset.side};render();}
+  else if(act==='weeklystats'){SUIVI='stats';go('suivi');}
+  else if(act==='workoutmode'){WORKOUT_MODE=actEl.dataset.mode==='list'?'list':'focus';render();}
+  else if(act==='exfocus'){
+    if(!SEANCE[route.seance]?.ex.some(e=>e.id===actEl.dataset.ex))return;
+    FOCUS_EX=actEl.dataset.ex;WORKOUT_MODE='focus';render();
+    const selected=app.querySelector('.exercise-rail [aria-pressed="true"]');
+    selected?.focus({preventScroll:true});selected?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+    const heading=app.querySelector('.workout-browser');heading?.scrollIntoView({block:'start',behavior:'instant'});
+  }
   else if(act==='open')go('seance',actEl.dataset.s);
   else if(act==='openback')go('seance',actEl.dataset.s);
   else if(act==='start')startWorkout(route.seance);

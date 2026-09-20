@@ -44,6 +44,7 @@ const server = http.createServer(async (req, res) => {
     const field = page.locator('.session-note').first();
     const note = 'Isolation bonne\nRessenti correct <test> & "ok"';
     await field.fill(note);
+    await page.locator('[data-act="workoutmode"][data-mode="list"]').click();
     await page.locator('.session-note').nth(1).fill('Exercice non realise : fatigue');
     assert.equal(await page.evaluate(id => JSON.parse(localStorage.getItem('muscu_v3')).active.exNotes[id], ids.ex), note);
     await page.reload();
@@ -83,6 +84,11 @@ const server = http.createServer(async (req, res) => {
     // A new workout on the same day must not inherit or overwrite its predecessor.
     await page.evaluate(sid => { go('seance', sid); startWorkout(sid); }, ids.sid);
     assert.equal(await field.inputValue(), '');
+    await card.locator('.previous-note summary').click();
+    assert.equal(await card.locator('.previous-note p').textContent(),note);
+    assert.equal(await card.locator('.previous-note p test').count(),0);
+    assert.equal(await field.inputValue(),'');
+    assert.equal(await page.evaluate(id=>DB.active.exNotes[id],ids.ex),undefined);
     await field.fill('Deuxieme seance');
     await card.locator('.chk').first().click();
     await page.evaluate(() => { finishWorkout(); closeSheet(); showEditWorkout(0); });

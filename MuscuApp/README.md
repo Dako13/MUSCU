@@ -8,6 +8,7 @@ Application web installable (PWA), hors ligne, sans serveur ni base de données.
 |---|---|
 | `index.html` | Structure de l'application |
 | `app.css` | Styles |
+| `app.overrides.css` | Direction visuelle et adaptations responsive |
 | `app.js` | Logique complète (séances, minuteur, stats, éditeur de programme, export) |
 | `data-integrity.js` | Validation des sauvegardes et fusion des historiques |
 | `sw.js` | Service worker — cache hors ligne |
@@ -49,6 +50,8 @@ Dans l'ancienne version : **Données** → **Exporter (copier)**. Dans la nouvel
 
 Les corrections, tests et limites relevées lors du dernier audit sont décrits dans
 [le bilan de qualité 4.22](../docs/quality-4.22.md).
+La refonte rouge et noir et ses tests sont décrits dans
+[le bilan 4.24](../docs/design-4.24.md).
 
 - Pas de vibration sur iPhone (API non supportée par Safari iOS) — signal sonore à la place.
 - Le minuteur ne sonne pas si l'app est fermée ou l'écran verrouillé (limitation web). L'app reste utilisable écran allumé.
