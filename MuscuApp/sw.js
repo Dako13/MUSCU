@@ -1,7 +1,7 @@
 /* Service worker — cache hors ligne.
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.28.0');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.29.0');
 const ASSETS=[
   './',
   './index.html',
@@ -35,6 +35,8 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
   const url=new URL(e.request.url);
   if(url.origin!==location.origin)return; /* liens externes (YouTube) : réseau direct */
+  // Never persist OAuth callback URLs containing single-use authorization codes.
+  if(url.searchParams.has('code')||url.searchParams.has('error'))return;
   const p=url.pathname;
   const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/data-integrity.js')||p.endsWith('/supabase-config.js')||p.endsWith('/cloud-sync.js')||p.endsWith('/cloud-ui.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
   if(shell){

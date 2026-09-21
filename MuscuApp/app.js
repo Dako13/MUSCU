@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.28.0';
+const APP_VERSION='4.29.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2664,6 +2664,7 @@ function closeSheet(){
   sheet.inert=true;sheet.setAttribute('aria-hidden','true');
   if(sheetReturnFocus?.isConnected)sheetReturnFocus.focus({preventScroll:true});
   sheetReturnFocus=null;
+  document.dispatchEvent(new Event('app:sheet-closed'));
 }
 document.addEventListener('keydown',ev=>{
   if(!sheet.classList.contains('on'))return;

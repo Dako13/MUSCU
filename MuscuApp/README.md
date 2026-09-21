@@ -95,9 +95,12 @@ Les arbitrages et tests des améliorations pendant la séance sont détaillés d
 ## Vers une commercialisation
 
 Le code est prêt pour : programme éditable par l'utilisateur (intégré), données isolées par domaine, échappement des entrées (XSS), versionnage du format de données (migrations automatiques v2→v3→v4). Étapes suivantes typiques : comptes utilisateurs + synchronisation (Supabase/Firebase), page d'accueil marketing, analytics respectueux (Plausible), puis éventuellement wrapper natif (Capacitor) pour l'App Store.
-# Sauvegarde Supabase (4.28)
+# Sauvegarde Supabase (4.29)
 
 Une sauvegarde cloud privee et optionnelle est disponible dans Reglages > Compte
 et sauvegarde. Elle reste desactivee tant que le projet n'est pas configure.
 Le mode local/hors ligne et les donnees existantes sont conserves.
+La connexion utilise Google, sans service d'envoi d'e-mails. Une proposition
+facultative apparait au premier lancement une fois le cloud configure, apres
+l'accueil du profil et jamais pendant une seance. Le choix sans compte est memorise.
 Voir [la procedure d'activation et les limites](../supabase/README.md).

@@ -1,6 +1,6 @@
 'use strict';
 window.DKOCloudUI=(()=>{
-  let client=null,cloud=null,loading=false,authBusy=false,notice='',email='';
+  let client=null,cloud=null,loading=false,authBusy=false,notice='',returnPending=false;
   const config=window.DKO_SUPABASE_CONFIG||{};
   // Only a publishable key is accepted. Admin and legacy JWT secrets stay out of the browser.
   const configured=/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(config.url||'')&&/^sb_publishable_[A-Za-z0-9_-]+$/.test(config.publishableKey||'');
@@ -47,10 +47,9 @@ window.DKOCloudUI=(()=>{
   function update(){
     if(!sheet.classList.contains('on')||!document.getElementById('cloudPanel'))return;
     const s=cloud?.state();
-    // Keep the email/code fields stable while typing.
-    if(document.getElementById('cloudEmail')&&!s?.user){
+    if(document.getElementById('cloudGoogle')&&!s?.user){
       document.getElementById('cloudNotice').textContent=notice;
-      sheet.querySelectorAll('#cloudPanel button').forEach(b=>{b.disabled=authBusy;});return;
+      document.getElementById('cloudGoogle').disabled=authBusy;return;
     }
     show();
   }
@@ -64,12 +63,10 @@ window.DKOCloudUI=(()=>{
     }else if(!client){
       content+='<p>Service indisponible. Rouvre l’application pour réessayer.</p>';
     }else if(!s?.user){
-      content+='<p class="sp">Connexion par code reçu par e-mail.</p>'
-        +'<form id="cloudLogin"><div class="efield"><label for="cloudEmail">Adresse e-mail</label><input id="cloudEmail" type="email" autocomplete="email" required maxlength="254" value="'+esc(email)+'"></div>'
-        +'<button class="sbtn pri" type="submit">Recevoir un code</button></form>'
-        +'<form id="cloudVerify"><div class="efield"><label for="cloudCode">Code reçu</label><input id="cloudCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required></div>'
-        +'<button class="sbtn" type="submit">Se connecter</button></form>'
-        +'<p class="sp">La connexion seule n’envoie pas ton suivi.</p>';
+      content+='<p>Ton suivi, dans ton espace privé.</p>'
+        +'<div class="sbtns"><button class="sbtn pri" id="cloudGoogle"'+(authBusy?' disabled':'')+'>Continuer avec Google</button></div>'
+        +'<div class="sbtns"><button class="sbtn" id="cloudSkip">Continuer sans compte</button></div>'
+        +'<p class="sp">Tes données restent sur cet appareil. La sauvegarde en ligne sera proposée après la connexion.</p>';
     }else{
       content+='<p class="cloud-email">'+esc(s.user.email||'Compte connecté')+'</p>'
         +'<p role="status">'+esc(statusText(s))+'</p>'
@@ -94,6 +91,8 @@ window.DKOCloudUI=(()=>{
     document.getElementById('cloudExport').onclick=downloadBackup;
     document.getElementById('cloudRecovery').onclick=exportRecovery;
     const bind=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
+    bind('cloudGoogle',signIn);
+    bind('cloudSkip',()=>{rememberWelcome();closeSheet();});
     bind('cloudSave',()=>{
       if(!s.enabled&&!window.confirm('Activer la sauvegarde de tes données Dko sur ce compte Supabase ?'))return;
       notice='';cloud.sync({enable:true});
@@ -112,29 +111,29 @@ window.DKOCloudUI=(()=>{
     bind('cloudReplace',()=>{
       if(window.confirm('Remplacer la sauvegarde en ligne par les données de cet appareil ? Les changements des autres appareils ne seront pas fusionnés. Exporte les deux versions avant de continuer.'))cloud.sync({enable:true,overwrite:true});
     });
-    const login=document.getElementById('cloudLogin');
-    if(login)login.onsubmit=async ev=>{
-      ev.preventDefault();if(authBusy)return;email=document.getElementById('cloudEmail').value.trim();
-      authBusy=true;notice='Envoi du code…';update();
-      try{
-        const {error}=await client.auth.signInWithOtp({email});
-        notice=error?'Code non envoyé. Vérifie l’adresse ou réessaie plus tard.':'Code demandé. Consulte tes e-mails et les indésirables.';
-      }catch{notice='Connexion indisponible. Réessaie plus tard.';}
-      finally{authBusy=false;update();}
-    };
-    const verify=document.getElementById('cloudVerify');
-    if(verify)verify.onsubmit=async ev=>{
-      ev.preventDefault();if(authBusy)return;
-      const address=document.getElementById('cloudEmail');
-      if(!address.reportValidity())return;
-      const token=document.getElementById('cloudCode').value.trim();email=address.value.trim();
-      authBusy=true;notice='Connexion…';update();
-      try{
-        const {error}=await client.auth.verifyOtp({email,token,type:'email'});
-        notice=error?'Code invalide ou expiré. Demande un nouveau code.':'';
-      }catch{notice='Connexion indisponible. Réessaie plus tard.';}
-      finally{authBusy=false;update();}
-    };
+  }
+  function rememberWelcome(){try{localStorage.setItem('dko_cloud_welcome','1');}catch{}}
+  function offer(){
+    if(!configured||loading||!cloud||!STORAGE_READY||DB.active||route.view==='edit'||sheet.classList.contains('on'))return;
+    let seen=true;try{seen=!!localStorage.getItem('dko_cloud_welcome');}catch{}
+    if(returnPending||(!cloud.state().user&&!seen)){
+      returnPending=false;rememberWelcome();show();
+    }
+  }
+  async function signIn(){
+    if(authBusy)return;
+    if(DB.active||route.view==='edit'){notice='Termine la séance ou l’édition en cours avant de te connecter.';update();return;}
+    if(!STORAGE_WRITABLE||!navigator.onLine){notice='Connexion indisponible. Tes données restent sur cet appareil.';update();return;}
+    authBusy=true;notice='Ouverture de Google…';update();rememberWelcome();
+    try{
+      await mirrorSnapshot();
+      const {error}=await client.auth.signInWithOAuth({provider:'google',options:{
+        redirectTo:new URL('./',location.href).href,
+        queryParams:{prompt:'select_account'}
+      }});
+      if(error)throw error;
+    }catch{notice='Connexion indisponible. Réessaie plus tard.';}
+    finally{authBusy=false;update();}
   }
   async function exportRecovery(){
     const snap=await idbGet('before-cloud-restore');
@@ -154,20 +153,36 @@ window.DKOCloudUI=(()=>{
     if(!configured||cloud)return;
     loading=true;
     try{
-      client=supabase.createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false},
+      // Exchange PKCE codes explicitly so errors never replace local data or stay in the URL.
+      const callback=new URL(location.href),fragment=new URLSearchParams(callback.hash.slice(1));
+      const code=callback.searchParams.get('code');
+      const failed=callback.searchParams.has('error')||fragment.has('error');
+      returnPending=!!code||failed;
+      if(returnPending){
+        for(const key of ['code','error','error_code','error_description'])callback.searchParams.delete(key);
+        if(fragment.has('error'))callback.hash='';
+        history.replaceState(null,'',callback.pathname+callback.search+callback.hash);
+      }
+      client=supabase.createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:'pkce'},
         global:{fetch:async(input,init={})=>{
           const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
           try{return await fetch(input,{...init,signal:init.signal||controller.signal});}finally{clearTimeout(timeout);}
         }}});
+      if(failed)notice='Connexion annulée ou refusée. Tes données restent sur cet appareil.';
+      else if(code){
+        const {error}=await client.auth.exchangeCodeForSession(code);
+        if(error)notice='Connexion non terminée. Réessaie depuis cette application, sur le même appareil.';
+      }
       const store={getItem:key=>localStorage.getItem(key),setItem:(key,value)=>{localStorage.setItem(key,value);mirrorSnapshot();}};
       cloud=DKO_CLOUD.create({client,project:config.url.replace(/\/$/,''),store,read,validate:DKO_DATA.cloud,restore,
         canSync:()=>STORAGE_READY&&STORAGE_WRITABLE&&!sheet.dataset.importing,onChange:update});
       await cloud.init();
     }catch{notice='Service cloud indisponible. Tes données restent locales.';}
-    finally{loading=false;update();}
+    finally{loading=false;update();setTimeout(offer,0);}
   }
   window.addEventListener('online',()=>cloud?.changed());
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloud?.changed();});
+  document.addEventListener('app:sheet-closed',()=>setTimeout(offer,0));
   if(STORAGE_READY)init();else document.addEventListener('app:ready',init,{once:true});
   return {show,changed:()=>cloud?.changed()};
 })();
