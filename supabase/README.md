@@ -10,11 +10,39 @@ Ce module est une sauvegarde automatique avec restauration manuelle, pas une
 fusion temps reel entre appareils. Le stockage local et le mode hors ligne restent
 les sources de travail. La base contient un instantane prive par utilisateur.
 
+## Projet configure le 21 septembre 2026
+
+- Projet Dko : `emgtwcdhjmjndtsfdbvt`, region `eu-west-1`, offre Free.
+- Migration appliquee : `20260920224724_dko_private_backups` dans l'historique
+  distant, issue de `migrations/202609200001_private_backups.sql`. Ne pas la rejouer.
+- `tests/cloud-remote-rls.sql` execute sur le projet reel : refus anonyme,
+  isolation de deux comptes, refus des ecritures directes et conflit de revision
+  verifies. La transaction est annulee integralement, sans envoi d'e-mail.
+- Controle final : RLS active, aucune sauvegarde, aucun compte fictif restant.
+- SMTP personnalise desactive dans le tableau de bord. L'interface demande un
+  SMTP personnalise avant modification des modeles d'e-mail. Les codes OTP et
+  leur livraison a des utilisateurs externes ne sont donc pas encore verifies.
+- La configuration publique de l'app reste vide volontairement jusqu'a la fin
+  du parametrage SMTP et des modeles. Aucun transfert de donnees locales effectue.
+
+Security Advisor signale les fonctions `SECURITY DEFINER` executables par un role
+API : `dko_save_backup` est volontairement accessible uniquement au role
+`authenticated`, avec controles d'identite et de revision testes. L'autre fonction,
+`rls_auto_enable`, preexistait au deploiement : elle retourne `event_trigger` et
+utilise `search_path=pg_catalog`; elle n'a pas ete modifiee. Ces avertissements ne
+sont pas un resultat "zero alerte" et restent a reevaluer si les privileges changent.
+
+References des avertissements :
+- https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable
+- https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+
 ## Activation par le proprietaire du projet
 
-1. Creer un projet Supabase (offre Free possible, choisir une region adaptee).
-2. Executer `migrations/202609200001_private_backups.sql` dans le SQL Editor, une
-   seule fois. Ne pas modifier les tables existantes d'un autre projet.
+1. Pour un nouveau deploiement, creer un projet Supabase (offre Free possible,
+   choisir une region adaptee). Le projet Dko ci-dessus existe deja.
+2. Sur un projet non configure uniquement, executer
+   `migrations/202609200001_private_backups.sql` dans le SQL Editor, une seule fois.
+   Cette etape est deja terminee pour Dko. Ne pas modifier les tables d'un autre projet.
 3. Laisser Email Auth actif et la confirmation des e-mails active. Dans les
    modeles d'e-mails **Magic Link** et **Confirm Signup**, afficher le code
    `{{ .Token }}` au lieu de seulement proposer un lien. Dko utilise `verifyOtp`
