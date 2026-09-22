@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.30.0';
+const APP_VERSION='4.31.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -938,6 +938,7 @@ let route={view:'home',seance:null};
 let DASH_SIDE={sid:null,side:'front'};
 let WORKOUT_MODE='focus',FOCUS_EX=null;
 let MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};
+let LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
@@ -2781,26 +2782,83 @@ function showSummary(o){
   openSheet();
   document.getElementById('shOk').addEventListener('click',closeSheet);
 }
-function showLibPicker(){
-  let h='<h2>Bibliothèque</h2><div class="sp">Choisis un exercice à ajouter à la séance en cours d’édition.</div>'
-   +'<input id="libq" type="search" aria-label="Rechercher dans la bibliothèque" class="msearch" placeholder="Rechercher un exercice…" style="margin:0 0 12px">'
-   +'<div id="liblist">';
-  MACHINES.forEach((m,i)=>{
-    const mus=(m.p||[]).map(mLabel).join(', ');
-    const ss=searchKey(m.n+' '+m.b+' '+mus);
-    h+='<button class="sbtn lib-option" data-m="'+i+'" data-s="'+esc(ss)+'"><span>'+esc(m.n)+'</span><small>'+esc(m.b)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</small></button>';
+function libraryBrands(){return [...new Set(MACHINES.map(m=>m.b))];}
+function libraryMatch(m){
+  if(LIBFILTER.b&&m.b!==LIBFILTER.b)return false;
+  if(LIBFILTER.c&&!machineChains(m).includes(LIBFILTER.c))return false;
+  if(LIBFILTER.l&&machineLoad(m)!==LIBFILTER.l)return false;
+  const group=MACHINE_GROUPS.find(g=>g[0]===LIBFILTER.g);
+  return !group||(m.p||[]).concat(m.s||[]).some(muscle=>group[2].includes(muscle));
+}
+function filterLibraryRows(){
+  const q=searchKey(LIBFILTER.q);let count=0;
+  sheet.querySelectorAll('#liblist .mrow').forEach(row=>{
+    const visible=row.dataset.search.includes(q);row.hidden=!visible;if(visible)count++;
   });
-  h+='</div>';
-  sheet.innerHTML=h;openSheet();
-  const q=document.getElementById('libq');
-  if(q)q.addEventListener('input',()=>{const v=searchKey(q.value);document.querySelectorAll('#liblist .sbtn').forEach(b=>{b.hidden=!b.dataset.s.includes(v)})});
-  sheet.querySelectorAll('#liblist .sbtn').forEach(b=>b.addEventListener('click',()=>{
-    const m=MACHINES[+b.dataset.m],list=document.getElementById('exlist');
-    if(!m||!list)return;
+  const countEl=document.getElementById('libCount');if(countEl)countEl.textContent=count+' exercice'+(count>1?'s':'');
+  const empty=document.getElementById('libEmpty');if(empty)empty.hidden=count>0;
+}
+function addLibraryExercise(m){
+  const list=document.getElementById('exlist');if(!m||!list)return;
+  const n=list.querySelectorAll('.ecard').length;
+  list.insertAdjacentHTML('beforeend',editExHTML({name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])},n));
+  labelFields(list);closeSheet();toast('Exercice ajouté — pense à enregistrer');
+}
+function showCustomExerciseForm(){
+  const options='<option value="">Non renseigné</option>'+MUSCLES.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('');
+  sheet.innerHTML='<h2>Exercice non répertorié</h2><div class="sp">Ajouté uniquement à cette séance, puis modifiable avant l’enregistrement.</div>'
+    +'<div class="seg lib-modes"><button class="segb" data-libmode="browse">Bibliothèque</button><button class="segb on" data-libmode="custom">Créer</button></div>'
+    +'<div class="efield"><label for="libCustomName">Nom de l’exercice</label><input id="libCustomName" maxlength="120" placeholder="Ex : Presse à jambes XFit"></div>'
+    +'<div class="egrid3"><div class="efield"><label for="libCustomSets">Séries</label><input id="libCustomSets" class="num" type="number" min="1" max="100" inputmode="numeric" value="3"></div>'
+    +'<div class="efield"><label for="libCustomReps">Répétitions</label><input id="libCustomReps" value="8–10"></div>'
+    +'<div class="efield"><label for="libCustomUnit">Unité</label><input id="libCustomUnit" value="kg"></div></div>'
+    +'<div class="egrid"><div class="efield"><label for="libCustomPrimary">Muscle principal</label><select id="libCustomPrimary">'+options+'</select></div>'
+    +'<div class="efield"><label for="libCustomSecondary">Muscle secondaire</label><select id="libCustomSecondary">'+options+'</select></div></div>'
+    +'<div class="efield"><label for="libCustomNotes">Notes techniques</label><textarea id="libCustomNotes" maxlength="2000"></textarea></div>'
+    +'<div class="sbtns"><button class="sbtn pri" id="libCustomAdd">Ajouter à la séance</button></div>';
+  openSheet();
+  sheet.querySelector('[data-libmode="browse"]').addEventListener('click',()=>{LIBFILTER.mode='browse';showLibPicker();});
+  document.getElementById('libCustomAdd').addEventListener('click',()=>{
+    const name=document.getElementById('libCustomName'),sets=intOrNull(document.getElementById('libCustomSets').value);
+    if(!name.value.trim()){name.setAttribute('aria-invalid','true');name.focus();return;}
+    if(sets==null||sets<1||sets>100){document.getElementById('libCustomSets').setAttribute('aria-invalid','true');return;}
+    const list=document.getElementById('exlist');if(!list)return;
+    const primary=document.getElementById('libCustomPrimary').value,secondary=document.getElementById('libCustomSecondary').value;
     const n=list.querySelectorAll('.ecard').length;
-    list.insertAdjacentHTML('beforeend',editExHTML({name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])},n));
-    labelFields(list);closeSheet();toast('Exercice ajouté — pense à enregistrer');
-  }));
+    list.insertAdjacentHTML('beforeend',editExHTML({name:name.value.trim(),sets,reps:document.getElementById('libCustomReps').value.trim()||'8–10',unit:document.getElementById('libCustomUnit').value.trim()||'kg',ref:null,notes:document.getElementById('libCustomNotes').value.trim(),yt:name.value.trim()+' technique',musP:primary?[primary]:[],musS:secondary&&secondary!==primary?[secondary]:[]},n));
+    labelFields(list);closeSheet();toast('Exercice personnalisé ajouté — pense à enregistrer');
+  });
+}
+function showLibPicker(){
+  if(LIBFILTER.mode==='custom'){showCustomExerciseForm();return;}
+  const brands=libraryBrands(),matches=MACHINES.map((m,i)=>({m,i})).filter(({m})=>libraryMatch(m));
+  const filters=[LIBFILTER.g,LIBFILTER.b,LIBFILTER.c,LIBFILTER.l].filter(Boolean).length;
+  let h='<h2>Bibliothèque</h2><div class="sp">Choisis un exercice à ajouter à la séance en cours d’édition.</div>'
+   +'<div class="seg lib-modes"><button class="segb on" data-libmode="browse">Bibliothèque</button><button class="segb" data-libmode="custom">Créer</button></div>'
+   +'<input id="libq" type="search" aria-label="Rechercher dans la bibliothèque" class="msearch" placeholder="Rechercher un exercice…" value="'+esc(LIBFILTER.q)+'" style="margin:0 0 10px">'
+   +'<details class="library-filters" open><summary>'+uiIcon('sliders-horizontal')+'Filtres'+(filters?' · '+filters+' actifs':'')+'</summary>'
+   +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.g?' on':'')+'" data-libfilter="g" data-value="">Tous muscles</button>'
+   +MACHINE_GROUPS.map(g=>'<button class="mfchip'+(LIBFILTER.g===g[0]?' on':'')+'" data-libfilter="g" data-value="'+g[0]+'">'+esc(g[1])+'</button>').join('')+'</div>'
+   +'<div class="mfilters"><button class="mfchip alt'+(!LIBFILTER.b?' on':'')+'" data-libfilter="b" data-value="">Toutes marques</button>'
+   +brands.map(b=>'<button class="mfchip alt'+(LIBFILTER.b===b?' on':'')+'" data-libfilter="b" data-value="'+esc(b)+'">'+esc(b)+'</button>').join('')+'</div>'
+   +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.c?' on':'')+'" data-libfilter="c" data-value="">Toutes salles</button>'
+   +CHAINS.map(c=>'<button class="mfchip'+(LIBFILTER.c===c?' on':'')+'" data-libfilter="c" data-value="'+esc(c)+'">'+esc(c)+'</button>').join('')+'</div>'
+   +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.l?' on':'')+'" data-libfilter="l" data-value="">Tout chargement</button>'
+   +LOAD_FILTER.map(x=>'<button class="mfchip'+(LIBFILTER.l===x[0]?' on':'')+'" data-libfilter="l" data-value="'+x[0]+'">'+esc(x[1])+'</button>').join('')+'</div>'
+   +'<button class="text-link" id="libReset">Réinitialiser les filtres</button></details>'
+   +'<div id="libCount" class="subdate">'+matches.length+' exercice'+(matches.length>1?'s':'')+'</div><div id="liblist">';
+  matches.forEach(({m,i})=>{
+    const muscles=(m.p||[]).map(mLabel).join(', '),search=searchKey(m.n+' '+m.b+' '+muscles+' '+LOAD_SHORT[machineLoad(m)]);
+    h+='<button class="mrow" data-libmachine="'+i+'" data-search="'+esc(search)+'"><div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(muscles)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div><span class="mrow-b">'+esc(m.b)+'</span></button>';
+  });
+  h+='</div><div id="libEmpty" class="library-empty"'+(matches.length?' hidden':'')+'><div class="hempty">Aucun exercice ne correspond à cette recherche.</div><button class="sbtn pri" data-libmode="custom">Créer un exercice non répertorié</button></div>';
+  sheet.innerHTML=h;openSheet();
+  document.getElementById('libq').addEventListener('input',event=>{LIBFILTER.q=event.target.value;filterLibraryRows();});
+  sheet.querySelectorAll('[data-libfilter]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER[button.dataset.libfilter]=button.dataset.value||null;showLibPicker();}));
+  sheet.querySelectorAll('[data-libmode="custom"]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER.mode='custom';showLibPicker();}));
+  document.getElementById('libReset').addEventListener('click',()=>{LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};showLibPicker();});
+  sheet.querySelectorAll('[data-libmachine]').forEach(button=>button.addEventListener('click',()=>addLibraryExercise(MACHINES[+button.dataset.libmachine])));
+  filterLibraryRows();
 }
 function showOnboarding(){
   const salles=['On Air','Basic-Fit','Fitness Park','Autre'],objs=['Prise de masse','Recomposition','Force','Forme'],nivs=['Débutant','Intermédiaire','Avancé'];

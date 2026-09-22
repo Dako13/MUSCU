@@ -774,6 +774,14 @@ a.sbtn{display:flex;align-items:center;justify-content:center;text-decoration:no
 .mrow-b{flex:0 0 auto;font-family:var(--font-head);font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(225,29,42,.3);border-radius:7px;padding:3px 8px;white-space:nowrap}
 .machadd{display:flex;flex-direction:column;gap:8px;margin-top:4px}
 .machadd .sbtn{flex:none;justify-content:flex-start}
+.lib-modes{margin:0 0 14px}
+#sheet .library-filters{margin:0 0 13px}
+#sheet .library-filters summary{margin:0 0 11px;padding:8px 0;font-family:var(--font-head);font-size:.78rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+#sheet .library-filters[open] summary::before{transform:rotate(45deg)}
+#sheet .library-filters .mfilters{margin-bottom:10px}
+#sheet .library-filters .text-link{padding:3px 0 0}
+.library-empty{padding:8px 0 2px}
+.library-empty .hempty{padding:12px 0 16px}
 
 /* ---------- calculateurs ---------- */
 .calcout{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:15px;margin-top:2px}
