@@ -41,7 +41,9 @@ function device(id,initial={value:'original'},storage=new Map()){
     const a=device('alice');await a.cloud.init();
     await a.cloud.sync();assert.equal(a.calls,0,'no upload before consent');
     assert(await a.cloud.sync({enable:true}));assert.equal(accounts.get('alice').revision,1);
+    a.cloud.changed();assert.equal(a.cloud.state().pending,true);
     await a.cloud.sync();assert.equal(a.calls,1,'unchanged state is not uploaded again');
+    assert.equal(a.cloud.state().pending,false);
     const b=device('alice',{value:'new phone'});await b.cloud.init();
     assert.equal(await b.cloud.sync({enable:true}),false);assert.equal(b.cloud.state().phase,'conflict');
     assert.equal(b.calls,0,'fresh device cannot overwrite existing cloud');
@@ -70,6 +72,10 @@ function device(id,initial={value:'original'},storage=new Map()){
     c.race(()=>c.account('david'));assert.equal(await c.cloud.sync({enable:true}),false);assert.equal(c.calls,0,'account race cannot upload');
     const bad=device('eve');accounts.set('eve',{revision:1,payload:{bad:true},updated_at:new Date().toISOString()});
     await bad.cloud.init();assert.equal(await bad.cloud.inspect(),false);assert.equal(bad.local.value,'original');
+    const during=device('during-save');await during.cloud.init();
+    during.race(()=>{during.set({value:'edit during save'});during.cloud.changed();});
+    await during.cloud.sync({enable:true});assert.equal(during.cloud.state().pending,true,'new edit must not be marked saved');
+    during.race(null);await during.cloud.sync();assert.equal(during.cloud.state().pending,false);
     console.log('PASS: consent, account isolation, offline retry, reload, conflicts, stale force-save, restore failure, sign-out and auth race.');
   }finally{instances.forEach(c=>c.dispose());}
 })().catch(e=>{console.error(e);process.exitCode=1;});

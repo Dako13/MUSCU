@@ -45,6 +45,7 @@ window.DKOCloudUI=(()=>{
     return s.enabled?'Sauvegarde automatique activée':'Sauvegarde automatique non activée';
   }
   function update(){
+    refreshBadge();
     if(!sheet.classList.contains('on')||!document.getElementById('cloudPanel'))return;
     const s=cloud?.state();
     if(document.getElementById('cloudGoogle')&&!s?.user){
@@ -52,6 +53,23 @@ window.DKOCloudUI=(()=>{
       document.getElementById('cloudGoogle').disabled=authBusy;return;
     }
     show();
+  }
+  function refreshBadge(){
+    const badge=document.getElementById('cloudStatus');if(!badge)return;
+    const s=cloud?.state();let label='Sur cet appareil uniquement';
+    if(!STORAGE_WRITABLE)label='Sauvegarde locale impossible';
+    else if(loading)label='Vérification de la sauvegarde';
+    else if(s?.mismatch||s?.phase==='conflict')label='Sauvegarde : action nécessaire';
+    else if(s?.enabled){
+      if(!navigator.onLine)label='Hors ligne · copie locale';
+      else if(s.phase==='error')label='Sauvegarde en ligne indisponible';
+      else if(s.phase==='saving')label='Sauvegarde en cours';
+      else if(s.pending)label='Modifications locales · en attente';
+      else if(s.phase==='saved')label='Sauvegardé en ligne';
+      else label='Vérification de la sauvegarde';
+    }
+    badge.textContent=label;
+    badge.dataset.saved=String(STORAGE_WRITABLE&&s?.enabled&&s.phase==='saved'&&!s.pending&&navigator.onLine);
   }
   function show(){
     const s=cloud?.state(),disabled=s?.busy?' disabled':'';
@@ -181,8 +199,9 @@ window.DKOCloudUI=(()=>{
     finally{loading=false;update();setTimeout(offer,0);}
   }
   window.addEventListener('online',()=>cloud?.changed());
+  window.addEventListener('offline',refreshBadge);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloud?.changed();});
   document.addEventListener('app:sheet-closed',()=>setTimeout(offer,0));
   if(STORAGE_READY)init();else document.addEventListener('app:ready',init,{once:true});
-  return {show,changed:()=>cloud?.changed()};
+  return {show,refreshBadge,changed:()=>{cloud?.changed();refreshBadge();}};
 })();

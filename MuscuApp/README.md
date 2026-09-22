@@ -2,6 +2,21 @@
 
 Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
+## Bibliothèque personnelle (4.32)
+
+L’ajout d’exercices propose une sélection multiple, des favoris, les ajouts récents
+et les exercices personnels. La création conserve son brouillon lors du passage
+à la bibliothèque. Les modèles personnels, favoris et récents sont inclus dans
+les exports JSON et les sauvegardes privées, sans modifier les anciens programmes.
+
+L’éditeur permet un incrément de charge par exercice, utilisé par les boutons
+plus/moins et les cibles. Les remplacements ponctuels filtrent les candidats par
+mouvement et muscles ; ils ne transfèrent pas la charge du mouvement remplacé.
+L’accueil indique l’état de sauvegarde locale ou en ligne.
+
+Tests : `node tests/library-workflow.cjs`, `node tests/cloud-sync.cjs` et
+`node tests/cloud-browser.cjs` (Playwright avec Microsoft Edge pour les tests navigateur).
+
 ## Contenu du dossier
 
 | Fichier | Rôle |

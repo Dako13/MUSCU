@@ -76,6 +76,9 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
     DB.workouts=[snapshotWorkout({id:'w_before_cloud',date:'2026-09-01',seance:session.id,dur:2700,
       ex:{[exercise.id]:[{w:32.5,r:7.5,done:true}]},exNotes:{[exercise.id]:'Bon ressenti avant Supabase'}})];
     SETTINGS.objectif='Objectif personnel existant';SETTINGS.rest=240;
+    exercise.increment=1.25;
+    SETTINGS.exerciseLibrary=[{name:'Machine personnelle',unit:'kg',sets:3,reps:'8–10',musP:['dos'],musS:[],notes:'Reglage personnel',increment:2.5}];
+    SETTINGS.exerciseFavorites=['machine personnelle|kg'];SETTINGS.exerciseRecent=['machine personnelle|kg'];
     BODY=[{date:'2026-09-01',vals:{poids:78.5,bras:37.5}}];
     savePrograms();persist();saveSettings();saveBody();
     return {
@@ -106,9 +109,11 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
   await page.locator('#cloudSave').click();
   await page.waitForFunction(()=>document.getElementById('cloudPanel').textContent.includes('Sauvegarde à jour'));
   assert.equal(rows.get(a).revision,1);assert(rows.get(a).payload.programs.length);
+  assert.equal(await page.locator('#cloudStatus').textContent(),'Sauvegardé en ligne');
   assert.deepEqual(await localData(),existing.storage,'first cloud backup does not modify existing local data');
   assert.deepEqual(rows.get(a).payload,existing.payload,'existing programs, history, notes, settings and body measurements are copied to the private backup');
   await page.evaluate(()=>{PROGRAMS[0].name='Programme local';savePrograms();});
+  assert.equal(await page.locator('#cloudStatus').textContent(),'Modifications locales · en attente');
   await page.waitForTimeout(3500);assert.equal(rows.get(a).revision,2);assert.equal(rows.get(a).payload.programs[0].name,'Programme local');
   await page.reload();await page.locator('#splash').waitFor({state:'detached'});
   await page.evaluate(()=>DKOCloudUI.show());await page.locator('#cloudSignOut').waitFor();
@@ -123,6 +128,8 @@ const jwt=id=>[Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('ba
   await page.locator('#cloudRestore').click();
   await page.getByText('Sauvegarde restaurée',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>PROGRAMS[0].name),'Programme autre appareil');
+  assert.equal(await page.evaluate(()=>SETTINGS.exerciseLibrary[0].name),'Machine personnelle');
+  assert.equal(await page.evaluate(()=>SETTINGS.exerciseFavorites[0]),'machine personnelle|kg');
   const recovery=await page.evaluate(()=>idbGet('before-cloud-restore'));
   assert.equal(JSON.parse(recovery.data.dako_programs).programs[0].name,'Changement non synchronise');
   const recoveryDownload=page.waitForEvent('download');await page.locator('#cloudRecovery').click();

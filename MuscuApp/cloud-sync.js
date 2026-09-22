@@ -17,11 +17,12 @@ const DKO_CLOUD=(()=>{
   function create({client,project,store,read,validate,restore,canSync,onChange=()=>{}}){
     let user=null,link={},remote=null,busy=false,epoch=0,timer=null,disposed=false;
     let phase='signed-out',message='',lastSync=null,authSubscription;
+    let changeCounter=0,savedCounter=0;
     try{link=JSON.parse(store.getItem(LINK_KEY))||{};}catch{}
     const owner=()=>user?project+'|'+user.id:null;
     const bound=()=>!!user&&link.owner===owner();
     const mismatch=()=>!!link.owner&&!!user&&!bound();
-    const state=()=>({user:user?{id:user.id,email:user.email}:null,phase,message,busy,
+    const state=()=>({user:user?{id:user.id,email:user.email}:null,phase,message,busy,pending:changeCounter!==savedCounter,
       enabled:bound()&&!!link.enabled,mismatch:mismatch(),lastSync,
       remote:remote?{revision:remote.revision,updated_at:remote.updated_at,
         workouts:remote.payload.workouts.length,programs:remote.payload.programs.length}:null});
@@ -60,8 +61,8 @@ const DKO_CLOUD=(()=>{
         if(!canSync()){phase='waiting';message='Sauvegarde en attente';return false;}
         if(!enable&&(!bound()||!link.enabled))return false;
         if(phase==='conflict'&&!enable&&!overwrite)return false;
-        const local=validate(read()),hash=await fingerprint(local);current();
-        if(!enable&&!overwrite&&bound()&&hash===link.hash){phase='saved';message='Sauvegarde à jour';return true;}
+        const revisionAtRead=changeCounter,local=validate(read()),hash=await fingerprint(local);current();
+        if(!enable&&!overwrite&&bound()&&hash===link.hash){savedCounter=revisionAtRead;phase='saved';message='Sauvegarde à jour';return true;}
         phase='saving';message='Sauvegarde en cours';emit();
         // A force-save uses the revision actually shown in the conflict dialog.
         const expected=overwrite?remote?.revision:null;
@@ -70,6 +71,7 @@ const DKO_CLOUD=(()=>{
         const revision=row?.revision||0;
         if(row&&await fingerprint(row.payload)===hash){
           current();save({owner:owner(),revision,hash,enabled:true,lastSync:row.updated_at});
+          savedCounter=revisionAtRead;
           phase='saved';message='Sauvegarde à jour';return true;
         }
         current();
@@ -80,6 +82,7 @@ const DKO_CLOUD=(()=>{
         current();if(error)throw error;
         if(!data||!Number.isSafeInteger(data.revision))throw new Error('Invalid save response');
         save({owner:owner(),revision:data.revision,hash,enabled:true,lastSync:data.updated_at});
+        savedCounter=revisionAtRead;
         remote={...data,payload:local};phase='saved';message='Sauvegarde à jour';
         return true;
       },!enable&&!overwrite);
@@ -104,6 +107,7 @@ const DKO_CLOUD=(()=>{
         // before any awaited UI/mirror work can deliver an auth-change event.
         if(!await restore(payload,current,next,()=>{link=next;lastSync=next.lastSync;}))throw new Error('Restore failed');
         current();save(next);
+        savedCounter=changeCounter;
         phase='saved';message='Sauvegarde restaurée';return true;
       });
     }
@@ -133,7 +137,7 @@ const DKO_CLOUD=(()=>{
       setUser(null);
     }
     function dispose(){disposed=true;epoch++;clearTimeout(timer);authSubscription?.unsubscribe();}
-    return {init,state,sync,inspect,restoreRemote,pause,signOut,changed:()=>schedule(),dispose,
+    return {init,state,sync,inspect,restoreRemote,pause,signOut,changed:()=>{changeCounter++;schedule();emit();},dispose,
       remotePayload:()=>user&&remote?structuredClone(remote.payload):null};
   }
   return {create,fingerprint};

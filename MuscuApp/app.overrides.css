@@ -429,3 +429,25 @@ body:has(#timerbar.on) #app{padding-bottom:calc(240px + env(safe-area-inset-bott
 #cloudPanel .ui-icon{flex:0 0 18px}
 #cloudPanel form{margin-bottom:18px}
 #cloudPanel .efield{margin-top:12px}
+.library-choice label{display:flex;align-items:center;gap:12px;min-width:0;flex:1;cursor:pointer;min-height:44px}
+.library-choice input[type=checkbox],.library-remember input{width:20px;height:20px;flex:0 0 20px;accent-color:var(--ac)}
+.library-choice .mrow-main,.library-choice .mrow-n,.library-choice .mrow-mu{display:block}
+.library-choice .mrow-n,.library-choice .mrow-mu{white-space:normal;overflow-wrap:anywhere}
+.library-choice .icon-button[aria-pressed=true]{color:var(--ac)}
+.library-choice .icon-button[aria-pressed=true] svg{fill:var(--ac-soft)}
+.library-add{position:sticky;bottom:-30px;background:var(--card);padding:12px 0 calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--line);z-index:2}
+.library-add button{width:100%;min-height:48px;border-radius:8px}
+.library-add button:disabled{opacity:.45;cursor:default}
+.library-remember{display:flex;gap:10px;align-items:center;font-size:.85rem;margin:12px 0 20px;min-height:44px}
+#sheet .lib-modes{letter-spacing:0}
+#sheet .lib-modes button{min-width:0;letter-spacing:0;font-size:.84rem;min-height:44px}
+#sheet .library-scopes .mfchip{letter-spacing:0;min-height:40px}
+#sheet .library-filters summary{letter-spacing:0}
+#sheet:has(#libCustomName) .egrid3{grid-template-columns:repeat(2,minmax(0,1fr))}
+#sheet:has(#libCustomName) .efield{min-width:0}
+#sheet:has(#libCustomName) .efield input,#sheet:has(#libCustomName) .efield select{min-width:0}
+@media(max-width:400px){#sheet:has(#libCustomName) .egrid{grid-template-columns:minmax(0,1fr)}}
+.personal-library{margin:0 0 16px}
+.personal-library summary{min-height:44px;font-size:.9rem;color:var(--txt)}
+.cloud-status{min-height:36px;font-size:.78rem;color:var(--dim);text-align:left;white-space:normal}
+.cloud-status[data-saved=true]{color:var(--ok)}

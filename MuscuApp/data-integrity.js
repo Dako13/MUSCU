@@ -26,7 +26,8 @@ const DKO_DATA=(()=>{
   const muscles=v=>v==null?[]:list(v,'Muscles').map(x=>str(x,'',80));
   const meta=e=>({name:str(e.name),unit:str(e.unit,'kg',80),musP:muscles(e.musP),musS:muscles(e.musS),
     sets:number(e.sets,1,100,3,true),reps:str(e.reps,'8–10',80),ref:number(e.ref,0,10000),refText:str(e.refText),
-    rest:number(e.rest,1,86400),ceiling:str(e.ceiling),notes:str(e.notes),yt:str(e.yt)});
+    rest:number(e.rest,1,86400),ceiling:str(e.ceiling),notes:str(e.notes),yt:str(e.yt),
+    ...(e.increment!=null?{increment:number(e.increment,0.0001,100)}:{})});
   function programs(values){
     const seen=new Set();
     const unique=v=>{const key=id(v);if(seen.has(key))fail('Identifiant dupliqué dans les programmes');seen.add(key);return key;};
@@ -77,6 +78,8 @@ const DKO_DATA=(()=>{
     for(const [k,min,max] of [['poids',1,1000],['taille',1,300],['age',1,130],['rest',1,86400]])if(k in s)out[k]=number(s[k],min,max);
     for(const k of ['objectif','salle','niveau'])if(k in s)out[k]=str(s[k]);
     if('theme' in s){if(!['dark','rose'].includes(s.theme))fail('Thème non reconnu');out.theme=s.theme;}
+    if('exerciseLibrary' in s)out.exerciseLibrary=list(s.exerciseLibrary,'Bibliothèque personnelle').map(e=>meta(object(e,'Exercice personnel')));
+    for(const key of ['exerciseFavorites','exerciseRecent'])if(key in s)out[key]=[...new Set(list(s[key],'Exercices').map(x=>str(x,'',6000)))];
     return out;
   }
   function body(values){

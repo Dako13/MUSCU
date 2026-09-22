@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.31.0';
+const APP_VERSION='4.32.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -329,7 +329,10 @@ function loadSettings(){
     objectif:(typeof s.objectif==='string'?s.objectif:''),
     salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
     niveau:(typeof s.niveau==='string')?s.niveau:'',
-    theme:(['dark','rose'].indexOf(s.theme)>=0?s.theme:'dark')
+    theme:(['dark','rose'].indexOf(s.theme)>=0?s.theme:'dark'),
+    ...(Array.isArray(s.exerciseLibrary)?{exerciseLibrary:s.exerciseLibrary}:{}),
+    ...(Array.isArray(s.exerciseFavorites)?{exerciseFavorites:s.exerciseFavorites}:{}),
+    ...(Array.isArray(s.exerciseRecent)?{exerciseRecent:s.exerciseRecent}:{})
   };
 }
 function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
@@ -647,7 +650,7 @@ function snapshotMetadata(w,exercises,sessions){
   w.exMeta=w.exMeta||{};
   for(const id of workoutExerciseIds(w))if(!w.exMeta[id]){
     const e=exercises[id]||{};
-    w.exMeta[id]={name:e.name||id,unit:e.unit||'kg',musP:(e.musP||[]).slice(),musS:(e.musS||[]).slice(),sets:e.sets,reps:e.reps,ref:e.ref,refText:e.refText,notes:e.notes||'',yt:e.yt||'',ceiling:e.ceiling,rest:e.rest};
+    w.exMeta[id]={name:e.name||id,unit:e.unit||'kg',musP:(e.musP||[]).slice(),musS:(e.musS||[]).slice(),sets:e.sets,reps:e.reps,ref:e.ref,refText:e.refText,notes:e.notes||'',yt:e.yt||'',ceiling:e.ceiling,rest:e.rest,...(e.increment!=null?{increment:e.increment}:{})};
   }
   return w;
 }
@@ -882,9 +885,10 @@ function repsRange(str){
   return[lo,m.length>1?numOrNull(m[1]):lo];
 }
 function wInc(w){return w>=60?2.5:w>=20?2:w>=10?1:0.5}
+function exerciseIncrement(e,w){return Number.isFinite(e?.increment)&&e.increment>0?e.increment:wInc(w);}
 function suggestTargets(e){
   const[lo,hi]=repsRange(e.reps);
-  const prev=prevSets(e.id);
+  const prev=previousExercise(e)?.sets;
   const out=[];
   const n=Math.max(e.sets,prev?prev.length:0);
   for(let i=0;i<n;i++){
@@ -900,7 +904,7 @@ function suggestTargets(e){
     }else if(p.r==null||p.w==null){
       out.push({w:p.w,r:p.r!=null?Math.min(p.r+1,hi):lo});
     }else if(p.r>=hi){
-      out.push({w:Math.round((p.w+wInc(p.w))*10)/10,r:lo});
+      out.push({w:Number((p.w+exerciseIncrement(e,p.w)).toFixed(4)),r:lo});
     }else{
       out.push({w:p.w,r:Math.min(p.r+1,hi)});
     }
@@ -910,7 +914,7 @@ function suggestTargets(e){
 function setShort(s){return s?(s.w!=null?fmtN(s.w):'—')+'×'+(s.r!=null?fmtN(s.r):'—'):'—'}
 function firstUsefulSet(a){return(a||[]).find(s=>s&&(s.w!=null||s.r!=null))||null}
 function targetCue(e){
-  const targets=suggestTargets(e),prev=prevSets(e.id)||[];
+  const targets=suggestTargets(e),prev=previousExercise(e)?.sets||[];
   const t=firstUsefulSet(targets),p=firstUsefulSet(prev);
   if(!t)return{tone:'base',title:'Cible à construire',body:'Valide une première séance pour générer une cible automatique.',target:'—'};
   let title='Même cible';
@@ -939,6 +943,7 @@ let DASH_SIDE={sid:null,side:'front'};
 let WORKOUT_MODE='focus',FOCUS_EX=null;
 let MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};
 let LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};
+let LIBSELECT=new Map(),LIBDRAFT=null,LIBSCOPE='all';
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
@@ -948,6 +953,7 @@ function editorDirty(){return route.view==='edit'&&editBaseline!==null&&editorSt
 function go(view,seance){
   if(view==='edit'&&DB.active?.seance===seance){toast('Termine la séance en cours avant de la modifier');return;}
   if(editorDirty()&&!window.confirm('Quitter sans enregistrer les modifications de cette séance ?'))return;
+  if(view==='edit'&&(route.view!=='edit'||route.seance!==seance)){LIBSELECT.clear();LIBDRAFT=null;LIBFILTER.mode='browse';}
   route={view,seance:seance||null};render();
   editBaseline=view==='edit'?editorState():null;
   window.scrollTo({top:0});
@@ -971,6 +977,7 @@ function render(){
   else app.innerHTML=homeHTML();
   labelFields(app);
   syncExerciseFocus();
+  window.DKOCloudUI?.refreshBadge?.();
   const filters=app.querySelector('#machineFilters');
   if(filters)filters.addEventListener('toggle',()=>{MFILTER.open=filters.open});
   app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
@@ -1020,7 +1027,7 @@ function homeHTML(){
   const next=DB.active?SEANCE[DB.active.seance]:(reco?SEANCE[reco.id]:PROGRAM[0]);
   let h='<header class="dash-top"><div class="dash-brand"><h1>Dko<span>.</span></h1><span class="brand-caption">Journal d’entraînement</span></div>'
     +'<div class="hbtns">'+toolButton('data','database','Données et sauvegardes')+toolButton('settings','settings-2','Réglages')+'</div></header>';
-  h+='<div class="home-date">'+esc(now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'</div><div class="home-layout">';
+  h+='<button class="cloud-status text-link" data-act="cloud" id="cloudStatus">Sauvegarde locale</button><div class="home-date">'+esc(now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'</div><div class="home-layout">';
   if(next){
     const sm=sessionMuscles(next),val=m=>sm.p.has(m)?1:(sm.s.has(m)?.45:0);
     const side=DASH_SIDE.sid===next.id?DASH_SIDE.side:dominantSide(next);
@@ -2028,6 +2035,7 @@ function editExHTML(e,i,defaultRest=editorRestValue()){
    +'<div class="efield"><label>Muscles secondaires</label><input class="e-muss" placeholder="ex : triceps" value="'+esc((e.musS||[]).join(', '))+'"></div>'
    +'</div>'
    +'<div class="efield"><label>Recherche vidéo YouTube</label><input class="e-yt" value="'+esc(e.yt||'')+'"></div>'
+   +'<div class="efield"><label>Incrément de charge (unité de cet exercice)</label><input class="e-increment" type="text" inputmode="decimal" placeholder="Automatique" value="'+esc(e.increment??'')+'"></div>'
    +'<div class="efield"><label>Notes techniques</label><textarea class="e-notes">'+esc(e.notes||'')+'</textarea></div>'
    +'</div>';
 }
@@ -2056,6 +2064,11 @@ function editHTML(sid){
 }
 function collectEdit(sid){
   const s=SEANCE[sid];
+  for(const input of app.querySelectorAll('.e-increment')){
+    const value=numOrNull(input.value),invalid=!!input.value.trim()&&(value==null||value<0.0001||value>100);
+    input.setAttribute('aria-invalid',String(invalid));
+    if(invalid){toast('Incrément attendu : de 0,0001 à 100');input.focus();return false;}
+  }
   for(const input of app.querySelectorAll('#es-rest,.e-rest')){
     const n=intOrNull(input.value),invalid=!!input.value.trim()&&(n==null||n<1||n>86400);
     input.setAttribute('aria-invalid',String(invalid));
@@ -2090,6 +2103,8 @@ function collectEdit(sid){
     else if(refRaw){e.ref=null;e.refText=refRaw}
     else e.ref=null;
     const ceil=card.querySelector('.e-ceiling').value.trim();
+    const increment=numOrNull(card.querySelector('.e-increment')?.value);
+    if(increment!=null)e.increment=increment;
     if(ceil)e.ceiling=ceil;
     const restEl=card.querySelector('.e-rest');
     const rest=restEl?intOrNull(restEl.value):null;
@@ -2130,6 +2145,8 @@ function machinesHTML(){
   h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.l?' on':'')+'" data-act="mfl" data-l="">Tout chargement</button>';
   LOAD_FILTER.forEach(x=>{h+='<button class="mfchip'+(MFILTER.l===x[0]?' on':'')+'" data-act="mfl" data-l="'+x[0]+'">'+esc(x[1])+'</button>'});
   h+='</div><button class="sbtn" data-act="mfreset">Réinitialiser les filtres</button></details>';
+  const personal=libraryCatalog().filter(m=>m.personal);
+  if(personal.length)h+='<details class="personal-library"><summary>Mes exercices · '+personal.length+'</summary>'+personal.map(m=>'<button class="mrow" data-act="personalexercise" data-key="'+esc(m.key)+'"><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(m.p.map(mLabel).join(', '))+'</span></span>'+uiIcon('chevron-right')+'</button>').join('')+'</details>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
   const ids=grp?grp[2]:null;
   const q=searchKey(MFILTER.q);
@@ -2184,6 +2201,23 @@ function addMachineToSeance(i,sid){
     musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])});
   savePrograms();closeSheet();toast('Ajouté à '+s.tab);
 }
+function showPersonalExercise(key){
+  const entry=libraryCatalog().find(m=>m.personal&&m.key===key);if(!entry)return;
+  const e=entry.exercise;
+  sheet.innerHTML='<h2>'+esc(e.name)+'</h2><p class="sp">'+esc((e.musP||[]).map(mLabel).join(', '))+'</p><div class="notes">'+esc(e.notes||'')+'</div>'
+    +'<div class="rectitle">Ajouter à une séance</div><div class="machadd">'+(activeProgram()?.seances||[]).map(s=>'<button class="sbtn" data-personalsession="'+esc(s.id)+'">'+esc(s.title)+'</button>').join('')+'</div>'
+    +((SETTINGS.exerciseLibrary||[]).some(x=>libraryKey(x)===key)?'<button class="sbtn danger" id="removePersonal">Retirer de ma bibliothèque</button>':'');
+  openSheet();
+  sheet.querySelectorAll('[data-personalsession]').forEach(button=>button.addEventListener('click',()=>{
+    const s=SEANCE[button.dataset.personalsession];if(!s)return;
+    if(DB.active?.seance===s.id){toast('Termine la séance en cours avant de la modifier');return;}
+    s.ex.push({...structuredClone(e),id:uid('e_')});savePrograms();rememberLibraryExercises([e]);closeSheet();toast('Exercice ajouté');
+  }));
+  document.getElementById('removePersonal')?.addEventListener('click',()=>{
+    if(!window.confirm('Retirer cet exercice de la bibliothèque personnelle ? Les copies dans tes programmes sont conservées.'))return;
+    SETTINGS.exerciseLibrary=SETTINGS.exerciseLibrary.filter(x=>libraryKey(x)!==key);saveSettings();closeSheet();render();
+  });
+}
 
 /* Remplacement ponctuel : l'exercice choisi vit uniquement dans DB.active.
    Le programme ne change jamais, et l'historique conserve le vrai mouvement fait. */
@@ -2196,35 +2230,40 @@ function machineAsExercise(m){
   return {name:m.n+' ('+m.b+')',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x]),load:LOAD_SHORT[machineLoad(m)]};
 }
 function replacementCandidates(source){
+  const pattern=exPattern(source),family=p=>['chestpress','benchpress'].includes(p)?'horizontal-press':p;
+  const compatible=e=>family(exPattern(e))===family(pattern)&&(source.musP||[]).some(m=>(e.musP||[]).includes(m));
   const seen=new Set([searchKey(source.name)]),out=[];
-  for(const e of Object.values(EXO)){
+  for(const e of [...Object.values(EXO),...(SETTINGS.exerciseLibrary||[])]){
     const key=searchKey(e.name);
     const score=muscleOverlap(source,e);
-    if(!score||seen.has(key))continue;
+    if(!score||!compatible(e)||seen.has(key))continue;
     seen.add(key);out.push({kind:'program',value:e,score,label:'Programme'});
   }
   MACHINES.forEach((m,index)=>{
     const e=machineAsExercise(m),key=searchKey(e.name),score=muscleOverlap(source,e);
-    if(!score||seen.has(key))return;
+    if(!score||!compatible(e)||seen.has(key))return;
     seen.add(key);out.push({kind:'machine',value:e,index,score,label:e.load});
   });
   return out.sort((a,b)=>b.score-a.score||a.value.name.localeCompare(b.value.name,'fr')).slice(0,24);
 }
 function replacementExercise(source,candidate){
   const base=candidate.value;
-  return {id:uid('e_'),name:base.name,sets:Math.max(1,Number(source.sets)||3),reps:source.reps||base.reps||'8–10',unit:base.unit||source.unit||'kg',ref:base.ref??null,refText:base.refText,notes:base.notes||'',yt:base.yt||'',musP:(base.musP||[]).slice(),musS:(base.musS||[]).slice(),ceiling:base.ceiling,rest:base.rest??source.rest};
+  return {id:uid('e_'),name:base.name,sets:Math.max(1,Number(source.sets)||3),reps:source.reps||base.reps||'8–10',unit:base.unit||source.unit||'kg',ref:null,notes:base.notes||'',yt:base.yt||'',musP:(base.musP||[]).slice(),musS:(base.musS||[]).slice(),ceiling:base.ceiling,rest:base.rest??source.rest,...(base.increment!=null?{increment:base.increment}:{})};
 }
 function replaceActiveExercise(sourceId,candidate){
   const active=DB.active,source=activeExercise(sourceId);
   if(!active||!source||!active.ex[sourceId])return;
   if(active.ex[sourceId].some(set=>set.done)){toast('Remplacement possible avant la première série validée');return;}
   const replacement=replacementExercise(source,candidate);
+  if(active.ex[sourceId].some(set=>set.w!=null||set.r!=null)&&!window.confirm('Remplacer cet exercice ? Les valeurs non validées seront effacées ; la note sera conservée.'))return;
+  replacement.sets=active.ex[sourceId].length;
   const order=(active.exerciseOrder||SEANCE[active.seance]?.ex.map(e=>e.id)||[]).slice();
   const at=order.indexOf(sourceId);if(at<0)return;
   active.ex[replacement.id]=Array.from({length:replacement.sets},()=>({w:null,r:null,done:false}));
   active.exMeta={...(active.exMeta||{}),[replacement.id]:replacement};
   delete active.ex[sourceId];delete active.exMeta[sourceId];
-  if(active.exNotes)delete active.exNotes[sourceId];
+  if(active.exNotes?.[sourceId]){active.exNotes[replacement.id]=active.exNotes[sourceId];delete active.exNotes[sourceId];}
+  if(active.restByEx?.[sourceId]!=null){active.restByEx[replacement.id]=active.restByEx[sourceId];delete active.restByEx[sourceId];}
   order[at]=replacement.id;active.exerciseOrder=order;
   FOCUS_EX=replacement.id;persist();closeSheet();render();
   toast('Exercice remplacé pour cette séance');
@@ -2236,8 +2275,10 @@ function showReplaceExercise(sourceId){
   const candidates=replacementCandidates(source);
   const target=(source.musP||[]).map(mLabel).join(' · ')||'même zone musculaire';
   sheet.innerHTML='<h2>Remplacer l’exercice</h2><div class="sp">'+esc(source.name)+' · alternatives ciblant '+esc(target)+'. Le programme ne sera pas modifié.</div>'
-    +'<div class="replace-list">'+(candidates.length?candidates.map((candidate,i)=>'<button class="replace-option" data-replace="'+i+'"><span>'+esc(candidate.value.name)+'</span><small>'+esc(candidate.label)+' · '+esc((candidate.value.musP||[]).map(mLabel).join(', '))+'</small>'+uiIcon('arrow-right')+'</button>').join(''):'<div class="hempty">Aucune alternative équivalente dans la bibliothèque.</div>')+'</div>';
+    +'<div class="efield"><label for="replaceEquipment">Matériel</label><select id="replaceEquipment"><option value="">Tout matériel</option>'+[...new Set(candidates.map(c=>c.label))].map(label=>'<option>'+esc(label)+'</option>').join('')+'</select></div>'
+    +'<div class="replace-list">'+(candidates.length?candidates.map((candidate,i)=>'<button class="replace-option" data-replace="'+i+'"><span>'+esc(candidate.value.name)+'</span><small>'+esc(candidate.label)+' · '+esc((candidate.value.musP||[]).map(mLabel).join(', '))+'</small>'+uiIcon('arrow-right')+'</button>').join(''):'<div class="hempty">Aucune alternative du même mouvement dans la bibliothèque.</div>')+'</div>';
   openSheet();
+  document.getElementById('replaceEquipment').addEventListener('change',event=>sheet.querySelectorAll('[data-replace]').forEach(button=>{button.hidden=!!event.target.value&&candidates[+button.dataset.replace].label!==event.target.value;}));
   sheet.querySelectorAll('[data-replace]').forEach(button=>button.addEventListener('click',()=>replaceActiveExercise(sourceId,candidates[+button.dataset.replace])));
 }
 
@@ -2464,6 +2505,7 @@ app.addEventListener('click',ev=>{
     input.value=actEl.dataset.rest;input.setAttribute('aria-invalid','false');updateEditorRest();
   }
   else if(act==='data')showData();
+  else if(act==='cloud')window.DKOCloudUI?.show();
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
   else if(act==='suivitab'){SUIVI=actEl.dataset.t;render();}
@@ -2476,6 +2518,7 @@ app.addEventListener('click',ev=>{
   else if(act==='wdel'){if(window.confirm('Supprimer définitivement cette séance de l’historique ?')){DB.workouts.splice(+actEl.dataset.w,1);persist();render();toast('Séance supprimée');}}
   else if(act==='machines')go('machines');
   else if(act==='machine')showMachine(+actEl.dataset.m);
+  else if(act==='personalexercise')showPersonalExercise(actEl.dataset.key);
   else if(act==='mfg'){MFILTER.g=actEl.dataset.g||null;render();}
   else if(act==='mfb'){MFILTER.b=actEl.dataset.b||null;render();}
   else if(act==='mfc'){MFILTER.c=actEl.dataset.c||null;render();}
@@ -2495,7 +2538,7 @@ app.addEventListener('click',ev=>{
   else if(act==='sedown'){moveSeance(actEl.dataset.s,1);render();}
   else if(act==='edit')go('edit',route.seance);
   else if(act==='esave'){if(collectEdit(route.seance)){toast('Séance enregistrée');go('seance',route.seance)}}
-  else if(act==='elib')showLibPicker();
+  else if(act==='elib'){LIBFILTER.mode='browse';showLibPicker();}
   else if(act==='eadd'){
     const list=document.getElementById('exlist');
     const n=list.querySelectorAll('.ecard').length;
@@ -2550,8 +2593,8 @@ app.addEventListener('click',ev=>{
     const tv=isKg?(t?t.w:null):(t?t.r:null);
     let nv;
     if(cur==null&&tv!=null)nv=tv;                       /* 1er appui : cale sur la cible */
-    else{const base=cur!=null?cur:0;nv=base+d*(isKg?wInc(base):1);}
-    if(isKg){nv=Math.min(10000,Math.max(0,Math.round(nv*2)/2));st.w=nv;inp.value=fmtN(nv);}
+    else{const base=cur!=null?cur:0;nv=base+d*(isKg?exerciseIncrement(e,base):1);}
+    if(isKg){nv=Math.min(10000,Math.max(0,Number(nv.toFixed(4))));st.w=nv;inp.value=fmtN(nv);}
     else{nv=Math.min(100000,Math.max(0,Number(nv.toFixed(6))));st.r=nv;inp.value=fmtN(nv);}
     inp.dispatchEvent(new Event('input',{bubbles:true}));
   }
@@ -2782,11 +2825,41 @@ function showSummary(o){
   openSheet();
   document.getElementById('shOk').addEventListener('click',closeSheet);
 }
-function libraryBrands(){return [...new Set(MACHINES.map(m=>m.b))];}
+function libraryKey(e){return searchKey(e.name)+'|'+searchKey(e.unit||'kg');}
+function libraryCatalog(){
+  const entries=MACHINES.map(m=>({...m,exercise:{...machineAsExercise(m),sets:3,reps:'8–10'}}));
+  const seen=new Set(entries.map(m=>libraryKey(m.exercise)));
+  for(const e of [...(SETTINGS.exerciseLibrary||[]),...Object.values(EXO)]){
+    const key=libraryKey(e);if(seen.has(key))continue;seen.add(key);
+    entries.push({n:e.name,b:'Personnel',p:e.musP||[],s:e.musS||[],t:'Personnel',exercise:e,personal:true});
+  }
+  return entries.map(m=>({...m,key:libraryKey(m.exercise)}));
+}
+function libraryBrands(){return [...new Set(libraryCatalog().map(m=>m.b))];}
+function rememberLibraryExercises(exercises){
+  const recent=exercises.map(libraryKey);
+  SETTINGS.exerciseRecent=[...new Set([...recent,...(SETTINGS.exerciseRecent||[])])].slice(0,30);
+  saveSettings();
+}
+function addSelectedLibraryExercises(){
+  const list=document.getElementById('exlist');if(!list||!LIBSELECT.size)return;
+  const exercises=[...LIBSELECT.values()],n=list.querySelectorAll('.ecard').length;
+  list.insertAdjacentHTML('beforeend',exercises.map((e,i)=>editExHTML({...e,id:undefined},n+i)).join(''));
+  rememberLibraryExercises(exercises);LIBSELECT.clear();labelFields(list);closeSheet();
+  list.lastElementChild?.querySelector('.e-name')?.focus();
+  toast(exercises.length+' exercice(s) ajouté(s)');
+}
+function refreshLibrarySelection(){
+  const button=document.getElementById('libAddSelected');
+  if(button){button.disabled=!LIBSELECT.size;button.textContent='Ajouter la sélection ('+LIBSELECT.size+')';}
+}
 function libraryMatch(m){
+  if(LIBSCOPE==='personal'&&!m.personal)return false;
+  if(LIBSCOPE==='favorites'&&!(SETTINGS.exerciseFavorites||[]).includes(m.key))return false;
+  if(LIBSCOPE==='recent'&&!(SETTINGS.exerciseRecent||[]).includes(m.key))return false;
   if(LIBFILTER.b&&m.b!==LIBFILTER.b)return false;
   if(LIBFILTER.c&&!machineChains(m).includes(LIBFILTER.c))return false;
-  if(LIBFILTER.l&&machineLoad(m)!==LIBFILTER.l)return false;
+  if(LIBFILTER.l&&(m.personal||machineLoad(m)!==LIBFILTER.l))return false;
   const group=MACHINE_GROUPS.find(g=>g[0]===LIBFILTER.g);
   return !group||(m.p||[]).concat(m.s||[]).some(muscle=>group[2].includes(muscle));
 }
@@ -2806,37 +2879,53 @@ function addLibraryExercise(m){
 }
 function showCustomExerciseForm(){
   const options='<option value="">Non renseigné</option>'+MUSCLES.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('');
-  sheet.innerHTML='<h2>Exercice non répertorié</h2><div class="sp">Ajouté uniquement à cette séance, puis modifiable avant l’enregistrement.</div>'
+  if(!LIBDRAFT)LIBDRAFT={libCustomName:LIBFILTER.q.slice(0,120),libCustomSets:'3',libCustomReps:'8–10',libCustomUnit:'kg',libCustomPrimary:'',libCustomSecondary:'',libCustomNotes:''};
+  sheet.innerHTML='<h2>Exercice non répertorié</h2>'
     +'<div class="seg lib-modes"><button class="segb" data-libmode="browse">Bibliothèque</button><button class="segb on" data-libmode="custom">Créer</button></div>'
     +'<div class="efield"><label for="libCustomName">Nom de l’exercice</label><input id="libCustomName" maxlength="120" placeholder="Ex : Presse à jambes XFit"></div>'
     +'<div class="egrid3"><div class="efield"><label for="libCustomSets">Séries</label><input id="libCustomSets" class="num" type="number" min="1" max="100" inputmode="numeric" value="3"></div>'
-    +'<div class="efield"><label for="libCustomReps">Répétitions</label><input id="libCustomReps" value="8–10"></div>'
-    +'<div class="efield"><label for="libCustomUnit">Unité</label><input id="libCustomUnit" value="kg"></div></div>'
+    +'<div class="efield"><label for="libCustomReps">Répétitions</label><input id="libCustomReps" maxlength="80" value="8–10"></div>'
+    +'<div class="efield"><label for="libCustomUnit">Unité</label><input id="libCustomUnit" maxlength="80" value="kg"></div></div>'
     +'<div class="egrid"><div class="efield"><label for="libCustomPrimary">Muscle principal</label><select id="libCustomPrimary">'+options+'</select></div>'
     +'<div class="efield"><label for="libCustomSecondary">Muscle secondaire</label><select id="libCustomSecondary">'+options+'</select></div></div>'
     +'<div class="efield"><label for="libCustomNotes">Notes techniques</label><textarea id="libCustomNotes" maxlength="2000"></textarea></div>'
+    +'<label class="library-remember"><input type="checkbox" id="libRemember" checked> Conserver dans ma bibliothèque personnelle</label>'
     +'<div class="sbtns"><button class="sbtn pri" id="libCustomAdd">Ajouter à la séance</button></div>';
   openSheet();
+  for(const [id,value] of Object.entries(LIBDRAFT)){
+    const field=document.getElementById(id);if(!field)continue;
+    if(field.type==='checkbox')field.checked=value;else field.value=value;
+  }
+  sheet.querySelectorAll('input,select,textarea').forEach(field=>field.addEventListener('input',()=>{
+    LIBDRAFT[field.id]=field.type==='checkbox'?field.checked:field.value;field.removeAttribute('aria-invalid');
+  }));
   sheet.querySelector('[data-libmode="browse"]').addEventListener('click',()=>{LIBFILTER.mode='browse';showLibPicker();});
   document.getElementById('libCustomAdd').addEventListener('click',()=>{
     const name=document.getElementById('libCustomName'),sets=intOrNull(document.getElementById('libCustomSets').value);
     if(!name.value.trim()){name.setAttribute('aria-invalid','true');name.focus();return;}
-    if(sets==null||sets<1||sets>100){document.getElementById('libCustomSets').setAttribute('aria-invalid','true');return;}
+    if(sets==null||sets<1||sets>100){document.getElementById('libCustomSets').setAttribute('aria-invalid','true');document.getElementById('libCustomSets').focus();return;}
     const list=document.getElementById('exlist');if(!list)return;
     const primary=document.getElementById('libCustomPrimary').value,secondary=document.getElementById('libCustomSecondary').value;
     const n=list.querySelectorAll('.ecard').length;
-    list.insertAdjacentHTML('beforeend',editExHTML({name:name.value.trim(),sets,reps:document.getElementById('libCustomReps').value.trim()||'8–10',unit:document.getElementById('libCustomUnit').value.trim()||'kg',ref:null,notes:document.getElementById('libCustomNotes').value.trim(),yt:name.value.trim()+' technique',musP:primary?[primary]:[],musS:secondary&&secondary!==primary?[secondary]:[]},n));
+    const exercise={name:name.value.trim(),sets,reps:document.getElementById('libCustomReps').value.trim()||'8–10',unit:document.getElementById('libCustomUnit').value.trim()||'kg',ref:null,notes:document.getElementById('libCustomNotes').value.trim(),yt:name.value.trim()+' technique',musP:primary?[primary]:[],musS:secondary&&secondary!==primary?[secondary]:[]};
+    list.insertAdjacentHTML('beforeend',editExHTML(exercise,n));
+    if(document.getElementById('libRemember').checked){
+      SETTINGS.exerciseLibrary=[...(SETTINGS.exerciseLibrary||[]).filter(e=>libraryKey(e)!==libraryKey(exercise)),exercise];
+    }
+    rememberLibraryExercises([exercise]);LIBDRAFT=null;LIBFILTER.mode='browse';
     labelFields(list);closeSheet();toast('Exercice personnalisé ajouté — pense à enregistrer');
   });
 }
 function showLibPicker(){
   if(LIBFILTER.mode==='custom'){showCustomExerciseForm();return;}
-  const brands=libraryBrands(),matches=MACHINES.map((m,i)=>({m,i})).filter(({m})=>libraryMatch(m));
+  const catalog=libraryCatalog(),brands=libraryBrands(),matches=catalog.map((m,i)=>({m,i})).filter(({m})=>libraryMatch(m));
+  if(LIBSCOPE==='recent')matches.sort((a,b)=>(SETTINGS.exerciseRecent||[]).indexOf(a.m.key)-(SETTINGS.exerciseRecent||[]).indexOf(b.m.key));
   const filters=[LIBFILTER.g,LIBFILTER.b,LIBFILTER.c,LIBFILTER.l].filter(Boolean).length;
-  let h='<h2>Bibliothèque</h2><div class="sp">Choisis un exercice à ajouter à la séance en cours d’édition.</div>'
+  let h='<h2>Ajouter des exercices</h2>'
    +'<div class="seg lib-modes"><button class="segb on" data-libmode="browse">Bibliothèque</button><button class="segb" data-libmode="custom">Créer</button></div>'
    +'<input id="libq" type="search" aria-label="Rechercher dans la bibliothèque" class="msearch" placeholder="Rechercher un exercice…" value="'+esc(LIBFILTER.q)+'" style="margin:0 0 10px">'
-   +'<details class="library-filters" open><summary>'+uiIcon('sliders-horizontal')+'Filtres'+(filters?' · '+filters+' actifs':'')+'</summary>'
+   +'<div class="mfilters library-scopes" role="group" aria-label="Origine des exercices">'+[['all','Tous'],['personal','Mes exercices'],['favorites','Favoris'],['recent','Récents']].map(([key,label])=>'<button class="mfchip'+(LIBSCOPE===key?' on':'')+'" data-libscope="'+key+'" aria-pressed="'+(LIBSCOPE===key)+'">'+label+'</button>').join('')+'</div>'
+   +'<details class="library-filters"><summary>'+uiIcon('sliders-horizontal')+'Filtres'+(filters?' · '+filters+' actifs':'')+'</summary>'
    +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.g?' on':'')+'" data-libfilter="g" data-value="">Tous muscles</button>'
    +MACHINE_GROUPS.map(g=>'<button class="mfchip'+(LIBFILTER.g===g[0]?' on':'')+'" data-libfilter="g" data-value="'+g[0]+'">'+esc(g[1])+'</button>').join('')+'</div>'
    +'<div class="mfilters"><button class="mfchip alt'+(!LIBFILTER.b?' on':'')+'" data-libfilter="b" data-value="">Toutes marques</button>'
@@ -2846,18 +2935,33 @@ function showLibPicker(){
    +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.l?' on':'')+'" data-libfilter="l" data-value="">Tout chargement</button>'
    +LOAD_FILTER.map(x=>'<button class="mfchip'+(LIBFILTER.l===x[0]?' on':'')+'" data-libfilter="l" data-value="'+x[0]+'">'+esc(x[1])+'</button>').join('')+'</div>'
    +'<button class="text-link" id="libReset">Réinitialiser les filtres</button></details>'
-   +'<div id="libCount" class="subdate">'+matches.length+' exercice'+(matches.length>1?'s':'')+'</div><div id="liblist">';
+   +'<div id="libCount" class="subdate" role="status">'+matches.length+' exercice'+(matches.length>1?'s':'')+'</div><div id="liblist">';
   matches.forEach(({m,i})=>{
-    const muscles=(m.p||[]).map(mLabel).join(', '),search=searchKey(m.n+' '+m.b+' '+muscles+' '+LOAD_SHORT[machineLoad(m)]);
-    h+='<button class="mrow" data-libmachine="'+i+'" data-search="'+esc(search)+'"><div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(muscles)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div><span class="mrow-b">'+esc(m.b)+'</span></button>';
+    const muscles=(m.p||[]).map(mLabel).join(', '),load=m.personal?'':LOAD_SHORT[machineLoad(m)],search=searchKey(m.n+' '+m.b+' '+muscles+' '+load);
+    const detail=[m.b,muscles,load].filter(Boolean).join(' · ');
+    const favorite=(SETTINGS.exerciseFavorites||[]).includes(m.key);
+    h+='<div class="mrow library-choice" data-search="'+esc(search)+'"><label><input type="checkbox" data-libmachine="'+i+'"'+(LIBSELECT.has(m.key)?' checked':'')+'><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(detail)+'</span></span></label><button class="icon-button" data-libfavorite="'+i+'" aria-pressed="'+favorite+'" aria-label="Favori : '+esc(m.n)+'" data-tooltip="Favori">'+uiIcon('star')+'</button></div>';
   });
   h+='</div><div id="libEmpty" class="library-empty"'+(matches.length?' hidden':'')+'><div class="hempty">Aucun exercice ne correspond à cette recherche.</div><button class="sbtn pri" data-libmode="custom">Créer un exercice non répertorié</button></div>';
-  sheet.innerHTML=h;openSheet();
+  h+='<div class="library-add"><button class="sbtn pri" id="libAddSelected"></button></div>';
+  sheet.innerHTML=h;openSheet();refreshLibrarySelection();
   document.getElementById('libq').addEventListener('input',event=>{LIBFILTER.q=event.target.value;filterLibraryRows();});
-  sheet.querySelectorAll('[data-libfilter]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER[button.dataset.libfilter]=button.dataset.value||null;showLibPicker();}));
+  sheet.querySelectorAll('[data-libfilter]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER[button.dataset.libfilter]=button.dataset.value||null;showLibPicker();sheet.querySelector('.library-filters').open=true;sheet.querySelector('[data-libfilter="'+button.dataset.libfilter+'"][data-value="'+CSS.escape(button.dataset.value)+'"]')?.focus();}));
   sheet.querySelectorAll('[data-libmode="custom"]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER.mode='custom';showLibPicker();}));
   document.getElementById('libReset').addEventListener('click',()=>{LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};showLibPicker();});
-  sheet.querySelectorAll('[data-libmachine]').forEach(button=>button.addEventListener('click',()=>addLibraryExercise(MACHINES[+button.dataset.libmachine])));
+  sheet.querySelectorAll('[data-libscope]').forEach(button=>button.addEventListener('click',()=>{LIBSCOPE=button.dataset.libscope;showLibPicker();}));
+  sheet.querySelectorAll('[data-libmachine]').forEach(input=>input.addEventListener('change',()=>{
+    const m=catalog[+input.dataset.libmachine];
+    if(input.checked)LIBSELECT.set(m.key,m.exercise);else LIBSELECT.delete(m.key);
+    refreshLibrarySelection();
+  }));
+  sheet.querySelectorAll('[data-libfavorite]').forEach(button=>button.addEventListener('click',()=>{
+    const key=catalog[+button.dataset.libfavorite].key,favorites=new Set(SETTINGS.exerciseFavorites||[]);
+    if(favorites.has(key))favorites.delete(key);else favorites.add(key);
+    SETTINGS.exerciseFavorites=[...favorites];saveSettings();button.setAttribute('aria-pressed',String(favorites.has(key)));
+    if(LIBSCOPE==='favorites')showLibPicker();
+  }));
+  document.getElementById('libAddSelected').addEventListener('click',addSelectedLibraryExercises);
   filterLibraryRows();
 }
 function showOnboarding(){
@@ -3146,7 +3250,7 @@ async function applyImport(incoming,replace){
     const active=candidate?snapshotWorkout(structuredClone(candidate)):null;
     if(active&&!programs.some(p=>p.seances.some(s=>s.id===active.seance)))throw new Error('Le programme de la séance en cours manque dans la sauvegarde');
     const activeSession=active&&programs.flatMap(p=>p.seances).find(s=>s.id===active.seance);
-    if(activeSession&&Object.keys(active.ex).some(id=>!activeSession.ex.some(e=>e.id===id)))throw new Error('La séance en cours ne correspond plus au programme. Restaure sa sauvegarde complète.');
+    if(activeSession&&Object.keys(active.ex).some(id=>!activeSession.ex.some(e=>e.id===id)&&!(active.exerciseOrder?.includes(id)&&active.exMeta?.[id])))throw new Error('La séance en cours ne correspond plus au programme. Restaure sa sauvegarde complète.');
     const body=incoming.body?(replace?incoming.body:BODY.concat(incoming.body.filter(b=>!BODY.some(current=>current.date===b.date)))):BODY;
     const settings=replace&&incoming.settings?{...SETTINGS,...incoming.settings}:SETTINGS;
     const activeId=replace&&incoming.programs?incoming.activeId:ACTIVE_PID;
