@@ -640,6 +640,20 @@ details[open] summary::before{transform:rotate(45deg)}
 }
 .howbtn::after{content:"";flex:0 0 auto}
 .howbtn:active{background:rgba(225,29,42,.22)}
+.replace-exercise{
+  display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;
+  margin-top:12px;padding:11px 15px;border-radius:13px;
+  border:1px solid var(--line2);font-size:.82rem;font-weight:700;color:var(--dim);
+  transition:border-color .18s,color .18s,background .18s;
+}
+.replace-exercise .ui-icon{width:16px;height:16px;stroke:currentColor}
+.replace-exercise:active{color:var(--ac);border-color:var(--ac);background:var(--ac-soft)}
+.replace-list{display:flex;flex-direction:column;gap:8px}
+.replace-option{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;align-items:center;text-align:left;width:100%;padding:13px 14px;border:.5px solid var(--line2);border-radius:13px;background:var(--card2);color:var(--txt)}
+.replace-option span{min-width:0;font-size:.9rem;font-weight:700;line-height:1.3}
+.replace-option small{grid-column:1;min-width:0;margin-top:4px;font-size:.72rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.replace-option .ui-icon{grid-column:2;grid-row:1 / span 2;width:17px;height:17px;stroke:var(--ac)}
+.replace-option:active{border-color:var(--ac);background:var(--ac-soft)}
 
 /* ---------- fiche exercice (sheet) ---------- */
 .exmap{padding:4px 0 12px}

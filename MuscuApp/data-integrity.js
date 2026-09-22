@@ -24,7 +24,9 @@ const DKO_DATA=(()=>{
     return v;
   };
   const muscles=v=>v==null?[]:list(v,'Muscles').map(x=>str(x,'',80));
-  const meta=e=>({name:str(e.name),unit:str(e.unit,'kg',80),musP:muscles(e.musP),musS:muscles(e.musS)});
+  const meta=e=>({name:str(e.name),unit:str(e.unit,'kg',80),musP:muscles(e.musP),musS:muscles(e.musS),
+    sets:number(e.sets,1,100,3,true),reps:str(e.reps,'8–10',80),ref:number(e.ref,0,10000),refText:str(e.refText),
+    rest:number(e.rest,1,86400),ceiling:str(e.ceiling),notes:str(e.notes),yt:str(e.yt)});
   function programs(values){
     const seen=new Set();
     const unique=v=>{const key=id(v);if(seen.has(key))fail('Identifiant dupliqué dans les programmes');seen.add(key);return key;};
@@ -62,6 +64,11 @@ const DKO_DATA=(()=>{
       clean.start=number(w.start,0,8640000000000000,Date.now());
       clean.pt=number(w.pt,0,8640000000000000,0);clean.ps=number(w.ps,0,8640000000000000);
       if(w.restTimer){object(w.restTimer,'Minuteur');clean.restTimer={end:number(w.restTimer.end,0,8640000000000000),label:str(w.restTimer.label)};}
+      if(w.exerciseOrder!=null){
+        const order=list(w.exerciseOrder,'Ordre des exercices').map(id),unique=new Set(order);
+        if(unique.size!==order.length||order.length!==Object.keys(ex).length||order.some(exId=>!Object.hasOwn(ex,exId)))fail('Ordre des exercices invalide');
+        clean.exerciseOrder=order;
+      }
     }
     return clean;
   }
@@ -99,7 +106,8 @@ const DKO_DATA=(()=>{
     const active=value.active==null?null:workout(value.active,true);
     if(active){
       const session=ps.flatMap(p=>p.seances).find(s=>s.id===active.seance);
-      if(!session||Object.keys(active.ex).some(k=>!session.ex.some(e=>e.id===k)))fail('Programme de la séance en cours incomplet');
+      const programIds=new Set(session?.ex.map(e=>e.id)||[]),temporaryIds=new Set(Object.keys(active.exMeta||{}));
+      if(!session||Object.keys(active.ex).some(k=>!programIds.has(k)&&!temporaryIds.has(k)))fail('Programme de la séance en cours incomplet');
       if(ws.some(w=>w.id&&w.id===active.id))fail('Séance déjà terminée dans la sauvegarde');
     }
     return {schema:1,programs:ps,activeId:value.activeId,workouts:ws,active,settings:settings(value.settings),body:body(value.body)};

@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.29.0';
+const APP_VERSION='4.30.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -645,10 +645,27 @@ function snapshotMetadata(w,exercises,sessions){
   const s=sessions[w.seance];
   if(!w.session)w.session={title:s?.title||w.seance,tab:s?.tab||''};
   w.exMeta=w.exMeta||{};
-  for(const id of workoutExerciseIds(w))if(!w.exMeta[id]){const e=exercises[id];w.exMeta[id]={name:e?.name||id,unit:e?.unit||'kg',musP:(e?.musP||[]).slice(),musS:(e?.musS||[]).slice()};}
+  for(const id of workoutExerciseIds(w))if(!w.exMeta[id]){
+    const e=exercises[id]||{};
+    w.exMeta[id]={name:e.name||id,unit:e.unit||'kg',musP:(e.musP||[]).slice(),musS:(e.musS||[]).slice(),sets:e.sets,reps:e.reps,ref:e.ref,refText:e.refText,notes:e.notes||'',yt:e.yt||'',ceiling:e.ceiling,rest:e.rest};
+  }
   return w;
 }
-function workoutExercise(w,id){return w.exMeta?.[id]||EXO[id];}
+function workoutExercise(w,id){
+  const saved=w?.exMeta?.[id],base=EXO[id];
+  if(!saved)return base;
+  return {...(base||{}),...saved,id};
+}
+function activeExercise(exId){return DB.active?workoutExercise(DB.active,exId):EXO[exId];}
+function activeExerciseList(s,active){
+  const order=active?.exerciseOrder||s.ex.map(e=>e.id);
+  const original=new Map(s.ex.map(e=>[e.id,e]));
+  return order.map(id=>{
+    const saved=active?.exMeta?.[id];
+    const base=original.get(id)||EXO[id]||{};
+    return saved?{...base,...saved,id}:base.id?base:null;
+  }).filter(Boolean);
+}
 function historicalExercises(){
   const all={...EXO};
   for(const w of DB.workouts)for(const id of workoutExerciseIds(w))all[id]={id,...workoutExercise(w,id)};
@@ -822,7 +839,7 @@ function muscleFatigue(mid){
   if(DB.active){
     let load=0;
     for(const exId in DB.active.ex){
-      const e=EXO[exId];if(!e)continue;
+      const e=workoutExercise(DB.active,exId);if(!e)continue;
       const sets=DB.active.ex[exId].filter(s=>s.done).length;
       if((e.musP||[]).includes(mid))load+=sets;
       else if((e.musS||[]).includes(mid))load+=sets*0.5;
@@ -1043,12 +1060,12 @@ function homeHTML(){
 }
 
 /* ---------- séance ---------- */
-function focusControlsHTML(s){
-  if(!s.ex.some(e=>e.id===FOCUS_EX))FOCUS_EX=(s.ex.find(e=>(DB.active.ex[e.id]||[]).some(st=>!st.done))||s.ex[0])?.id;
-  const index=s.ex.findIndex(e=>e.id===FOCUS_EX);
-  return '<div class="workout-browser"><div class="workout-browser-head"><span>Exercice <b>'+String(index+1).padStart(2,'0')+'</b> / '+String(s.ex.length).padStart(2,'0')+'</span>'
+function focusControlsHTML(exercises){
+  if(!exercises.some(e=>e.id===FOCUS_EX))FOCUS_EX=(exercises.find(e=>(DB.active.ex[e.id]||[]).some(st=>!st.done))||exercises[0])?.id;
+  const index=exercises.findIndex(e=>e.id===FOCUS_EX);
+  return '<div class="workout-browser"><div class="workout-browser-head"><span>Exercice <b>'+String(index+1).padStart(2,'0')+'</b> / '+String(exercises.length).padStart(2,'0')+'</span>'
     +'<div class="workout-modes" role="group" aria-label="Affichage des exercices"><button data-act="workoutmode" data-mode="focus" aria-pressed="'+(WORKOUT_MODE==='focus')+'" aria-label="Un exercice à la fois" data-tooltip="Un exercice à la fois">'+uiIcon('dumbbell')+'</button><button data-act="workoutmode" data-mode="list" aria-pressed="'+(WORKOUT_MODE==='list')+'" aria-label="Liste complète" data-tooltip="Liste complète">'+uiIcon('layout-list')+'</button></div></div>'
-    +'<div class="exercise-rail" aria-label="Exercices de la séance">'+s.ex.map((e,i)=>'<button data-act="exfocus" data-ex="'+esc(e.id)+'" aria-label="Exercice '+(i+1)+' : '+esc(e.name)+'" aria-pressed="'+(e.id===FOCUS_EX)+'"><span class="num">'+String(i+1).padStart(2,'0')+'</span>'+uiIcon('check')+'</button>').join('')+'</div></div>';
+    +'<div class="exercise-rail" aria-label="Exercices de la séance">'+exercises.map((e,i)=>'<button data-act="exfocus" data-ex="'+esc(e.id)+'" aria-label="Exercice '+(i+1)+' : '+esc(e.name)+'" aria-pressed="'+(e.id===FOCUS_EX)+'"><span class="num">'+String(i+1).padStart(2,'0')+'</span>'+uiIcon('check')+'</button>').join('')+'</div></div>';
 }
 function syncExerciseFocus(){
   if(route.view!=='seance'||DB.active?.seance!==route.seance)return;
@@ -1063,8 +1080,8 @@ function syncExerciseFocus(){
     button.setAttribute('aria-label',button.getAttribute('aria-label').replace(/ · terminé$/,'')+(done?' · terminé':''));
   });
 }
-function focusFooterHTML(s){
-  const index=s.ex.findIndex(e=>e.id===FOCUS_EX),previous=s.ex[index-1],next=s.ex[index+1];
+function focusFooterHTML(exercises){
+  const index=exercises.findIndex(e=>e.id===FOCUS_EX),previous=exercises[index-1],next=exercises[index+1];
   return '<div class="focus-footer"'+(WORKOUT_MODE==='list'?' hidden':'')+'><button class="focus-prev" data-act="exfocus" data-ex="'+esc(previous?.id||'')+'" aria-label="Exercice précédent"'+(previous?'':' disabled')+'>'+uiIcon('chevron-left')+'</button>'
     +'<button class="focus-next" data-act="'+(next?'exfocus':'finish')+'"'+(next?' data-ex="'+esc(next.id)+'"':'')+'><span><small>'+(next?'Exercice suivant':'Fin de séance')+'</small><strong>'+esc(next?.name||'Terminer la séance')+'</strong></span>'+uiIcon('arrow-right')+'</button></div>';
 }
@@ -1072,9 +1089,10 @@ function seanceHTML(sid){
   const s=SEANCE[sid];
   if(!s)return homeHTML();
   const active=DB.active&&DB.active.seance===sid?DB.active:null;
+  const exercises=activeExerciseList(s,active);
   let h='<button class="back" data-act="home">'+uiIcon('chevron-left')+'<span>Séances</span></button>'
    +'<div class="shead"><div><div class="stag">'+esc(s.tab)+'</div><h2>'+esc(s.title)+'</h2>'
-   +'<div class="smeta">'+s.ex.length+' exercices · repos '+fmtT(s.rest??SETTINGS.rest)
+   +'<div class="smeta">'+exercises.length+' exercices · repos '+fmtT(s.rest??SETTINGS.rest)
    +' · <span class="num">récup. '+seanceRecoveryScore(s)+' %</span></div></div>'
    +(active?'':'<button class="editbtn" data-act="edit">Modifier</button>')+'</div>';
   if(active){
@@ -1089,9 +1107,9 @@ function seanceHTML(sid){
   }else{
     h+='<button class="bigbtn" data-act="start">Démarrer la séance</button>';
   }
-  if(active)h+=focusControlsHTML(s);
-  s.ex.forEach((e,i)=>{h+=exCardHTML(e,i,active)});
-  if(active)h+=focusFooterHTML(s);
+  if(active)h+=focusControlsHTML(exercises);
+  exercises.forEach((e,i)=>{h+=exCardHTML(e,i,active)});
+  if(active)h+=focusFooterHTML(exercises);
   if(s.warn)h+='<div class="pwarn">'+esc(s.warn)+'</div>';
   if(active)h+='<div class="session-end">'+(WORKOUT_MODE==='list'?'<button class="bigbtn" data-act="finish">Terminer la séance</button>':'')
     +'<button class="text-link" data-act="cancel">Abandonner la séance</button></div>';
@@ -1122,6 +1140,7 @@ function exCardHTML(e,idx,active){
     h+='</div><div class="setbtns" style="display:flex;gap:8px"><button class="addset" data-act="delset" style="flex:1">− série</button><button class="addset" data-act="addset" style="flex:1">+ série</button></div>';
     h+=workoutNoteField(active,e.id,false)+previousNoteHTML(e.id);
   }
+  if(active)h+='<button class="replace-exercise" data-act="replaceex" data-ex="'+esc(e.id)+'">Remplacer pour cette séance '+uiIcon('arrow-right')+'</button>';
   h+='<button class="howbtn" data-act="exinfo" data-ex="'+esc(e.id)+'">Technique et muscles ciblés ›</button>';
   h+='<details class="dprog"><summary>Progression</summary><div class="hist">'+progHTML(e)+'</div></details></div>';
   return h;
@@ -1567,7 +1586,7 @@ function machineCoachHTML(p,load){
 
 /* fiche exercice : démo animée + visuel muscles + comment réaliser */
 function showExercise(exId){
-  const e=EXO[exId];if(!e)return;
+  const e=activeExercise(exId);if(!e)return;
   const musP=e.musP||[],musS=e.musS||[];
   const p=exPattern(e);
   const steps=String(e.notes||'').split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9])/).map(t=>t.trim()).filter(t=>t.length>1);
@@ -2165,6 +2184,62 @@ function addMachineToSeance(i,sid){
   savePrograms();closeSheet();toast('Ajouté à '+s.tab);
 }
 
+/* Remplacement ponctuel : l'exercice choisi vit uniquement dans DB.active.
+   Le programme ne change jamais, et l'historique conserve le vrai mouvement fait. */
+function muscleOverlap(a,b){
+  const wanted=new Set(a.musP||[]);
+  return (b.musP||[]).reduce((n,m)=>n+(wanted.has(m)?2:0),0)
+    +(b.musS||[]).reduce((n,m)=>n+(wanted.has(m)?1:0),0);
+}
+function machineAsExercise(m){
+  return {name:m.n+' ('+m.b+')',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x]),load:LOAD_SHORT[machineLoad(m)]};
+}
+function replacementCandidates(source){
+  const seen=new Set([searchKey(source.name)]),out=[];
+  for(const e of Object.values(EXO)){
+    const key=searchKey(e.name);
+    const score=muscleOverlap(source,e);
+    if(!score||seen.has(key))continue;
+    seen.add(key);out.push({kind:'program',value:e,score,label:'Programme'});
+  }
+  MACHINES.forEach((m,index)=>{
+    const e=machineAsExercise(m),key=searchKey(e.name),score=muscleOverlap(source,e);
+    if(!score||seen.has(key))return;
+    seen.add(key);out.push({kind:'machine',value:e,index,score,label:e.load});
+  });
+  return out.sort((a,b)=>b.score-a.score||a.value.name.localeCompare(b.value.name,'fr')).slice(0,24);
+}
+function replacementExercise(source,candidate){
+  const base=candidate.value;
+  return {id:uid('e_'),name:base.name,sets:Math.max(1,Number(source.sets)||3),reps:source.reps||base.reps||'8–10',unit:base.unit||source.unit||'kg',ref:base.ref??null,refText:base.refText,notes:base.notes||'',yt:base.yt||'',musP:(base.musP||[]).slice(),musS:(base.musS||[]).slice(),ceiling:base.ceiling,rest:base.rest??source.rest};
+}
+function replaceActiveExercise(sourceId,candidate){
+  const active=DB.active,source=activeExercise(sourceId);
+  if(!active||!source||!active.ex[sourceId])return;
+  if(active.ex[sourceId].some(set=>set.done)){toast('Remplacement possible avant la première série validée');return;}
+  const replacement=replacementExercise(source,candidate);
+  const order=(active.exerciseOrder||SEANCE[active.seance]?.ex.map(e=>e.id)||[]).slice();
+  const at=order.indexOf(sourceId);if(at<0)return;
+  active.ex[replacement.id]=Array.from({length:replacement.sets},()=>({w:null,r:null,done:false}));
+  active.exMeta={...(active.exMeta||{}),[replacement.id]:replacement};
+  delete active.ex[sourceId];delete active.exMeta[sourceId];
+  if(active.exNotes)delete active.exNotes[sourceId];
+  order[at]=replacement.id;active.exerciseOrder=order;
+  FOCUS_EX=replacement.id;persist();closeSheet();render();
+  toast('Exercice remplacé pour cette séance');
+}
+function showReplaceExercise(sourceId){
+  const active=DB.active,source=activeExercise(sourceId);
+  if(!active||!source||!active.ex[sourceId])return;
+  if(active.ex[sourceId].some(set=>set.done)){toast('Remplacement possible avant la première série validée');return;}
+  const candidates=replacementCandidates(source);
+  const target=(source.musP||[]).map(mLabel).join(' · ')||'même zone musculaire';
+  sheet.innerHTML='<h2>Remplacer l’exercice</h2><div class="sp">'+esc(source.name)+' · alternatives ciblant '+esc(target)+'. Le programme ne sera pas modifié.</div>'
+    +'<div class="replace-list">'+(candidates.length?candidates.map((candidate,i)=>'<button class="replace-option" data-replace="'+i+'"><span>'+esc(candidate.value.name)+'</span><small>'+esc(candidate.label)+' · '+esc((candidate.value.musP||[]).map(mLabel).join(', '))+'</small>'+uiIcon('arrow-right')+'</button>').join(''):'<div class="hempty">Aucune alternative équivalente dans la bibliothèque.</div>')+'</div>';
+  openSheet();
+  sheet.querySelectorAll('[data-replace]').forEach(button=>button.addEventListener('click',()=>replaceActiveExercise(sourceId,candidates[+button.dataset.replace])));
+}
+
 /* ---------- gestion des programmes (vue) ---------- */
 function programsHTML(){
   const ap=activeProgram();
@@ -2248,7 +2323,7 @@ function startWorkout(sid){
   }
   stopTimer();
   FOCUS_EX=null;
-  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{}});
+  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{},exerciseOrder:SEANCE[sid].ex.map(e=>e.id)});
   persist();render();
 }
 function elapsedStr(){
@@ -2301,7 +2376,8 @@ function updateProgress(){
 }
 function refreshWorkoutCoach(card,exId){
   const old=card&&card.querySelector('.wcoach');
-  if(old&&DB.active&&EXO[exId]&&DB.active.ex[exId])old.outerHTML=workoutCoachHTML(EXO[exId],DB.active.ex[exId]);
+  const e=activeExercise(exId);
+  if(old&&DB.active&&e&&DB.active.ex[exId])old.outerHTML=workoutCoachHTML(e,DB.active.ex[exId]);
 }
 function finishWorkout({automatic=false}={}){
   const a=DB.active;if(!a)return;
@@ -2313,7 +2389,7 @@ function finishWorkout({automatic=false}={}){
     const m=maxW(a.ex[exId].filter(s=>s.done));
     if(m==null)continue;
     const prev=comparableBest(exId,workoutExercise(a,exId),a.date);
-    if(prev==null||m>prev)recs.push({name:EXO[exId]?EXO[exId].name:exId,w:m,prev});
+    if(prev==null||m>prev)recs.push({name:workoutExercise(a,exId)?.name||exId,w:m,prev});
   }
   const lastElapsed=lastValidatedElapsed(a);
   const dur=lastElapsed==null&&automatic?null:Math.round((lastElapsed??workoutElapsedMs(a))/1000);
@@ -2367,7 +2443,8 @@ app.addEventListener('click',ev=>{
   else if(act==='weeklystats'){SUIVI='stats';go('suivi');}
   else if(act==='workoutmode'){WORKOUT_MODE=actEl.dataset.mode==='list'?'list':'focus';render();}
   else if(act==='exfocus'){
-    if(!SEANCE[route.seance]?.ex.some(e=>e.id===actEl.dataset.ex))return;
+    const current=activeExerciseList(SEANCE[route.seance]||{ex:[]},DB.active);
+    if(!current.some(e=>e.id===actEl.dataset.ex))return;
     FOCUS_EX=actEl.dataset.ex;WORKOUT_MODE='focus';render();
     const selected=app.querySelector('.exercise-rail [aria-pressed="true"]');
     selected?.focus({preventScroll:true});selected?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
@@ -2392,6 +2469,7 @@ app.addEventListener('click',ev=>{
   else if(act==='expick')showExPicker();
   else if(act==='settings')showSettings();
   else if(act==='exinfo')showExercise(actEl.dataset.ex);
+  else if(act==='replaceex')showReplaceExercise(actEl.dataset.ex);
   else if(act==='bilan')showBodyEntry();
   else if(act==='wedit')showEditWorkout(+actEl.dataset.w);
   else if(act==='wdel'){if(window.confirm('Supprimer définitivement cette séance de l’historique ?')){DB.workouts.splice(+actEl.dataset.w,1);persist();render();toast('Séance supprimée');}}
@@ -2438,7 +2516,7 @@ app.addEventListener('click',ev=>{
     if(!DB.active||!DB.active.ex[exId])return;
     DB.active.ex[exId].push({w:null,r:null,done:false});persist();
     const i=DB.active.ex[exId].length-1;
-    const e=EXO[exId];
+    const e=activeExercise(exId);
     card.querySelector('.stable').insertAdjacentHTML('beforeend',
       setRowHTML(e,i,{w:null,r:null,done:false},e?suggestTargets(e):null));
     card.classList.remove('complete');
@@ -2464,7 +2542,7 @@ app.addEventListener('click',ev=>{
     const exId=card.dataset.ex,i=+row.dataset.i;
     const st=DB.active.ex[exId]&&DB.active.ex[exId][i];
     if(!st)return;
-    const isKg=act==='stepw',d=+actEl.dataset.d,e=EXO[exId];
+    const isKg=act==='stepw',d=+actEl.dataset.d,e=activeExercise(exId);
     const t=e?suggestTargets(e)[i]:null;
     const inp=row.querySelector(isKg?'.w':'.r');
     const cur=numOrNull(inp.value);
@@ -2487,7 +2565,7 @@ app.addEventListener('click',ev=>{
       let r=numOrNull(reps.value);
       if(weight.value.trim()&&(w==null||w<0||w>10000)){toast('Saisis une charge positive ou nulle');weight.focus();return;}
       if(reps.value.trim()&&(r==null||r<=0||r>100000)){toast('Saisis des répétitions supérieures à zéro, par exemple 7,5');reps.focus();return;}
-      const e=EXO[exId];
+      const e=activeExercise(exId);
       const t=e?suggestTargets(e)[i]:null;
       if(w==null&&t&&t.w!=null){w=t.w;row.querySelector('.w').value=fmtN(w)}
       if(r==null&&t&&t.r!=null){r=t.r;row.querySelector('.r').value=fmtN(r)}
@@ -2511,7 +2589,7 @@ app.addEventListener('click',ev=>{
     card.classList.toggle('complete',DB.active.ex[exId].every(s=>s.done));
     updateProgress();
     refreshWorkoutCoach(card,exId);
-    const prog=card.querySelector('.dprog .hist');if(prog&&EXO[exId])prog.innerHTML=progHTML(EXO[exId]);
+    const prog=card.querySelector('.dprog .hist'),current=activeExercise(exId);if(prog&&current)prog.innerHTML=progHTML(current);
   }
 });
 app.addEventListener('input',ev=>{
@@ -2548,7 +2626,7 @@ function restForExercise(e){
   return DB.active?.restByEx?.[e.id]??e.rest??SEANCE[e.seance||DB.active?.seance]?.rest??SETTINGS.rest;
 }
 function showExerciseRest(exId){
-  const e=EXO[exId],active=DB.active;
+  const e=activeExercise(exId),active=DB.active;
   if(!e||!active||!Object.hasOwn(active.ex,exId))return;
   sheet.innerHTML='<h2>Repos pour cette séance</h2><div class="sp">'+esc(e.name)+'</div>'
     +'<div class="efield"><label for="exerciseRest">Durée en secondes</label><input id="exerciseRest" type="number" inputmode="numeric" min="1" max="86400" step="1" value="'+restForExercise(e)+'"></div>'
