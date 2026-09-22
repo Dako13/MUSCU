@@ -26,9 +26,52 @@ const server=http.createServer(async(req,res)=>{
     await p.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'domcontentloaded'});
     await p.waitForFunction(()=>typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
     await p.locator('#splash').waitFor({state:'detached'});
+    const catalogCheck=await p.evaluate(()=>{
+      const names=new Set();
+      for(const m of MACHINES){const key=libraryKey(machineAsExercise(m));if(names.has(key))throw new Error('Duplicate catalog key '+key);names.add(key);}
+      for(const m of EXERCISE_CATALOG){
+        if(machineTip(m)!==m.tip||machineLoad(m)!==m.load||exPattern(machineAsExercise(m))!==m.pattern)throw new Error('Lost metadata '+m.n);
+        if(machineChains(m).length)throw new Error('Invented location '+m.n);
+      }
+      for(const m of MATRIX_CATALOG){
+        if(machineTip(m)!==m.tip||machineLoad(m)!==m.load||exPattern(machineAsExercise(m))!==m.pattern)throw new Error('Lost Matrix metadata '+m.n);
+        if(!machineChains(m).includes('Basic-Fit'))throw new Error('Missing Basic-Fit brand '+m.n);
+      }
+      go('machines');return {new:EXERCISE_CATALOG.length,total:MACHINES.length};
+    });
+    console.log('Catalog: '+JSON.stringify(catalogCheck));
+    assert(catalogCheck.new>=140);
+    await p.locator('#mq').fill('bayesian');
+    assert.equal(await p.locator('#mlist .mrow:visible').count(),1);
+    await p.locator('#mlist .mrow:visible').click();
+    assert(await p.locator('#sheet').getByText('Place la poulie basse derrière toi', {exact:false}).isVisible());
+    await p.screenshot({path:path.join(out,'bayesian-detail.png'),animations:'disabled'});
+    await p.evaluate(()=>closeSheet());
+    await p.locator('#mq').fill('barre incliné développé');
+    assert(await p.locator('#mlist .mrow:visible').count()>0);
+    await p.evaluate(()=>{MFILTER.l='corps';MFILTER.q='';render();});
+    assert(await p.locator('#mlist .mrow:visible').count()>=20);
+    await p.screenshot({path:path.join(out,'bodyweight-library.png'),animations:'disabled'});
+    await p.evaluate(()=>{MFILTER.c='Basic-Fit';MFILTER.b='Matrix';MFILTER.l='disques';MFILTER.q='';render();});
+    assert(await p.locator('#mlist .mrow:visible').count()>=13);
+    await p.locator('#mq').fill('MG-PL78');
+    assert.equal(await p.locator('#mlist .mrow:visible').count(),1);
+    await p.locator('#mlist .mrow:visible').click();
+    assert(await p.locator('#sheet h2').getByText('Hip thrust (Magnum Glute Trainer)').isVisible());
+    assert(await p.locator('#sheet').getByText('MG-PL78', {exact:false}).isVisible());
+    await p.screenshot({path:path.join(out,'matrix-glute-detail.png'),animations:'disabled'});
+    await p.locator('#sheet [data-act=machadd]').first().click();
+    assert(await p.evaluate(()=>PROGRAM[0].ex.some(e=>e.name==='Hip thrust (Magnum Glute Trainer) (Matrix)'&&e.notes.includes('coussin de bassin'))));
+    await p.evaluate(()=>{closeSheet();MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};});
     const sid=await p.evaluate(()=>{go('edit',PROGRAM[0].id);return PROGRAM[0].id;});
     const originalCount=await p.locator('#exlist .ecard').count();
     await p.locator('[data-act=elib]').click();
+    await p.evaluate(()=>{LIBFILTER.c='Basic-Fit';LIBFILTER.b='Matrix';LIBFILTER.l='broche';showLibPicker();});
+    await p.locator('#libq').fill('VS-S72');
+    assert.equal(await p.locator('#liblist .mrow:visible').count(),1);
+    await p.evaluate(()=>{LIBFILTER.c=null;LIBFILTER.b=null;LIBFILTER.l=null;showLibPicker();});
+    await p.locator('#libq').fill('bayesian');
+    assert.equal(await p.locator('#liblist .mrow:visible').count(),1);
     await p.locator('#libq').fill('Ma machine introuvable');
     assert(await p.locator('#libEmpty').isVisible());
     await p.locator('#libEmpty [data-libmode=custom]').click();
@@ -98,6 +141,18 @@ const server=http.createServer(async(req,res)=>{
     },sid);
     assert.deepEqual(checks,{noCurl:true,note:'Note conservee',rest:95,removed:true,ref:null,target:21.25});
     assert.deepEqual(errors,[]);
+    const offlineContext=await browser.newContext({serviceWorkers:'allow'});
+    await offlineContext.addInitScript(()=>{localStorage.setItem('dako_onboarded','1');localStorage.setItem('dko_cloud_welcome','1');});
+    const offlinePage=await offlineContext.newPage();
+    await offlinePage.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'domcontentloaded'});
+    await offlinePage.waitForFunction(()=>navigator.serviceWorker.controller&&typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
+    await offlineContext.setOffline(true);
+    await offlinePage.reload({waitUntil:'domcontentloaded'});
+    await offlinePage.waitForFunction(()=>typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
+    assert.equal(await offlinePage.evaluate(()=>MACHINES.length),catalogCheck.total);
+    assert.equal(await offlinePage.evaluate(()=>machineLoad(MATRIX_CATALOG.find(m=>m.model==='MG-PL78'))),'disques');
+    await offlineContext.close();
+    console.log('PASS: full catalog available offline after service-worker installation.');
     console.log('PASS: library workflow, data preservation, replacement, 1.25 increments, mobile/desktop layouts. Screenshots: '+out);
   }finally{if(browser)await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

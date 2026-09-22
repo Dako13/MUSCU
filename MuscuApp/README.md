@@ -2,6 +2,26 @@
 
 Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
+## Catalogue étendu (4.33)
+
+Ajout de 141 mouvements et variantes génériques et de 26 fiches Matrix
+(Versa, Aura et Magnum), avec conseils individuels et chargement explicite.
+Recherche par mots, synonymes français/anglais et référence constructeur.
+Les données sont dans `exercise-catalog.js`, également disponible hors ligne.
+Les anciennes entrées restent en place pour préserver favoris et références.
+
+Le filtre par enseigne est une association indicative de marques, pas un
+inventaire de chaque club. La présence locale des modèles doit être vérifiée.
+Sources consultées le 23 septembre 2026 :
+- [Basic-Fit : Matrix et Technogym](https://www.basic-fit.com/fr-lu/newestequipment).
+- [Catalogue constructeur Matrix Versa](https://pl.matrixfitness.com/pol/strength/catalog?modalities=single-station&series=versa).
+- [Catalogue Matrix 2025 : Aura et Magnum](https://www.matrixfitnessblog.it/Matrix_Strength_2025.pdf).
+- [Matrix Magnum Vertical Bench Press et gamme plate-loaded](https://www.johnsonfitness.com/Matrix-Magnum-Vertical-Bench-Press-P36128.aspx).
+- [Taxonomie des exercices ACE](https://www.acefitness.org/resources/everyone/exercise-library/).
+
+Les conseils français sont rédigés pour Dko, sans copier les fiches sources.
+Vérification des données : `node tests/exercise-catalog.cjs`.
+
 ## Bibliothèque personnelle (4.32)
 
 L’ajout d’exercices propose une sélection multiple, des favoris, les ajouts récents
@@ -25,6 +45,7 @@ Tests : `node tests/library-workflow.cjs`, `node tests/cloud-sync.cjs` et
 | `app.css` | Styles |
 | `app.overrides.css` | Direction visuelle et adaptations responsive |
 | `app.js` | Logique complète (séances, minuteur, stats, éditeur de programme, export) |
+| `exercise-catalog.js` | Mouvements génériques et références Matrix avec conseils spécifiques |
 | `data-integrity.js` | Validation des sauvegardes et fusion des historiques |
 | `cloud-sync.js`, `cloud-ui.js` | Sauvegarde Supabase privée, connexion et restauration |
 | `supabase-config.js` | Configuration publique optionnelle (aucun secret) |

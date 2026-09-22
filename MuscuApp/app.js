@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.32.0';
+const APP_VERSION='4.33.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -490,9 +490,12 @@ const MACHINES=[
  {n:'Rameur',b:'Technogym',p:['cardio'],s:['dos'],t:'Cardio'},
  {n:'Elliptique',b:'Technogym',p:['cardio'],s:[],t:'Cardio'},
  {n:'SkillMill',b:'Technogym',p:['cardio'],s:['fessiers'],t:'Cardio'},
- {n:'Stair / Climb',b:'Life Fitness',p:['cardio'],s:['fessiers'],t:'Cardio'}
+ {n:'Stair / Climb',b:'Life Fitness',p:['cardio'],s:['fessiers'],t:'Cardio'},
+ ...(typeof EXERCISE_CATALOG==='undefined'?[]:EXERCISE_CATALOG),
+ ...(typeof MATRIX_CATALOG==='undefined'?[]:MATRIX_CATALOG)
 ];
-const MACHINE_GROUPS=[['pecs','Pecs',['pecs']],['dos','Dos',['dos','lombaires']],['epaules','Épaules',['delt_ant','delt_lat','delt_post']],['biceps','Biceps',['biceps']],['triceps','Triceps',['triceps']],['jambes','Jambes',['quadriceps','ischios']],['fessiers','Fessiers',['fessiers','adducteurs']],['mollets','Mollets',['mollets']],['abdos','Abdos',['abdos']],['cardio','Cardio',['cardio']]];
+const CATALOG_BY_NAME=new Map(MACHINES.filter(m=>m.pattern).flatMap(m=>[[searchKey(m.n),m],[searchKey(m.n+' ('+m.b+')'),m]]));
+const MACHINE_GROUPS=[['pecs','Pecs',['pecs']],['dos','Dos',['dos','lombaires']],['epaules','Épaules',['delt_ant','delt_lat','delt_post']],['biceps','Biceps',['biceps']],['triceps','Triceps',['triceps']],['avant_bras','Avant-bras',['avant_bras']],['jambes','Jambes',['quadriceps','ischios']],['fessiers','Fessiers',['fessiers','adducteurs']],['mollets','Mollets',['mollets']],['abdos','Abdos',['abdos']],['cardio','Cardio',['cardio']]];
 /* Marques réelles par enseigne (recherche 2026). Base indicative : composition courante des clubs, pas un inventaire club par club. */
 const CHAINS=['On Air','Basic-Fit','Fitness Park'];
 const BRAND_CHAINS={'Technogym':['On Air','Basic-Fit','Fitness Park'],'Matrix':['Basic-Fit'],'Hammer Strength':['Fitness Park','On Air'],'Gym80':['On Air'],'Eleiko':['Fitness Park','On Air'],'Life Fitness':['Basic-Fit','On Air'],'Charge libre':['On Air','Basic-Fit','Fitness Park']};
@@ -523,10 +526,11 @@ const TIP_BY_PATTERN={
  calf:'Amplitude complète avec étirement en bas, pause 1 s en haut, pas de rebond.',
  abs:'Enroule la colonne en soufflant, contracte les abdos sans tirer sur la nuque, déroule lentement.'
 };
-function machineTip(m){return TIP_BY_PATTERN[exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
+function machineTip(m){return m.tip||TIP_BY_PATTERN[exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
 function machineChains(m){return BRAND_CHAINS[m.b]||[];}
 /* Type de chargement : broche (sélectorisée, pin) vs disques (plate-loaded) vs charge libre / poulie / poids du corps. */
 function machineLoad(m){
+  if(m.load)return m.load;
   const t=m.t||'',n=m.n||'';
   if(t==='Cardio')return 'cardio';
   if(t==='Poids du corps')return 'corps';
@@ -540,7 +544,7 @@ function machineLoad(m){
 }
 const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques (poids)',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio'};
 const LOAD_DESC={broche:'Sélectorisée : tu choisis la charge avec une broche dans la pile, rien à porter.',disques:'Plate-loaded : tu charges et décharges les disques toi-même.',libre:'Charge libre (barre / haltères) : équilibre et gainage en plus.',poulie:'Poulie à broche : tension constante, réglage rapide.',corps:'Au poids du corps (lestable).',cardio:'Appareil cardio.'};
-const LOAD_FILTER=[['broche','Pin / broche'],['disques','Poids / disques'],['libre','Charge libre'],['poulie','Poulie']];
+const LOAD_FILTER=[['broche','Pin / broche'],['disques','Poids / disques'],['libre','Charge libre'],['poulie','Poulie'],['corps','Poids du corps'],['cardio','Cardio']];
 
 /* ================== DONNÉES SÉANCES ================== */
 loadProgram(); /* doit précéder loadDB() : la migration s'appuie sur EXO */
@@ -1354,6 +1358,7 @@ function bodyMapHTML(){
 }
 /* ---------- démonstrations animées (SVG/SMIL) ---------- */
 function exPattern(e){
+  const catalog=CATALOG_BY_NAME.get(searchKey(e?.name));if(catalog)return catalog.pattern;
   const n=String(e&&e.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   /* du plus spécifique au plus générique — l'ordre compte */
   if(/cardio|tapis|velo|rameur|elliptique|skillmill|stair|climb|course/.test(n))return 'cardio';
@@ -1527,6 +1532,7 @@ function demoSVG(p){
   return '<svg class="exdemo-svg" viewBox="0 0 160 172">'+floor+g+'</svg>';
 }
 const PATTERN_LABEL={
+ frontraise:'Élévation frontale',forearm:'Poignets',stepup:'Montée sur support',kickback:'Extension de hanche',core:'Contrôle du tronc',backext:'Extension lombaire',
  cardio:'Cardio maîtrisé',chestpress:'Poussée poitrine',benchpress:'Développé couché',inclinepress:'Développé incliné',shoulderpress:'Poussée épaules',
  fly:'Ouverture contrôlée',pullover:'Pull-over',pulldown:'Tirage vertical',rowhoriz:'Tirage horizontal',reardelt:'Arrière épaules',
  lateral:'Élévation latérale',shrug:'Trapèzes',curl:'Curl biceps',triceps:'Extension triceps',
@@ -1578,7 +1584,8 @@ function coachCardsHTML(lines){
   }
   return h+'</div>';
 }
-function exerciseGuideHTML(p,steps){
+function exerciseGuideHTML(p,steps,specific=false){
+  if(specific)return '<div class="rectitle">Conseils d’exécution</div><ol class="steps compact">'+steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>';
   const notes=steps.length?('<div class="rectitle softtitle">Notes du programme</div><ol class="steps compact">'+steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'):'';
   return '<div class="rectitle">Comment réaliser</div>'+coachCardsHTML(guideForPattern(p))+notes;
 }
@@ -1613,7 +1620,7 @@ function showExercise(exId){
    +(chips?'<div class="mchips">'+chips+'</div>':'')
    +'<div class="sumgrid"><div class="sumbox"><div class="v num">'+ref+'</div><div class="l">Charge réf.</div></div>'
    +'<div class="sumbox"><div class="v num">'+e.sets+' × '+esc(e.reps)+'</div><div class="l">Objectif</div></div></div>'
-   +exerciseGuideHTML(p,steps);
+   +exerciseGuideHTML(p,steps,CATALOG_BY_NAME.has(searchKey(e.name)));
   openSheet();bindExPhoto();
 }
 
@@ -2120,9 +2127,11 @@ function collectEdit(sid){
 
 /* ---------- bibliothèque de machines (vue) ---------- */
 function searchKey(text){return String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function matchesSearch(text,query){return searchKey(query).split(/\s+/).every(word=>text.includes(word));}
+function machineSearch(m){return searchKey([m.n,m.b,m.t,m.aliases,(m.p||[]).concat(m.s||[]).map(mLabel).join(' '),m.personal?'':LOAD_SHORT[machineLoad(m)]].filter(Boolean).join(' '));}
 function filterMachineRows(){
   const q=searchKey(MFILTER.q);let count=0;
-  document.querySelectorAll('#mlist .mrow').forEach(row=>{const visible=row.dataset.search.includes(q);row.hidden=!visible;if(visible)count++;});
+  document.querySelectorAll('#mlist .mrow').forEach(row=>{const visible=matchesSearch(row.dataset.search,q);row.hidden=!visible;if(visible)count++;});
   const total=document.getElementById('machineCount');if(total)total.textContent=count+' exercice'+(count>1?'s':'');
   const empty=document.getElementById('machineEmpty');if(empty)empty.hidden=count>0;
 }
@@ -2145,6 +2154,7 @@ function machinesHTML(){
   h+='<div class="mfilters"><button class="mfchip'+(!MFILTER.l?' on':'')+'" data-act="mfl" data-l="">Tout chargement</button>';
   LOAD_FILTER.forEach(x=>{h+='<button class="mfchip'+(MFILTER.l===x[0]?' on':'')+'" data-act="mfl" data-l="'+x[0]+'">'+esc(x[1])+'</button>'});
   h+='</div><button class="sbtn" data-act="mfreset">Réinitialiser les filtres</button></details>';
+  if(MFILTER.c)h+='<p class="sp">Marques associées à '+esc(MFILTER.c)+' · modèles à vérifier dans ton club.</p>';
   const personal=libraryCatalog().filter(m=>m.personal);
   if(personal.length)h+='<details class="personal-library"><summary>Mes exercices · '+personal.length+'</summary>'+personal.map(m=>'<button class="mrow" data-act="personalexercise" data-key="'+esc(m.key)+'"><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(m.p.map(mLabel).join(', '))+'</span></span>'+uiIcon('chevron-right')+'</button>').join('')+'</details>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
@@ -2159,8 +2169,8 @@ function machinesHTML(){
     const all=(m.p||[]).concat(m.s||[]);
     if(ids&&!all.some(x=>ids.indexOf(x)>=0))return;
     const mus=(m.p||[]).map(mLabel).join(', ');
-    const searchStr=searchKey(m.n+' '+m.b+' '+all.map(mLabel).join(' '));
-    const visible=searchStr.includes(q);if(visible)n++;
+    const searchStr=machineSearch(m);
+    const visible=matchesSearch(searchStr,q);if(visible)n++;
     h+='<button class="mrow"'+(visible?'':' hidden')+' data-act="machine" data-m="'+i+'" data-search="'+esc(searchStr)+'">'
      +'<div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(mus)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div>'
      +'<span class="mrow-b">'+esc(m.b)+'</span></button>';
@@ -2177,18 +2187,18 @@ function showMachine(i){
   const seances=ap?ap.seances:[];
   const opts=seances.map(s=>'<button class="sbtn" data-act="machadd" data-m="'+i+'" data-s="'+esc(s.id)+'">'+esc(s.tab)+' · '+esc(s.title)+'</button>').join('');
   const chains=machineChains(m);
-  const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+' '+m.b+' machine musculation');
+  const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+(m.generic?' exercice musculation':' '+m.b+' machine musculation'));
   const load=machineLoad(m);
   const p=exPattern({name:m.n});
   sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
-   +'<div class="sp">'+esc(m.b)+' · '+esc(LOAD_SHORT[load])+(chains.length?' · présent chez : '+chains.map(esc).join(', '):'')+'</div>'
+   +'<div class="sp">'+esc(m.generic?m.t:m.b)+(m.model?' · '+esc(m.model):'')+' · '+esc(LOAD_SHORT[load])+(chains.length?' · Enseignes indicatives : '+chains.map(esc).join(', ')+'. Modèle à vérifier dans ton club.':'')+'</div>'
    +exPhotoHTML(m.n)
-   +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir la machine en photos ›</a></div>'
+   +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +machineVisualHTML(m,p,load)
    +'<div class="mchips">'+chips+'</div>'
    +'<div class="rectitle">Chargement</div><div class="notes" style="margin-bottom:14px">'+esc(LOAD_DESC[load])+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
-   +machineCoachHTML(p,load)
+   +(m.tip?'':machineCoachHTML(p,load))
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
   openSheet();bindExPhoto();
@@ -2197,8 +2207,7 @@ function showMachine(i){
 function addMachineToSeance(i,sid){
   const m=MACHINES[i],s=SEANCE[sid];if(!m||!s)return;
   if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la modifier');return;}
-  s.ex.push({id:uid('e_'),name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',
-    musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])});
+  s.ex.push({...machineAsExercise(m),id:uid('e_'),sets:3,reps:'8–10'});
   savePrograms();closeSheet();toast('Ajouté à '+s.tab);
 }
 function showPersonalExercise(key){
@@ -2227,7 +2236,7 @@ function muscleOverlap(a,b){
     +(b.musS||[]).reduce((n,m)=>n+(wanted.has(m)?1:0),0);
 }
 function machineAsExercise(m){
-  return {name:m.n+' ('+m.b+')',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x]),load:LOAD_SHORT[machineLoad(m)]};
+  return {name:m.generic?m.n:m.n+' ('+m.b+')',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x]),load:LOAD_SHORT[machineLoad(m)]};
 }
 function replacementCandidates(source){
   const pattern=exPattern(source),family=p=>['chestpress','benchpress'].includes(p)?'horizontal-press':p;
@@ -2866,7 +2875,7 @@ function libraryMatch(m){
 function filterLibraryRows(){
   const q=searchKey(LIBFILTER.q);let count=0;
   sheet.querySelectorAll('#liblist .mrow').forEach(row=>{
-    const visible=row.dataset.search.includes(q);row.hidden=!visible;if(visible)count++;
+    const visible=matchesSearch(row.dataset.search,q);row.hidden=!visible;if(visible)count++;
   });
   const countEl=document.getElementById('libCount');if(countEl)countEl.textContent=count+' exercice'+(count>1?'s':'');
   const empty=document.getElementById('libEmpty');if(empty)empty.hidden=count>0;
@@ -2874,7 +2883,7 @@ function filterLibraryRows(){
 function addLibraryExercise(m){
   const list=document.getElementById('exlist');if(!m||!list)return;
   const n=list.querySelectorAll('.ecard').length;
-  list.insertAdjacentHTML('beforeend',editExHTML({name:m.n+' ('+m.b+')',sets:3,reps:'8–10',unit:'kg',ref:null,notes:machineTip(m),yt:m.n+' technique',musP:(m.p||[]).filter(x=>MUSCLE_BY_ID[x]),musS:(m.s||[]).filter(x=>MUSCLE_BY_ID[x])},n));
+  list.insertAdjacentHTML('beforeend',editExHTML({...machineAsExercise(m),sets:3,reps:'8–10'},n));
   labelFields(list);closeSheet();toast('Exercice ajouté — pense à enregistrer');
 }
 function showCustomExerciseForm(){
@@ -2935,9 +2944,10 @@ function showLibPicker(){
    +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.l?' on':'')+'" data-libfilter="l" data-value="">Tout chargement</button>'
    +LOAD_FILTER.map(x=>'<button class="mfchip'+(LIBFILTER.l===x[0]?' on':'')+'" data-libfilter="l" data-value="'+x[0]+'">'+esc(x[1])+'</button>').join('')+'</div>'
    +'<button class="text-link" id="libReset">Réinitialiser les filtres</button></details>'
+   +(LIBFILTER.c?'<p class="sp">Marques associées à '+esc(LIBFILTER.c)+' · modèles à vérifier dans ton club.</p>':'')
    +'<div id="libCount" class="subdate" role="status">'+matches.length+' exercice'+(matches.length>1?'s':'')+'</div><div id="liblist">';
   matches.forEach(({m,i})=>{
-    const muscles=(m.p||[]).map(mLabel).join(', '),load=m.personal?'':LOAD_SHORT[machineLoad(m)],search=searchKey(m.n+' '+m.b+' '+muscles+' '+load);
+    const muscles=(m.p||[]).map(mLabel).join(', '),load=m.personal?'':LOAD_SHORT[machineLoad(m)],search=machineSearch(m);
     const detail=[m.b,muscles,load].filter(Boolean).join(' · ');
     const favorite=(SETTINGS.exerciseFavorites||[]).includes(m.key);
     h+='<div class="mrow library-choice" data-search="'+esc(search)+'"><label><input type="checkbox" data-libmachine="'+i+'"'+(LIBSELECT.has(m.key)?' checked':'')+'><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(detail)+'</span></span></label><button class="icon-button" data-libfavorite="'+i+'" aria-pressed="'+favorite+'" aria-label="Favori : '+esc(m.n)+'" data-tooltip="Favori">'+uiIcon('star')+'</button></div>';
