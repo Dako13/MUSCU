@@ -7,10 +7,11 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.38.0';
+const APP_VERSION='4.39.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
+const FRESH_INSTALL=(()=>{try{return !['dako_programs','muscu_program','muscu_settings','muscu_v3','dako_onboarded'].some(k=>localStorage.getItem(k)!==null)}catch{return false}})();
 
 /* ================== UTILITAIRES ================== */
 function esc(s){
@@ -253,8 +254,8 @@ function loadProgram(){
     let legacy=null;
     try{legacy=JSON.parse(localStorage.getItem(KEY_PROGRAM))}catch(e){}
     const hasCustom=Array.isArray(legacy)&&legacy.length;
-    const seances=hasCustom?legacy:JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
-    PROGRAMS=[{id:'p_main',name:hasCustom?'Mon programme':'Programme principal',seances}];
+    const seances=hasCustom?legacy:(FRESH_INSTALL?[]:JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
+    PROGRAMS=[{id:'p_main',name:hasCustom||FRESH_INSTALL?'Mon programme':'Programme principal',seances}];
     ACTIVE_PID='p_main';
     normalizePrograms();savePrograms();
   }
@@ -275,7 +276,7 @@ const saveProgram=savePrograms; /* compat : édition de séance */
 function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
   const act=activeProgram();if(!act)return false;
   if(DB.active&&act.seances.some(s=>s.id===DB.active.seance)){toast('Termine la séance en cours avant de réinitialiser');return false;}
-  act.seances=regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
+  act.seances=SETTINGS.programOrigin==='neutral'?[]:regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
   normalizePrograms();savePrograms();
   return true;
 }
@@ -288,10 +289,18 @@ function regenIds(seances,keepDefault){
   return seances;
 }
 function blankSeance(){return{id:uid('s_'),tab:'Séance',title:'Nouvelle séance',sub:'',warn:'',ex:[]}}
+function starterSessions(){
+  const ex=(name,musP,musS=[])=>({id:uid('e_'),name,sets:3,reps:'8-12',ref:null,unit:'kg',musP,musS,notes:''});
+  return[
+    {id:uid('s_'),tab:'A',title:'Full body A',sub:'Tout le corps',warn:'',ex:[ex('Presse à cuisses',['quadriceps'],['fessiers']),ex('Développé couché haltères',['pecs'],['triceps']),ex('Tirage horizontal poulie',['dos'],['biceps']),ex('Leg curl assis',['ischios']),ex('Élévations latérales haltères',['delt_lat'])]},
+    {id:uid('s_'),tab:'B',title:'Full body B',sub:'Tout le corps',warn:'',ex:[ex('Hip thrust machine',['fessiers'],['ischios']),ex('Tirage vertical poulie',['dos'],['biceps']),ex('Développé épaules machine',['delt_ant'],['triceps']),ex('Leg extension',['quadriceps']),ex('Curl biceps poulie',['biceps'])]},
+    {id:uid('s_'),tab:'C',title:'Full body C',sub:'Tout le corps',warn:'',ex:[ex('Squat guidé Smith',['quadriceps'],['fessiers']),ex('Développé incliné haltères',['pecs'],['triceps']),ex('Rowing machine',['dos'],['biceps']),ex('Soulevé de terre roumain haltères',['ischios'],['fessiers']),ex('Extension triceps poulie',['triceps'])]}
+  ];
+}
 function setActiveProgram(pid){if(PROGRAMS.some(p=>p.id===pid)){ACTIVE_PID=pid;savePrograms()}}
 function createProgram(name,fromDefault){
   const pid=uid('p_');
-  const seances=fromDefault?regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM))):[blankSeance()];
+  const seances=fromDefault?(SETTINGS.programOrigin==='neutral'?starterSessions():regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)))):[blankSeance()];
   PROGRAMS.push({id:pid,name:name||'Nouveau programme',seances});
   ACTIVE_PID=pid;normalizePrograms();savePrograms();return pid;
 }
@@ -321,14 +330,16 @@ function loadSettings(){
   let s=null;
   try{s=JSON.parse(localStorage.getItem(KEY_SETTINGS))}catch(e){}
   if(!s||typeof s!=='object')s={};
+  const fresh=FRESH_INSTALL&&!localStorage.getItem(KEY_PROGRAMS);
   return{
     rest:[90,120,180,240].includes(s.rest)?s.rest:180,
-    poids:numOrNull(s.poids)||PROFILE.poids_kg,
-    taille:intOrNull(s.taille)||PROFILE.taille_cm,
-    age:intOrNull(s.age)||PROFILE.age,
+    poids:s.poids===null?null:(numOrNull(s.poids)||(fresh?null:PROFILE.poids_kg)),
+    taille:s.taille===null?null:(intOrNull(s.taille)||(fresh?null:PROFILE.taille_cm)),
+    age:s.age===null?null:(intOrNull(s.age)||(fresh?null:PROFILE.age)),
     objectif:(typeof s.objectif==='string'?s.objectif:''),
-    salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
+    salle:typeof s.salle==='string'?s.salle:(fresh?'':'On Air'),
     niveau:(typeof s.niveau==='string')?s.niveau:'',
+    programOrigin:s.programOrigin==='neutral'||(fresh&&s.programOrigin!=='legacy')?'neutral':'legacy',
     theme:(['dark','rose','emerald','gold','glacier'].includes(s.theme)?s.theme:'dark'),
     silhouette:(['male','female'].includes(s.silhouette)?s.silhouette:(s.theme==='rose'?'female':'male')),
     ...(Array.isArray(s.exerciseLibrary)?{exerciseLibrary:s.exerciseLibrary}:{}),
@@ -626,10 +637,23 @@ function previousNoteHTML(exId){
 const IDB_NAME='dako_store',IDB_STORE='kv';
 const MIRROR_KEYS=[KEY_PROGRAMS,KEY,KEY_SETTINGS,KEY_BODY,'dako_lastbackup','dko_cloud_link'];
 function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open(IDB_NAME,1)}catch(e){return rej(e)}r.onupgradeneeded=()=>{try{r.result.createObjectStore(IDB_STORE)}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
-function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>{db.close();res(true)};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)}})).catch(()=>false)}
+function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{
+  const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);
+  if(k==='snapshot'){
+    const request=store.get(k);
+    request.onsuccess=()=>{if(!request.result||request.result.t<=v.t)store.put(v,k)};
+  }else store.put(v,k);
+  tx.oncomplete=()=>{db.close();res(true)};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)};
+})).catch(()=>false)}
 function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);tx.oncomplete=()=>db.close()})).catch(()=>null)}
 function storageSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}return snap;}
-function mirrorSnapshot(){if(!STORAGE_READY||!STORAGE_WRITABLE)return Promise.resolve(false);try{return idbSet('snapshot',storageSnapshot())}catch(e){return Promise.resolve(false)}}
+function mirrorSnapshot(){
+  if(!STORAGE_READY||!STORAGE_WRITABLE)return Promise.resolve(false);
+  try{
+    if(localStorage.getItem(KEY_PROGRAMS)==null||localStorage.getItem(KEY)==null)return Promise.resolve(false);
+    return idbSet('snapshot',storageSnapshot());
+  }catch(e){return Promise.resolve(false)}
+}
 var _mirT=null; /* var volontaire (anti-TDZ) : mirrorSoon peut être appelé pendant la migration au chargement (loadProgram->savePrograms), AVANT cette ligne — ne pas repasser en let */
 function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400);window.DKOCloudUI?.changed();window.DKOCoachUI?.changed();}
 function maybeRestoreFromIDB(){
@@ -1092,7 +1116,7 @@ function homeHTML(){
       +'<button class="bigbtn stage-start" data-act="'+(active?'open':'quickstart')+'" data-s="'+esc(next.id)+'">'+uiIcon('play')+'<span>'+(active?'Reprendre la séance':'Commencer')+'</span>'
       +(active?'<span id="elapsed" class="num">'+elapsedStr()+'</span>':uiIcon('arrow-right'))+'</button></section>';
   }else{
-    h+='<section class="session-stage"><div class="eyebrow">Ton entraînement</div><h2>À toi de jouer.</h2><button class="bigbtn" data-act="programs">Créer une séance '+uiIcon('arrow-right')+'</button></section>';
+    h+='<section class="session-stage"><div class="eyebrow">Ton entraînement</div><h2>À toi de jouer.</h2><button class="bigbtn stage-start" data-act="programs"><span>Créer une séance</span>'+uiIcon('arrow-right')+'</button></section>';
   }
   h+='<section class="week-panel" aria-labelledby="weekTitle"><div class="section-heading"><h2 id="weekTitle">Ta semaine</h2><button class="text-link" data-act="weeklystats">Tout le suivi '+uiIcon('arrow-up-right')+'</button></div>'
     +'<div class="weekly-lead"><b class="num">'+String(weekW.length).padStart(2,'0')+'</b><span>séance'+(weekW.length>1?'s':'')+'<br>réalisée'+(weekW.length>1?'s':'')+'</span></div>'
@@ -3038,11 +3062,13 @@ function showLibPicker(){
   document.getElementById('libAddSelected').addEventListener('click',addSelectedLibraryExercises);
   filterLibraryRows();
 }
-function showOnboarding(){
+function showOnboarding(fresh=false){
   const salles=['On Air','Basic-Fit','Fitness Park','Autre'],objs=['Prise de masse','Recomposition','Force','Forme'],nivs=['Débutant','Intermédiaire','Avancé'];
   const row=(g,arr,sel)=>arr.map(v=>'<button class="chip'+(sel===v?' on':'')+'" data-ob="'+g+'" data-v="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('');
+  let plan='blank';
   sheet.innerHTML='<h2>Bienvenue sur Dko</h2>'
-   +'<div class="sp">Trois infos pour personnaliser ton suivi — modifiable à tout moment dans Réglages.</div>'
+   +'<div class="sp">Personnalise ton suivi. Tu pourras tout modifier ensuite.</div>'
+   +(fresh?'<div class="efield"><label>Point de départ</label><div class="onboarding-plans"><button class="chip on" data-plan="blank" aria-pressed="true">Créer mon programme</button><button class="chip" data-plan="starter" aria-pressed="false">Exemple 3 séances</button></div><small class="field-hint">L’exemple ne contient aucune charge cible et reste modifiable.</small></div>':'')
    +'<div class="efield"><label>Ta salle</label><div class="chips" style="flex-wrap:wrap">'+row('salle',salles,SETTINGS.salle)+'</div></div>'
    +'<div class="efield"><label>Ton objectif</label><div class="chips" style="flex-wrap:wrap">'+row('obj',objs,SETTINGS.objectif)+'</div></div>'
    +'<div class="efield"><label>Ton niveau</label><div class="chips" style="flex-wrap:wrap">'+row('niv',nivs,SETTINGS.niveau)+'</div></div>'
@@ -3053,7 +3079,14 @@ function showOnboarding(){
     sheet.querySelectorAll('[data-ob="'+g+'"]').forEach(x=>x.classList.toggle('on',x===b));
     if(g==='salle')SETTINGS.salle=b.dataset.v;else if(g==='obj')SETTINGS.objectif=b.dataset.v;else if(g==='niv')SETTINGS.niveau=b.dataset.v;
   }));
+  sheet.querySelectorAll('[data-plan]').forEach(b=>b.addEventListener('click',()=>{
+    plan=b.dataset.plan;
+    sheet.querySelectorAll('[data-plan]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))});
+  }));
   const go=document.getElementById('obGo');
+  if(go)go.addEventListener('click',()=>{
+    if(fresh&&plan==='starter'){const p=activeProgram();if(p&&!p.seances.length){p.seances=starterSessions();savePrograms();}}
+  });
   if(go)go.addEventListener('click',()=>{try{localStorage.setItem('dako_onboarded','1')}catch(e){}saveSettings();closeSheet();render();toast('Profil enregistré · bienvenue 💪');});
 }
 function showSettings(){
@@ -3085,7 +3118,7 @@ function showSettings(){
    +'<div class="rectitle">Compte</div><div class="sbtns"><button class="sbtn" id="setCloud">Compte et sauvegarde</button><button class="sbtn" id="setCoach">'+uiIcon('users')+'Coaching</button></div>'
    +'<div class="rectitle">Outils</div>'
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
-   +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
+   +'<div class="sbtns"><button class="sbtn danger" id="setReset">'+(SETTINGS.programOrigin==='neutral'?'Vider le programme actif':'Réinitialiser le programme')+'</button></div>'
    +'<div class="sbtns"><button class="sbtn pri" id="setOk">Fermer</button></div>'
    +'<div class="about">Dko v'+APP_VERSION+' · '+esc((activeProgram()||{}).name||'')+'</div>';
   openSheet();
@@ -3104,7 +3137,7 @@ function showSettings(){
     SETTINGS.silhouette=c.dataset.silhouette;saveSettings();render();
     document.querySelectorAll('#silhouetteChips .chip').forEach(x=>{x.classList.toggle('on',x===c);x.setAttribute('aria-pressed',String(x===c))});
   });
-  document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null){SETTINGS.poids=v;saveSettings()}});
+  document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null||!ev.target.value.trim()){SETTINGS.poids=v;saveSettings()}});
   document.getElementById('setTaille').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.taille=v;saveSettings()});
   document.getElementById('setAge').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.age=v;saveSettings()});
   document.getElementById('setObj').addEventListener('input',ev=>{SETTINGS.objectif=ev.target.value.trim();saveSettings()});
@@ -3123,7 +3156,7 @@ function showSettings(){
   document.getElementById('setCoach').addEventListener('click',()=>window.DKOCoachUI?.open());
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
-    if(!window.confirm('Revenir au programme par défaut ? Tes modifications de programme seront perdues (l’historique est conservé).'))return;
+    if(!window.confirm((SETTINGS.programOrigin==='neutral'?'Vider les séances de ce programme ?':'Revenir au programme par défaut ?')+' Tes modifications de programme seront perdues (l’historique est conservé).'))return;
     if(resetProgram()){closeSheet();go('home');toast('Programme réinitialisé');}
   });
   document.getElementById('setOk').addEventListener('click',()=>{closeSheet();render()});
@@ -3138,7 +3171,7 @@ function exportPayload(){
   const recup={};
   for(const m of MUSCLES)recup[m.id]=muscleRecovery(m.id);
   return{app:'dako',version:7,exporte_le:new Date().toISOString(),
-    profil:Object.assign({},PROFILE,{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||PROFILE.methode,salle:SETTINGS.salle,niveau:SETTINGS.niveau}),
+    profil:Object.assign(SETTINGS.programOrigin==='neutral'?{}:{...PROFILE},{poids_kg:SETTINGS.poids,taille_cm:SETTINGS.taille,age:SETTINGS.age,objectif:SETTINGS.objectif||(SETTINGS.programOrigin==='neutral'?'':PROFILE.methode),salle:SETTINGS.salle,niveau:SETTINGS.niveau}),
     reglages:SETTINGS,recuperation_musculaire:recup,
     programmes:PROGRAMS,programme_actif:ACTIVE_PID,
     programme:PROGRAM,exercices:exos,seances:DB.workouts,active:DB.active,bilan_forme:BODY};
@@ -3417,7 +3450,7 @@ maybeRestoreFromIDB().then(restored=>{
   }
   DB.workouts.forEach(snapshotWorkout);
   if(DB.active)snapshotWorkout(DB.active);
-  STORAGE_READY=true;savePrograms();persist();render();
+  STORAGE_READY=true;if(FRESH_INSTALL&&!restored)saveSettings();savePrograms();persist();render();
   checkWorkoutTimeout();
   document.dispatchEvent(new Event('app:ready'));
   if(restored)toast('Données restaurées depuis la sauvegarde de secours');
@@ -3425,7 +3458,7 @@ maybeRestoreFromIDB().then(restored=>{
   if(timer&&timer.end>Date.now())startTimer(timer.label,(timer.end-Date.now())/1000);
   else if(timer){delete DB.active.restTimer;persist();}
   backupReminder();
-  try{if(!localStorage.getItem('dako_onboarded'))showOnboarding()}catch(e){}
+  try{if(!localStorage.getItem('dako_onboarded'))showOnboarding(FRESH_INSTALL&&!restored)}catch(e){}
 });
 
 /* ================== SPLASH ================== */

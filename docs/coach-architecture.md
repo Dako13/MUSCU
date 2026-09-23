@@ -34,11 +34,14 @@ no automatic enrollment or upload to coaching. The new account-specific
 `dko_coach_base:<project>|<user>` key is synchronization metadata only and must
 never be restored from a backup or reused for another account.
 
-Coach drafts and student dossiers are memory-only: they are not added to the
-coach's localStorage, IndexedDB, service worker cache or personal backups.
-A draft can be exported deliberately. Closing/reloading the page without
-publishing discards it after the browser's unsaved-changes warning. A temporary
-network failure retains the draft in memory. Signing out clears it.
+Student dossiers remain memory-only. One coach draft per signed-in account is
+kept in localStorage on that device, outside personal backups and the IndexedDB
+mirror. It is never published automatically. Reopening the app offers an explicit
+resume, export or discard action; resume checks current permissions and the
+remote revision first. A changed remote version leaves the draft exportable but
+cannot be resumed over it. Drafts expire after 30 days and are cleared on sign-out
+or account switch. Local device storage is not encrypted; coaches using a shared
+device should sign out. A temporary network failure does not erase the draft.
 
 ## Server contract
 
@@ -134,7 +137,8 @@ the feature resumes. No guarantee of unlimited free use.
 - `tests/coach-browser.cjs`: isolated student/coach browser contexts using the
   actual SQL RPC, editor, custom exercise fallback, publication/receipt,
   existing data preservation, active-workout protection, rights changes,
-  restore conflicts and responsive screenshots in both themes.
+  draft resume/revision checks/account clearing, restore conflicts and responsive
+  screenshots in both themes.
 - Existing cloud, library and workout regressions continue to run. Headless
   Chromium tests do not replace physical iPhone/Safari validation.
 

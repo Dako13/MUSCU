@@ -2,11 +2,30 @@
 /* Coach dossiers never enter the student's local database or private backups.
    This adapter owns consent, account boundaries and guarded program application. */
 window.DKOCoachUI=(()=>{
-  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='';
+  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,savedDraft=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='';
   const ctx=()=>window.DKOCloudUI?.coachContext()||{};
   const clone=v=>structuredClone(v),normalize=v=>DKO_DATA.programs(v);
   const local=()=>normalize(PROGRAMS);
   const ownKey=()=>`dko_coach_base:${owner}`;
+  const draftKey=()=>`dko_coach_draft:${owner}`;
+  function readDraft(){
+    try{
+      const raw=localStorage.getItem(draftKey());if(!raw||raw.length>2*1024*1024)return null;
+      const saved=JSON.parse(raw),t=saved.target;
+      if(saved.owner!==owner||!t||!['student','template'].includes(t.kind)||(t.kind==='student'&&typeof t.id!=='string')||!Array.isArray(saved.programs)||!saved.programs.length||saved.programs.length>100||Date.now()-saved.at>30*86400000)return null;
+      if(!saved.programs.every(p=>p&&typeof p.name==='string'&&Array.isArray(p.seances)&&p.seances.length<=100&&p.seances.every(s=>s&&typeof s.title==='string'&&Array.isArray(s.ex)&&s.ex.length<=100&&s.ex.every(e=>e&&typeof e.name==='string'))))return null;
+      return saved;
+    }catch{return null;}
+  }
+  function clearDraft(){try{if(owner)localStorage.removeItem(draftKey())}catch{}savedDraft=null;}
+  function persistDraft(){
+    if(!owner||!draft||!draftTarget)return false;
+    const target=draftTarget.kind==='student'?{kind:'student',id:dossier?.id,revision:dossier?.revision}:draftTarget;
+    if(!target.id&&target.kind==='student')return false;
+    const saved={owner,target,programs:draft,baseline,selectedProgram,selectedSession,at:Date.now()};
+    try{const raw=JSON.stringify(saved);if(raw.length>2*1024*1024)throw new Error('too large');localStorage.setItem(draftKey(),raw);savedDraft=saved;return true;}
+    catch{savedDraft=null;notice='Brouillon non sauvegardé sur cet appareil. Exporte-le avant de fermer.';return false;}
+  }
   const readBase=()=>{try{return JSON.parse(localStorage.getItem(ownKey()))||null;}catch{return null;}};
   const writeBase=value=>{if(value)localStorage.setItem(ownKey(),JSON.stringify(value));else localStorage.removeItem(ownKey());};
   const ownAllowed=()=>{const s=ctx().state;return STORAGE_READY&&STORAGE_WRITABLE&&s?.enabled&&!s.mismatch&&!['conflict','error'].includes(s.phase);};
@@ -52,7 +71,11 @@ window.DKOCoachUI=(()=>{
   function accountChanged(){
     const c=ctx(),next=c.state?.user?`${c.project}|${c.state.user.id}`:'';
     if(next===owner)return;
+    const previous=owner;
+    if(previous){try{localStorage.removeItem(`dko_coach_draft:${previous}`)}catch{}}
     epoch++;service?.dispose();service=null;owner=next;profile=null;students=[];templates=[];dossier=null;draft=null;draftTarget=null;baseline='';notice='';phase='idle';busy=false;
+    savedDraft=owner?readDraft():null;
+    if(owner&&!savedDraft){try{localStorage.removeItem(draftKey())}catch{}}
     clearTimeout(timer);
     if(owner){
       service=DKO_COACH_SYNC.create({api,read:local,apply,blocked,hash:DKO_CLOUD.fingerprint,getBase:readBase,setBase:writeBase,
@@ -88,18 +111,18 @@ window.DKOCoachUI=(()=>{
     const id=dossier?.id;if(!id)return;
     try{
       const fresh=await api('read',{student:id});if(dossier?.id!==id)return;
-      if(fresh.mode!=='full'&&draftTarget?.kind==='student'){draft=null;draftTarget=null;baseline='';notice='L’élève a limité ton accès à la lecture.';}
+      if(fresh.mode!=='full'&&draftTarget?.kind==='student'){draft=null;draftTarget=null;baseline='';clearDraft();notice='L’élève a limité ton accès à la lecture.';}
       if(!draft){dossier=fresh;paint();}
       else if(fresh.revision!==dossier.revision){notice='Une version plus récente existe. Exporte ton brouillon avant de recharger.';paintStatus();const n=document.getElementById('coachNotice');if(n)n.textContent=notice;}
-    }catch(e){if(dossier?.id===id){if(e.code==='42501'){dossier=null;draft=null;students=[];}notice=errorText(e);paint();}}
+    }catch(e){if(dossier?.id===id){if(e.code==='42501'){dossier=null;draft=null;students=[];clearDraft();}notice=errorText(e);paint();}}
   }
   async function run(fn){
     if(busy)return;busy=true;notice='';const token=epoch;toggleBusy();
-    try{await fn();check(token);}catch(e){if(token===epoch){notice=errorText(e);if(e.code==='42501'){dossier=null;draft=null;students=[];}}}
+    try{await fn();check(token);}catch(e){if(token===epoch){notice=errorText(e);if(e.code==='42501'){dossier=null;draft=null;students=[];clearDraft();}}}
     finally{if(token===epoch){busy=false;paint();}}
   }
   function toggleBusy(){app.querySelectorAll('#coachRoot button,#coachRoot input,#coachRoot select,#coachRoot textarea').forEach(el=>{el.disabled=true;});}
-  function leave(){if(dirty()&&!confirm('Quitter sans enregistrer ce brouillon ?'))return false;draft=null;draftTarget=null;baseline='';dossier=null;return true;}
+  function leave(){if(dirty()&&!savedDraft&&!confirm('Brouillon non sauvegardé. Quitter quand même ?'))return false;draft=null;draftTarget=null;baseline='';dossier=null;return true;}
   function open(){closeSheet();go('coach');if(route.view==='coach')run(refresh);}
   function html(){
     let h='<section id="coachRoot" class="coach"><header class="coach-head"><div><div class="coach-eyebrow">DKO</div><h1>Coaching</h1></div>'+iconButton('refresh','Actualiser','refresh-cw')+'</header>';
@@ -126,13 +149,23 @@ window.DKOCoachUI=(()=>{
     return h+'<div class="coach-actions">'+button('rotate','Changer mon code','refresh-cw')+button('disable','Arrêter le partage','x')+button('recovery','Copie avant modification','database')+'</div>';
   }
   function coachHTML(){
-    return '<form id="coachJoin"><h2>Ajouter un élève</h2><label class="coach-field"><span>Code personnel de l’élève</span><input name="code" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="Code transmis par l’élève"></label><button class="sbtn pri" type="submit">'+uiIcon('plus')+'Associer l’élève</button></form><h2>Mes élèves <span class="coach-count">'+students.length+'</span></h2>'
-      +(students.length?'<div class="coach-students">'+students.map(s=>`<button class="coach-student" data-coach="student" data-id="${esc(s.id)}"><span class="coach-avatar">${esc(s.label.slice(0,1).toUpperCase())}</span><span><strong>${esc(s.label)}</strong><small>${s.sessions} séances · ${s.mode==='full'?'Accès complet':'Lecture seule'}</small><small>Dernière sauvegarde : ${esc(stamp(s.lastSync))}</small></span>${uiIcon('chevron-right')}<span class="coach-delivery">${s.appliedRevision>=s.revision?'Programme reçu':'En attente de réception'}</span></button>`).join('')+'</div>':'<p class="sp">Aucun élève associé.</p>')+'<p class="sp">Historique visible après la sauvegarde de l’élève. Jusqu’à 200 élèves affichés.</p>';
+    const needsReview=s=>s.appliedRevision<s.revision||!s.lastSync||Date.now()-new Date(s.lastSync).getTime()>7*86400000;
+    const pending=students.filter(s=>s.appliedRevision<s.revision).length;
+    const stale=students.filter(s=>!s.lastSync||Date.now()-new Date(s.lastSync).getTime()>7*86400000).length;
+    const ordered=[...students].sort((a,b)=>Number(needsReview(b))-Number(needsReview(a))||a.label.localeCompare(b.label,'fr'));
+    return draftBanner()+'<div class="coach-overview"><div><b>'+students.length+'</b><span>Élèves</span></div><div><b>'+pending+'</b><span>Programmes en attente</span></div><div><b>'+stale+'</b><span>Sauvegardes à vérifier</span></div></div>'
+      +'<form id="coachJoin"><h2>Ajouter un élève</h2><label class="coach-field"><span>Code personnel de l’élève</span><input name="code" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="Code transmis par l’élève"></label><button class="sbtn pri" type="submit">'+uiIcon('plus')+'Associer l’élève</button></form><h2>Mes élèves <span class="coach-count">'+students.length+'</span></h2>'
+      +(students.length?'<div class="coach-students">'+ordered.map(s=>`<button class="coach-student" data-coach="student" data-id="${esc(s.id)}"><span class="coach-avatar">${esc(s.label.slice(0,1).toUpperCase())}</span><span><strong>${esc(s.label)}</strong><small>${s.sessions} séances · ${s.mode==='full'?'Accès complet':'Lecture seule'}</small><small>Dernière sauvegarde : ${esc(stamp(s.lastSync))}</small></span>${uiIcon('chevron-right')}<span class="coach-delivery${needsReview(s)?' attention':''}">${s.appliedRevision<s.revision?'Programme en attente de réception':!s.lastSync?'Aucune sauvegarde disponible':Date.now()-new Date(s.lastSync).getTime()>7*86400000?'Sauvegarde de plus de 7 jours':'Programme reçu'}</span></button>`).join('')+'</div>':'<p class="sp">Aucun élève associé.</p>')+'<p class="sp">La date de sauvegarde ne prouve pas la date du dernier entraînement. Jusqu’à 200 élèves affichés.</p>';
   }
   function templatesHTML(){
-    return '<div class="coach-section-head"><h2>Mes modèles <span class="coach-count">'+templates.length+'</span></h2>'+button('new-template','Créer un modèle','plus','',true)+'</div>'
+    return draftBanner()+'<div class="coach-section-head"><h2>Mes modèles <span class="coach-count">'+templates.length+'</span></h2>'+button('new-template','Créer un modèle','plus','',true)+'</div>'
       +'<p class="sp">Programmes réutilisables, privés à ton compte. Leur modification ne change aucun programme élève déjà publié.</p>'
       +(templates.length?'<div class="coach-templates">'+templates.map(t=>`<div class="coach-template"><div><strong>${esc(t.name)}</strong><small>${t.sessions} séance${t.sessions>1?'s':''} · Modifié le ${esc(stamp(t.updatedAt))}</small></div><div class="coach-template-actions">${button('template-edit','Modifier','notebook-pen',`data-id="${esc(t.id)}"`)}${iconButton('template-delete','Supprimer le modèle','trash-2',`data-id="${esc(t.id)}" data-revision="${t.revision}"`)}</div></div>`).join('')+'</div>':'<p class="sp">Aucun modèle pour le moment.</p>');
+  }
+  function draftBanner(){
+    if(!savedDraft||draft)return '';
+    const name=savedDraft.target.kind==='template'?'modèle':(students.find(s=>s.id===savedDraft.target.id)?.label||'élève');
+    return '<div class="coach-draft-banner"><div><strong>Brouillon sur cet appareil</strong><small>'+esc(name)+' · enregistré le '+esc(stamp(savedDraft.at))+'</small></div><div class="coach-actions">'+button('resume-draft','Reprendre','notebook-pen','',true)+button('export-saved-draft','Exporter','database')+button('discard-saved-draft','Effacer','trash-2')+'</div></div>';
   }
   function dossierHTML(){
     const d=dossier;
@@ -178,6 +211,7 @@ window.DKOCoachUI=(()=>{
     const [scope,key]=el.dataset.field.split('.'),p=draft[selectedProgram],s=p.seances[selectedSession];
     const target=scope==='p'?p:scope==='s'?s:s.ex[+el.closest('[data-ex-index]').dataset.exIndex];
     target[key]=el.multiple?[...el.selectedOptions].map(o=>o.value):['sets','ref','rest','increment'].includes(key)?(el.value.trim()===''?null:Number(el.value.replace(',','.'))):el.value;
+    persistDraft();
   }
   function mount(){
     const root=document.getElementById('coachRoot');if(!root)return;
@@ -185,8 +219,8 @@ window.DKOCoachUI=(()=>{
     root.oninput=e=>editInput(e.target);
     root.onchange=e=>{
       const el=e.target;
-      if(el.id==='coachProgram'){selectedProgram=+el.value;selectedSession=0;paint();}
-      else if(el.id==='coachSession'){selectedSession=+el.value;paint();}
+      if(el.id==='coachProgram'){selectedProgram=+el.value;selectedSession=0;persistDraft();paint();}
+      else if(el.id==='coachSession'){selectedSession=+el.value;persistDraft();paint();}
       else if(el.id==='coachProgressExercise'){progressExercise=el.value;paint();}
       else if(el.dataset.permission)run(async()=>{await api('permission',{coach:el.dataset.permission,mode:el.value});await refresh();});
       else if(el.id==='coachNotes')run(async()=>{await api('notes',{enabled:el.checked});await refresh();});
@@ -203,22 +237,47 @@ window.DKOCoachUI=(()=>{
     const d=await api('read',{student:id});d.programs=normalize(d.programs);d.workouts=(d.workouts||[]).map(w=>DKO_DATA.workout(w));
     dossier=d;draft=null;draftTarget=null;baseline='';selectedProgram=selectedSession=0;
   }
-  function startDraft(programs,target={kind:'student'}){draft=clone(programs);draftTarget=target;baseline=JSON.stringify(draft);selectedProgram=selectedSession=0;}
+  function startDraft(programs,target={kind:'student'}){
+    if(savedDraft&&!draft&&!confirm('Remplacer le brouillon conservé sur cet appareil ?'))return false;
+    draft=clone(programs);draftTarget=target;baseline=JSON.stringify(draft);selectedProgram=selectedSession=0;persistDraft();return true;
+  }
+  async function resumeDraft(){
+    const saved=savedDraft;if(!saved||saved.owner!==owner)return;
+    if(saved.target.kind==='student'){
+      const fresh=await api('read',{student:saved.target.id});
+      if(fresh.mode!=='full'){clearDraft();notice='Accès en lecture seule. Brouillon local effacé.';return;}
+      if(fresh.revision!==saved.target.revision){notice='Le programme a changé depuis ce brouillon. Exporte-le avant de le remplacer.';return;}
+      fresh.programs=normalize(fresh.programs);fresh.workouts=(fresh.workouts||[]).map(w=>DKO_DATA.workout(w));
+      dossier=fresh;mode='coach';
+    }else{
+      if(saved.target.id){
+        const current=await templateApi('read',{id:saved.target.id});
+        if(current.revision!==saved.target.revision){notice='Ce modèle a changé depuis le brouillon. Exporte-le avant de le remplacer.';return;}
+      }
+      dossier=null;mode='templates';
+    }
+    draft=clone(saved.programs);draftTarget=clone(saved.target);baseline=saved.baseline||JSON.stringify(draft);
+    selectedProgram=Math.min(saved.selectedProgram||0,draft.length-1);selectedSession=saved.selectedSession||0;
+    notice='Brouillon repris sur cet appareil. Vérifie-le avant publication.';
+  }
   function publish(form){
     if(!form.reportValidity()||(draftTarget?.kind==='student'&&dossier.mode!=='full'))return;
     let doc;try{doc=normalize(draft);}catch(e){notice=e.message;document.getElementById('coachNotice').textContent=notice;return;}
     if(draftTarget?.kind==='template'){
       const target=draftTarget;
-      run(async()=>{await templateApi('save',{id:target.id,revision:target.revision,program:reusableProgram(doc[0])});draft=null;draftTarget=null;baseline='';templates=await templateApi('list');notice='Modèle enregistré.';});
+      run(async()=>{await templateApi('save',{id:target.id,revision:target.revision,program:reusableProgram(doc[0])});draft=null;draftTarget=null;baseline='';clearDraft();templates=await templateApi('list');notice='Modèle enregistré.';});
       return;
     }
     const summary=form.querySelector('[data-field="summary"]').value;
     run(async()=>{const result=await api('publish',{student:dossier.id,revision:dossier.revision,programs:doc,summary});
-      draft=null;draftTarget=null;baseline='';await loadStudent(dossier.id);notice='Version '+result.revision+' publiée. En attente de réception par l’élève.';});
+      draft=null;draftTarget=null;baseline='';clearDraft();await loadStudent(dossier.id);notice='Version '+result.revision+' publiée. En attente de réception par l’élève.';});
   }
   function action(a,b){
     if(busy)return;
     if(a==='account'){window.DKOCloudUI.show();return;}
+    if(a==='resume-draft'){run(resumeDraft);return;}
+    if(a==='export-saved-draft'){if(savedDraft)download({app:'dako',version:7,programmes:savedDraft.programs},'dko-brouillon-coach.json');return;}
+    if(a==='discard-saved-draft'){if(!confirm('Effacer ce brouillon enregistré sur cet appareil ?'))return;clearDraft();paint();return;}
     if(a==='copy'){navigator.clipboard.writeText(profile.code.match(/.{1,4}/g).join('-')).then(()=>toast('Code copié'),()=>toast('Copie indisponible. Sélectionne le code.'));return;}
     if(a==='mode'){if(!leave())return;mode=b.dataset.mode;run(refresh);return;}
     if(a==='refresh'){if(!leave())return;run(refresh);return;}
@@ -235,7 +294,7 @@ window.DKOCoachUI=(()=>{
     if(a==='student'){run(()=>loadStudent(b.dataset.id));return;}
     if(a==='back'){if(leave())run(refresh);return;}
     if(a==='edit'){startDraft(dossier.programs);paint();return;}
-    if(a==='cancel'){if(dirty()&&!confirm('Abandonner ce brouillon ?'))return;draft=null;draftTarget=null;baseline='';paint();return;}
+    if(a==='cancel'){if(dirty()&&!confirm('Abandonner ce brouillon ?'))return;draft=null;draftTarget=null;baseline='';clearDraft();paint();return;}
     if(a==='draft-export'){download({programmes:draft},'dko-brouillon-coach.json');return;}
     if(a==='library'){library();return;}
     if(a==='template-import'){importTemplate();return;}
@@ -263,7 +322,7 @@ window.DKOCoachUI=(()=>{
     else if(a==='ex-copy'){if(s.ex.length>=100)return;s.ex.splice(i+1,0,{...clone(s.ex[i]),id:uid('e_')});}
     else if(a==='ex-up'&&i>0)[s.ex[i-1],s.ex[i]]=[s.ex[i],s.ex[i-1]];
     else if(a==='ex-down'&&i<s.ex.length-1)[s.ex[i+1],s.ex[i]]=[s.ex[i],s.ex[i+1]];
-    paint();
+    persistDraft();paint();
   }
   function importTemplate(){
     const token=epoch;
@@ -279,7 +338,7 @@ window.DKOCoachUI=(()=>{
       b.disabled=true;
       templateApi('read',{id:b.dataset.templateId}).then(t=>{
         if(token!==epoch||!draft||draftTarget?.kind!=='student')return;
-        draft.push(freshProgram(normalize([t.program])[0]));selectedProgram=draft.length-1;selectedSession=0;closeSheet();paint();
+        draft.push(freshProgram(normalize([t.program])[0]));selectedProgram=draft.length-1;selectedSession=0;persistDraft();closeSheet();paint();
       }).catch(()=>{b.disabled=false;toast('Modèle indisponible. Réessaie.');});
     };
   }
@@ -300,7 +359,7 @@ window.DKOCoachUI=(()=>{
         sheet.querySelectorAll('[data-coach="detail"][aria-expanded="true"]').forEach(other=>{other.setAttribute('aria-expanded','false');document.getElementById('coachDetail-'+other.dataset.index).hidden=true;});
         if(opening){const m=entries[+b.dataset.index];panel.innerHTML='<h3>'+esc(m.n)+'</h3>'+machineInfoHTML(m);panel.hidden=false;b.setAttribute('aria-expanded','true');bindExPhoto();}
       }
-      else if(b){const s=draft[selectedProgram].seances[selectedSession];if(s.ex.length>=100){toast('100 exercices maximum par séance');return;}s.ex.push({...clone(entries[+b.dataset.index].exercise),id:uid('e_')});closeSheet();paint();}
+      else if(b){const s=draft[selectedProgram].seances[selectedSession];if(s.ex.length>=100){toast('100 exercices maximum par séance');return;}s.ex.push({...clone(entries[+b.dataset.index].exercise),id:uid('e_')});persistDraft();closeSheet();paint();}
       else if(e.target.closest('[data-coach="custom"]')){closeSheet();action('new-exercise',{});}
     };show();
   }
@@ -323,8 +382,8 @@ window.DKOCoachUI=(()=>{
   document.addEventListener('app:sheet-closed',()=>{sheet.onclick=null;});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')changed();});
   window.addEventListener('online',changed);
-  window.addEventListener('offline',()=>{notice='Hors ligne. Publication indisponible ; le brouillon reste en mémoire tant que cette page reste ouverte.';paint();});
+  window.addEventListener('offline',()=>{notice='Hors ligne. Publication indisponible ; le brouillon local reste disponible sur cet appareil.';paint();});
   window.addEventListener('storage',e=>{if(e.key===KEY_PROGRAMS){service?.invalidate();changed();}});
   setTimeout(accountChanged,0);
-  return {open,html,mount,dirty,leave,changed,accountChanged,restored:()=>service?.invalidate()};
+  return {open,html,mount,dirty:()=>dirty()&&!savedDraft,leave,changed,accountChanged,restored:()=>service?.invalidate()};
 })();

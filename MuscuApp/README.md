@@ -2,6 +2,19 @@
 
 Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
+## Premier lancement et coaching (4.39)
+
+Une installation neuve commence avec un profil non prérempli et un programme
+vide. L'accueil propose un exemple modifiable de trois séances sans charges
+cibles. Les installations et sauvegardes existantes gardent leurs programmes.
+
+L'espace coach classe les élèves à vérifier selon la réception du programme et
+la date de leur dernière sauvegarde ; cette date ne représente pas la date du
+dernier entraînement. Un brouillon de programme coach peut être repris après
+rechargement sur le même appareil, après contrôle des droits et de la révision.
+Il n'est jamais publié automatiquement ni inclus dans la sauvegarde privée.
+Déconnexion et changement de compte l'effacent.
+
 ## Catalogue étendu (4.33)
 
 Ajout de 141 mouvements et variantes génériques et de 26 fiches Matrix

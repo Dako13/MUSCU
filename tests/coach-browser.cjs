@@ -31,17 +31,20 @@ const server=http.createServer(async(req,res)=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   browser=await chromium.launch({channel:'msedge',headless:true});
   const errors=[];
+  async function connect(page,id){
+   await page.evaluate(id=>{
+    window.testState={user:{id},enabled:true,phase:'saved',mismatch:false};
+    DKOCloudUI.coachContext=()=>({project:'test',state:testState,client:{rpc:async(fn,body)=>fetch('/test-rpc',{method:'POST',body:JSON.stringify({id:testState.user.id,fn,...body})}).then(r=>r.json())}});
+    DKOCoachUI.accountChanged();
+   },id);
+  }
   async function pageFor(id){
    const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
    await context.route('**/supabase-config.js',r=>r.fulfill({contentType:'text/javascript',body:'window.DKO_SUPABASE_CONFIG={};'}));
    const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
    await page.addInitScript(()=>localStorage.setItem('dako_onboarded','1'));
    await page.goto('http://127.0.0.1:'+server.address().port+'/');await page.locator('#splash').waitFor({state:'detached'});
-   await page.evaluate(id=>{
-    window.testState={user:{id},enabled:true,phase:'saved',mismatch:false};
-    DKOCloudUI.coachContext=()=>({project:'test',state:testState,client:{rpc:async(fn,body)=>fetch('/test-rpc',{method:'POST',body:JSON.stringify({id:testState.user.id,fn,...body})}).then(r=>r.json())}});
-    DKOCoachUI.accountChanged();
-   },id);return page;
+   await connect(page,id);return page;
   }
   const s=await pageFor(student),c=await pageFor(coach);
   const ready=page=>page.waitForFunction(()=>!document.querySelector('[data-coach="refresh"]')?.disabled);
@@ -78,8 +81,19 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await c.getByText('Bon ressenti',{exact:true}).count(),0);
   await c.setViewportSize({width:1280,height:900});await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-dossier-desktop.png'),fullPage:true,animations:'disabled'});
   await c.locator('[data-coach="back"]').click();await c.locator('[data-coach="student"]').waitFor();
+  assert.equal(await c.locator('.coach-overview b').first().textContent(),'1');
   await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-students-desktop.png'),fullPage:true,animations:'disabled'});
   await c.locator('[data-coach="student"]').click();await c.locator('[data-coach="edit"]').waitFor();await c.setViewportSize({width:390,height:844});
+  await c.locator('[data-coach="edit"]').click();await c.locator('[data-field="e.sets"]').first().fill('7');
+  assert.equal(await c.evaluate(()=>JSON.parse(localStorage.getItem('dko_coach_draft:test|'+testState.user.id)).programs[0].seances[0].ex[0].sets),7);
+  assert.equal(await c.evaluate(()=>JSON.stringify(exportPayload()).includes('dko_coach_draft')),false);
+  await c.reload();await c.locator('#splash').waitFor({state:'detached'});await connect(c,coach);
+  await c.evaluate(()=>DKOCoachUI.open());await c.locator('[data-mode="coach"]').click();await c.locator('[data-coach="resume-draft"]').waitFor();
+  await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-draft-mobile.png'),fullPage:true,animations:'disabled'});
+  await c.locator('[data-coach="resume-draft"]').click();await c.locator('[data-field="e.sets"]').first().waitFor();
+  assert.equal(await c.locator('[data-field="e.sets"]').first().inputValue(),'7');
+  await c.locator('[data-coach="cancel"]').click();
+  assert.equal(await c.evaluate(()=>localStorage.getItem('dko_coach_draft:test|'+testState.user.id)),null);
   const ownCoach=await c.evaluate(()=>JSON.stringify(PROGRAMS));
   await c.locator('[data-coach="edit"]').click();await c.locator('[data-field="e.sets"]').fill('4');await c.locator('[data-field="s.rest"]').fill('240');
   await c.locator('[data-coach="library"]').click();await c.locator('#coachSearch').fill('Curl bayésien');
@@ -113,7 +127,12 @@ const server=http.createServer(async(req,res)=>{
   const concurrent=await queryAs(student,'self');concurrent.programs[0].seances[0].ex[0].reps='12';
   await queryAs(student,'publish',{revision:concurrent.revision,programs:concurrent.programs});
   await c.locator('#coachEditor button[type="submit"]').click();await c.getByText(/Le programme a changé ailleurs/).waitFor();
-  assert.equal(await c.locator('[data-field="e.sets"]').first().inputValue(),'9');await c.locator('[data-coach="cancel"]').click();
+  assert.equal(await c.locator('[data-field="e.sets"]').first().inputValue(),'9');
+  await c.evaluate(()=>{DKOCoachUI.leave();DKOCoachUI.open();});await c.locator('[data-coach="resume-draft"]').waitFor();
+  await c.locator('[data-coach="resume-draft"]').click();await c.getByText(/Le programme a changé depuis ce brouillon/).waitFor();
+  assert.equal(await c.locator('#coachEditor').count(),0);
+  assert.equal(await c.locator('[data-coach="export-saved-draft"]').count(),1);
+  await c.locator('[data-coach="discard-saved-draft"]').click();await c.locator('[data-coach="student"]').click();await c.locator('[data-coach="edit"]').waitFor();
   await c.locator('[data-coach="back"]').click();await c.locator('[data-coach="student"]').click();
   // Current workouts freeze their prescription; program reception waits for completion.
   await s.evaluate(()=>startWorkout('s_student'));
@@ -138,6 +157,15 @@ const server=http.createServer(async(req,res)=>{
   await c.locator(`[data-coach="template-delete"][data-id="${model.id}"]`).click();
   await c.getByText('Modèle supprimé.',{exact:true}).waitFor();
   assert.equal((await queryAs(student,'self')).revision,revisionBeforeTemplateEdit,'deleting a template must not alter students');
+  await c.locator('[data-coach="new-template"]').click();await c.locator('[data-field="p.name"]').fill('Brouillon privé');
+  assert(await c.evaluate(()=>!!localStorage.getItem('dko_coach_draft:test|'+testState.user.id)));
+  await c.reload();await c.locator('#splash').waitFor({state:'detached'});await connect(c,coach);
+  await c.evaluate(()=>DKOCoachUI.open());await c.locator('[data-mode="templates"]').click();
+  await c.locator('[data-coach="resume-draft"]').click();
+  assert.equal(await c.locator('[data-field="p.name"]').inputValue(),'Brouillon privé');
+  await c.evaluate(()=>{testState.user=null;DKOCoachUI.accountChanged();});
+  assert.equal(await c.evaluate(()=>localStorage.getItem('dko_coach_draft:test|00000000-0000-0000-0000-000000000002')),null);
+  await connect(c,coach);
   // Missing sync base after a restored backup must not publish stale programs.
   await s.evaluate(()=>{DKOCoachUI.restored();PROGRAMS[0].name='Copie restaurée';savePrograms();});await s.locator('[data-coach="refresh"]').click();await s.getByText(/Deux versions différentes/).waitFor();
   await s.locator('[data-coach="compare"]').click();await s.locator('[data-coach="use-remote"]').click();await s.getByText('Programmes à jour',{exact:true}).waitFor();assert.equal(await s.evaluate(()=>PROGRAMS[0].name),'Programme élève');

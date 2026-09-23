@@ -54,9 +54,9 @@ async function importMerge(page){
     await p.locator('[data-act="bodyside"][data-side="back"]').click();
     assert.notEqual(await p.locator('.stage-anatomy svg').innerHTML(),male);
     await p.locator('[data-act="bodyside"][data-side="front"]').click();
-    await p.evaluate(()=>{SETTINGS.theme='rose';applyTheme();render();});
+    await p.evaluate(()=>{SETTINGS.silhouette='female';render();});
     assert.notEqual(await p.locator('.stage-anatomy svg').innerHTML(),male);
-    await p.evaluate(()=>{SETTINGS.theme='dark';applyTheme();render();});
+    await p.evaluate(()=>{SETTINGS.silhouette='male';render();});
     assert.equal(await p.locator('.stage-anatomy svg').innerHTML(),male);
     await p.locator('[data-act="weeklystats"]').click();
     assert(await p.evaluate(()=>route.view==='suivi'&&SUIVI==='stats'));
@@ -64,8 +64,8 @@ async function importMerge(page){
     await p.setViewportSize({width:320,height:568});
     await p.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    assert(await p.locator('.stage-start').evaluate(el=>el.getBoundingClientRect().bottom<=document.getElementById('tabbar').getBoundingClientRect().top),'Start must remain above navigation');
     await p.screenshot({path:path.join(out,'home-short.png')});
+    assert(await p.locator('.stage-start').evaluate(el=>el.getBoundingClientRect().bottom<=document.getElementById('tabbar').getBoundingClientRect().top),'Start must remain above navigation');
     await p.setViewportSize({width:390,height:844});
     await p.locator('[data-act="settings"]').click();
     assert(await p.locator('#sheet').isVisible());await p.keyboard.press('Escape');
