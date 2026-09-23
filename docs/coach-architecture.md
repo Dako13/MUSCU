@@ -104,6 +104,25 @@ Do not introduce a generic plugin framework or split the app into separate
 deployments before an actual feature needs it. Preserve the program-channel API
 when extracting the remaining monolith gradually.
 
+## Deferred: each coach's own ChatGPT account
+
+Product direction confirmed on 2026-09-23: Dko is a multi-coach platform, not
+a personal integration tied to its creator's ChatGPT account. Keep AI optional.
+The user explicitly deferred implementation and rejected metered generation API
+billing. Do not start this work until requested again.
+
+Investigate a public Dko connector used inside each coach's own ChatGPT account.
+Each connection authenticates that coach's Dko identity, exposes only permitted
+students and allows program drafts for human review before publication. Never
+share a creator account, collect ChatGPT passwords or reuse browser session tokens.
+Student permission to share with a coach is not consent to send data to an AI:
+require a separate, revocable agreement and minimize the data transmitted.
+
+Do not promise a generally available embedded ChatGPT generator in Dko funded
+by the coach's subscription. Connector availability, supported plans, publication
+review and hosting costs must be rechecked against official documentation when
+the feature resumes. No guarantee of unlimited free use.
+
 ## Verification
 
 - `tests/coach-sql.cjs`: real PostgreSQL engine via PGlite, private access,
