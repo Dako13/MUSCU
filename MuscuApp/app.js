@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.37.0';
+const APP_VERSION='4.38.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -330,6 +330,7 @@ function loadSettings(){
     salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
     niveau:(typeof s.niveau==='string')?s.niveau:'',
     theme:(['dark','rose','emerald','gold','glacier'].includes(s.theme)?s.theme:'dark'),
+    silhouette:(['male','female'].includes(s.silhouette)?s.silhouette:(s.theme==='rose'?'female':'male')),
     ...(Array.isArray(s.exerciseLibrary)?{exerciseLibrary:s.exerciseLibrary}:{}),
     ...(Array.isArray(s.exerciseFavorites)?{exerciseFavorites:s.exerciseFavorites}:{}),
     ...(Array.isArray(s.exerciseRecent)?{exerciseRecent:s.exerciseRecent}:{})
@@ -1345,7 +1346,7 @@ function slugValues(side,valFn){
 }
 function silhouette(side,valFn){
   const back=side==='back';
-  const fem=(typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.theme==='rose'&&typeof BODY_FRONT_F!=='undefined');
+  const fem=(typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.silhouette==='female'&&typeof BODY_FRONT_F!=='undefined');
   let data,vb,outline;
   if(fem){
     data=(back?BODY_BACK_F:BODY_FRONT_F)||[];
@@ -3062,6 +3063,9 @@ function showSettings(){
    +'<div class="efield"><label>Thème</label><div id="themeChips">'
    +[['dark','Rouge'],['rose','Rosé'],['emerald','Émeraude'],['gold','Or'],['glacier','Glacier']].map(t=>'<button type="button" class="chip theme-option'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" aria-pressed="'+(((SETTINGS.theme||'dark')===t[0])?'true':'false')+'"><span class="theme-swatch '+t[0]+'" aria-hidden="true"></span>'+t[1]+'</button>').join('')
    +'</div></div>'
+   +'<div class="efield"><label>Silhouette</label><div id="silhouetteChips">'
+   +[['male','Homme'],['female','Femme']].map(v=>'<button type="button" class="chip'+(SETTINGS.silhouette===v[0]?' on':'')+'" data-silhouette="'+v[0]+'" aria-pressed="'+(SETTINGS.silhouette===v[0])+'">'+v[1]+'</button>').join('')
+   +'</div></div>'
    +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
    +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')
    +'</div></div>'
@@ -3094,6 +3098,11 @@ function showSettings(){
     const c=ev.target.closest('.chip');if(!c)return;
     SETTINGS.theme=c.dataset.th;saveSettings();applyTheme();render();
     document.querySelectorAll('#themeChips .chip').forEach(x=>{x.classList.toggle('on',x===c);x.setAttribute('aria-pressed',String(x===c))});
+  });
+  document.getElementById('silhouetteChips').addEventListener('click',ev=>{
+    const c=ev.target.closest('[data-silhouette]');if(!c)return;
+    SETTINGS.silhouette=c.dataset.silhouette;saveSettings();render();
+    document.querySelectorAll('#silhouetteChips .chip').forEach(x=>{x.classList.toggle('on',x===c);x.setAttribute('aria-pressed',String(x===c))});
   });
   document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null){SETTINGS.poids=v;saveSettings()}});
   document.getElementById('setTaille').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.taille=v;saveSettings()});

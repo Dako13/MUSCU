@@ -343,6 +343,8 @@ summary{font-size:13px;min-height:44px}
 #themeChips .theme-swatch.emerald{background:#65dab0}
 #themeChips .theme-swatch.gold{background:#e9c57a}
 #themeChips .theme-swatch.glacier{background:#75d7e4}
+#silhouetteChips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#silhouetteChips .chip{min-height:48px}
 .mrow{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;margin:0;padding:16px 0;gap:14px}
 .mrow-main,.mrow-n{min-width:0;overflow-wrap:anywhere;white-space:normal}
 .mrow-n{font-size:15px;font-weight:600}

@@ -33,20 +33,36 @@ const server=http.createServer(async(req,res)=>{
       for(const [theme,accent] of themes){
         await page.evaluate(()=>showSettings());
         await page.locator('#themeChips [data-th="'+theme+'"]').click();
-        const actual=await page.evaluate(()=>({theme:SETTINGS.theme,stored:JSON.parse(localStorage.getItem('muscu_settings')).theme,accent:getComputedStyle(document.documentElement).getPropertyValue('--ac').trim(),valid:DKO_DATA.settings(exportPayload().reglages).theme,program:JSON.stringify(PROGRAMS),overflow:document.documentElement.scrollWidth>innerWidth}));
-        assert.deepEqual(actual,{theme,stored:theme,accent,valid:theme,program,overflow:false});
-        assert.equal(await page.locator('#themeChips [aria-pressed="true"]').count(),1);
-        assert.equal(await page.locator('#sheet').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
-        const actualMap=await page.evaluate(()=>silhouette('front',()=>0).match(/viewBox="([^"]+)"/)[1]);
-        assert.equal(actualMap,theme==='rose'?await page.evaluate(()=>BODY_VB_FRONT_F):await page.evaluate(()=>BODY_VB_FRONT));
-        if(width===390){await page.locator('#sheet').evaluate(el=>el.scrollTop=0);await page.screenshot({path:path.join(out,'settings-'+theme+'.png'),animations:'disabled'});}
-        await page.evaluate(()=>closeSheet());
-        if(width===390)await page.screenshot({path:path.join(out,'home-'+theme+'.png'),animations:'disabled'});
+        for(const silhouette of ['male','female']){
+          await page.locator('#silhouetteChips [data-silhouette="'+silhouette+'"]').click();
+          const actual=await page.evaluate(before=>({theme:SETTINGS.theme,silhouette:SETTINGS.silhouette,stored:JSON.parse(localStorage.getItem('muscu_settings')).silhouette,accent:getComputedStyle(document.documentElement).getPropertyValue('--ac').trim(),valid:DKO_DATA.settings(exportPayload().reglages).silhouette,programUnchanged:JSON.stringify(PROGRAMS)===before,overflow:document.documentElement.scrollWidth>innerWidth}),program);
+          assert.deepEqual(actual,{theme,silhouette,stored:silhouette,accent,valid:silhouette,programUnchanged:true,overflow:false});
+          assert.equal(await page.locator('#themeChips [aria-pressed="true"]').count(),1);
+          assert.equal(await page.locator('#silhouetteChips [aria-pressed="true"]').count(),1);
+          assert.equal(await page.locator('#sheet').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+          const actualMap=await page.evaluate(()=>silhouette('front',()=>0).match(/viewBox="([^"]+)"/)[1]);
+          assert.equal(actualMap,silhouette==='female'?await page.evaluate(()=>BODY_VB_FRONT_F):await page.evaluate(()=>BODY_VB_FRONT));
+          if(width===390){await page.locator('#sheet').evaluate(el=>el.scrollTop=0);await page.screenshot({path:path.join(out,'settings-'+theme+'-'+silhouette+'.png'),animations:'disabled'});}
+          await page.evaluate(()=>closeSheet());
+          if(width===390)await page.screenshot({path:path.join(out,'home-'+theme+'-'+silhouette+'.png'),animations:'disabled'});
+          if(silhouette==='male')await page.evaluate(()=>showSettings());
+        }
       }
     }
     await page.setViewportSize({width:390,height:844});
     await page.reload();await page.locator('#splash').waitFor({state:'detached'});
     assert.equal(await page.evaluate(()=>SETTINGS.theme),'glacier');
+    assert.equal(await page.evaluate(()=>SETTINGS.silhouette),'female');
+    const legacy=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block'});
+    await legacy.addInitScript(()=>{localStorage.setItem('dako_onboarded','1');localStorage.setItem('muscu_settings',JSON.stringify({theme:'rose'}));});
+    await legacy.goto('http://127.0.0.1:'+server.address().port+'/');
+    await legacy.locator('#splash').waitFor({state:'detached'});
+    assert.equal(await legacy.evaluate(()=>SETTINGS.silhouette),'female');
+    await legacy.evaluate(()=>showSettings());
+    await legacy.locator('#themeChips [data-th="dark"]').click();
+    assert.equal(await legacy.evaluate(()=>SETTINGS.silhouette),'female');
+    assert.equal(await legacy.evaluate(()=>DKO_DATA.settings({theme:'rose'}).silhouette),undefined);
+    assert.equal(await legacy.evaluate(()=>{try{DKO_DATA.settings({silhouette:'other'});return false}catch{return true}}),true);
     assert.deepEqual(errors,[]);
     console.log('Theme workflow passed; screenshots: '+out);
   }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
