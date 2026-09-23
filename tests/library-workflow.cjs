@@ -41,6 +41,20 @@ const server=http.createServer(async(req,res)=>{
     });
     console.log('Catalog: '+JSON.stringify(catalogCheck));
     assert(catalogCheck.new>=140);
+    const loadAndKickback=await p.evaluate(()=>{
+      const generic=MACHINES.find(m=>m.n==='Chest Press'&&m.b==='Technogym');
+      const plate=MACHINES.find(m=>m.n==='ISO-Lateral Bench Press'&&m.b==='Hammer Strength');
+      const kickback=EXERCISE_CATALOG.find(m=>m.n==='Kickback jambe tendue (poulie, sangle)');
+      return {generic:machineLoad(generic),plate:machineLoad(plate),kickback:exPattern(machineAsExercise(kickback)),visual:demoSVG(kickback.pattern),tip:machineTip(MACHINES.find(m=>m.n==='Glute / Kickback (poulie)'))};
+    });
+    assert.equal(loadAndKickback.generic,'variable');
+    assert.equal(loadAndKickback.plate,'disques');
+    assert.equal(loadAndKickback.kickback,'kickback');
+    assert(loadAndKickback.visual.includes('d-move')&&!loadAndKickback.visual.includes('d-bench'));
+    assert(loadAndKickback.tip.includes('recule la jambe'));
+    await p.evaluate(()=>showMachine(MACHINES.findIndex(m=>m.n==='Chest Press'&&m.b==='Technogym')));
+    assert(await p.locator('#sheet').getByText('Le chargement dépend de la gamme', {exact:false}).isVisible());
+    await p.evaluate(()=>closeSheet());
     await p.locator('#mq').fill('bayesian');
     assert.equal(await p.locator('#mlist .mrow:visible').count(),1);
     await p.locator('#mlist .mrow:visible').click();

@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.42.1';
+const APP_VERSION='4.43.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -533,6 +533,7 @@ const TIP_BY_PATTERN={
  legpress:'Pieds largeur d’épaules, descends jusqu’à ~90° aux genoux, pousse sans verrouiller, genoux dans l’axe des pieds.',
  squat:'Talons au sol, dos gainé, descends genoux dans l’axe des pieds, remonte en poussant le sol.',
  hipthrust:'Appui sur les talons, monte le bassin jusqu’à l’alignement, contracte les fessiers 1-2 s en haut sans cambrer.',
+ kickback:'Prends un appui stable et recule la jambe sans tourner le bassin ni cambrer le dos. Reviens lentement.',
  hinge:'Charnière de hanche : fessiers en arrière, dos plat, descends jusqu’à l’étirement des ischios, remonte en serrant les fessiers.',
  lunge:'Grand pas, descends le genou arrière vers le sol, buste droit, pousse sur le talon avant pour remonter.',
  legext:'Contraction 1 s en haut, descente contrôlée, ne relâche jamais complètement la charge.',
@@ -542,25 +543,25 @@ const TIP_BY_PATTERN={
  calf:'Amplitude complète avec étirement en bas, pause 1 s en haut, pas de rebond.',
  abs:'Enroule la colonne en soufflant, contracte les abdos sans tirer sur la nuque, déroule lentement.'
 };
-function machineTip(m){return m.tip||TIP_BY_PATTERN[exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
+function machineTip(m){return m.tip||TIP_BY_PATTERN[m.pattern||exPattern({name:m.n})]||'Mouvement contrôlé, amplitude complète, gaine le tronc.';}
 function machineChains(m){return BRAND_CHAINS[m.b]||[];}
-/* Type de chargement : broche (sélectorisée, pin) vs disques (plate-loaded) vs charge libre / poulie / poids du corps. */
+/* Les fiches sans gamme ni modèle exact ne permettent pas de déduire le chargement. */
 function machineLoad(m){
   if(m.load)return m.load;
   const t=m.t||'',n=m.n||'';
   if(t==='Cardio')return 'cardio';
   if(t==='Poids du corps')return 'corps';
   if(/Poulie/i.test(t))return 'poulie';
-  if(/Hack Squat|Leg Press 45|T-Bar/i.test(n))return 'disques';
   if(t==='Haltères')return 'libre';
-  if(t==='Convergente'||t==='Guidée')return 'disques';
-  if(t==='Assistée')return 'broche';
+  if(t==='Guidée')return 'disques';
+  if(/ISO-Lateral/i.test(n)&&m.b==='Hammer Strength')return 'disques';
+  if(/Leg Press 45|T-Bar/i.test(n)&&t==='Charge libre')return 'disques';
   if(t==='Charge libre')return 'libre';
-  return 'broche';
+  return 'variable';
 }
-const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques (poids)',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio'};
-const LOAD_DESC={broche:'Sélectorisée : tu choisis la charge avec une broche dans la pile, rien à porter.',disques:'Plate-loaded : tu charges et décharges les disques toi-même.',libre:'Charge libre (barre / haltères) : équilibre et gainage en plus.',poulie:'Poulie à broche : tension constante, réglage rapide.',corps:'Au poids du corps (lestable).',cardio:'Appareil cardio.'};
-const LOAD_FILTER=[['broche','Pin / broche'],['disques','Poids / disques'],['libre','Charge libre'],['poulie','Poulie'],['corps','Poids du corps'],['cardio','Cardio']];
+const LOAD_SHORT={broche:'Broche (pin)',disques:'À disques (poids)',libre:'Charge libre',poulie:'Poulie',corps:'Poids du corps',cardio:'Cardio',variable:'À vérifier'};
+const LOAD_DESC={broche:'Sélectorisée : tu choisis la charge avec une broche dans la pile, rien à porter.',disques:'Plate-loaded : tu charges et décharges les disques toi-même.',libre:'Charge libre (barre / haltères) : équilibre et gainage en plus.',poulie:'Poulie à broche : tension constante, réglage rapide.',corps:'Au poids du corps (lestable).',cardio:'Appareil cardio.',variable:'Le chargement dépend de la gamme et du modèle présents dans ta salle. Vérifie si la machine utilise une pile à broche ou des disques avant de la choisir.'};
+const LOAD_FILTER=[['broche','Pin / broche'],['disques','Poids / disques'],['libre','Charge libre'],['poulie','Poulie'],['corps','Poids du corps'],['cardio','Cardio'],['variable','À vérifier']];
 
 /* ================== DONNÉES SÉANCES ================== */
 loadProgram(); /* doit précéder loadDB() : la migration s'appuie sur EXO */
@@ -1483,6 +1484,7 @@ function exPattern(e){
   if(/leg extension|leg-extension|extension de jambe/.test(n))return 'legext';
   if(/leg curl|leg-curl|ischio|curl assis|curl allonge|curl jambe/.test(n))return 'legcurl';
   if(/fente|bulgare|lunge|split squat/.test(n))return 'lunge';
+  if(/kickback|extension de hanche|glute \/ extension/.test(n))return 'kickback';
   if(/hip thrust|fessier|glute/.test(n))return 'hipthrust';
   if(/soulev|roumain|good morning|deadlift/.test(n))return 'hinge';
   if(/hack|squat/.test(n))return 'squat';
@@ -1611,6 +1613,12 @@ function demoSVG(p){
        +'<g>'+tr('0 14;0 -4;0 14',2.2)+'<line class="d-bone" x1="52" y1="92" x2="104" y2="110"/><circle class="d-joint" cx="104" cy="110" r="3.5"/><line class="d-move" x1="104" y1="110" x2="132" y2="150"/><line class="d-move" x1="104" y1="110" x2="82" y2="150"/></g>'
        +'<line class="d-gear" x1="82" y1="104" x2="122" y2="104"/>';
       break;
+    case 'kickback':
+      g='<circle class="d-head" cx="65" cy="31" r="10"/><line class="d-bone" x1="65" y1="42" x2="72" y2="95"/>'
+       +'<line class="d-bone" x1="68" y1="55" x2="101" y2="72"/><line class="d-bone" x1="101" y1="72" x2="113" y2="101"/>'
+       +'<line class="d-bone" x1="72" y1="95" x2="79" y2="155"/>'
+       +'<g><line class="d-move" x1="72" y1="95" x2="102" y2="147"/>'+an('0 72 95;-48 72 95;0 72 95',2.2)+'</g>';
+      break;
     case 'hinge':
       g='<circle class="d-head" cx="78" cy="34" r="10"/><g>'+an('0 76 96;34 76 96;0 76 96',2.4)+'<line class="d-bone" x1="76" y1="44" x2="76" y2="96"/><line class="d-move" x1="76" y1="60" x2="58" y2="118"/><line class="d-move" x1="76" y1="60" x2="94" y2="118"/></g>'
        +'<line class="d-bone" x1="76" y1="96" x2="64" y2="156"/><line class="d-bone" x1="76" y1="96" x2="90" y2="156"/>';
@@ -1657,6 +1665,7 @@ const PATTERN_LABEL={
 };
 const COACH_LABELS=['Position','Trajectoire','Respiration','À éviter'];
 const COACH_GUIDE={
+ kickback:['Prends un appui stable et garde le bassin face à l’avant.','Recule la jambe depuis la hanche, puis reviens avec contrôle.','Souffle en reculant la jambe.','Évite de tourner le bassin ou de cambrer pour gagner de l’amplitude.'],
  cardio:['Monte progressivement en intensité, buste grand et regard loin.','Garde un rythme régulier avant de chercher la vitesse.','Respire en continu, sans bloquer la cage.','Ne pars pas trop fort si tu veux tenir la zone ciblée.'],
  chestpress:['Poignées à hauteur de poitrine, omoplates posées, pieds stables.','Pousse en diagonale légère, coudes vers 45°, retour contrôlé.','Souffle en poussant, inspire sur la descente.','Évite de verrouiller brutalement ou de décoller les épaules.'],
  benchpress:['Omoplates serrées, pieds ancrés, poignets alignés au-dessus des coudes.','Descends vers le bas des pectoraux, pousse sans rebond.','Grosse inspiration avant la descente, souffle après le passage dur.','Ne casse pas les poignets et ne rebondis pas sur la poitrine.'],
@@ -1684,6 +1693,7 @@ const COACH_GUIDE={
  abs:['Nuque longue, bassin contrôlé, mouvement court et propre.','Enroule la colonne ou maintiens le gainage selon la variante.','Souffle fort sur la contraction.','Ne tire pas sur la nuque et ne creuse pas le bas du dos.']
 };
 const LOAD_SETUP={
+ variable:'Vérifie sur la machine si la charge se règle à la broche ou avec des disques.',
  broche:'Choisis la broche avant de t’installer, puis teste une rep légère.',
  disques:'Charge les deux côtés de façon symétrique et verrouille les disques.',
  libre:'Prépare la zone, garde la charge proche et sécurise tes appuis.',
@@ -2314,7 +2324,7 @@ function machineInfoHTML(m){
   const chains=machineChains(m);
   const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+(m.generic?' exercice musculation':' '+m.b+' machine musculation'));
   const load=machineLoad(m);
-  const p=exPattern({name:m.n});
+  const p=m.pattern||exPattern({name:m.n});
   return '<div class="sp">'+esc(m.generic?m.t:m.b)+(m.model?' · '+esc(m.model):'')+' · '+esc(LOAD_SHORT[load])+(chains.length?' · Enseignes indicatives : '+chains.map(esc).join(', ')+'. Modèle à vérifier dans ton club.':'')+'</div>'
    +exPhotoHTML(m.n)
    +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
