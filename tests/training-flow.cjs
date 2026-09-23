@@ -60,6 +60,20 @@ async function settled(p){
       active.ex[ex][0].w=null;
       return isolated&&comparisonSummary(active).rows[0].now.vol===null;
     },ids));
+    const progressChecks=await p.evaluate(()=>{
+      const original=DB.workouts,date=todayISO();
+      const meta=(name,unit='kg')=>({name,unit});
+      const set=(w,r)=>[{w,r,done:true}];
+      const first={id:'one',date,ex:{a:set(20,8),b:set(20,8),c:set(20,8),d:set(null,8)},exMeta:{a:meta('A'),b:meta('B'),c:meta('C'),d:meta('D','reps')}};
+      const second={id:'two',date,ex:{a:set(20,9),b:set(25,6),c:set(25,8),d:set(null,10),e:set(10,8)},exMeta:{a:meta('A'),b:meta('B'),c:meta('C','lb'),d:meta('D','reps'),e:meta('E')}};
+      const third={id:'three',date,ex:{a:set(20,8)},exMeta:{a:meta('A')}};
+      DB.workouts=[first,second,third];
+      try{
+        const result=workoutProgressMap();
+        return {first:progressText(result.get(first)),second:{compared:result.get(second).compared,improved:result.get(second).improved},third:progressText(result.get(third)),period:periodProgress(date,null,result)};
+      }finally{DB.workouts=original;}
+    });
+    assert.deepEqual(progressChecks,{first:'—',second:{compared:3,improved:2},third:'0/1',period:{compared:3,improved:1}});
 
     // Per-workout rests never edit the program or an already-running timer.
     await card.locator('[data-act="restset"]').click();
@@ -110,8 +124,8 @@ async function settled(p){
     assert(await p.evaluate(()=>!DB.active.restTimer));
     await p.evaluate(()=>finishWorkout());
     assert.equal(await p.locator('.summary-comparison tbody tr').count(),1);
-    assert.match(await p.locator('.summary-comparison').textContent(),/2 séries.*360 kg/);
-    assert.match(await p.locator('.summary-comparison').textContent(),/1 série.*250 kg/);
+    assert.match(await p.locator('.summary-comparison').textContent(),/2 séries.*20 kg\/bras × 10 reps/);
+    assert.match(await p.locator('.summary-comparison').textContent(),/1 série.*25 kg\/bras × 10 reps/);
     assert.match(await p.locator('.recwrap').textContent(),/Records de charge/);
     for(const width of [320,390,1440]){
       await p.setViewportSize({width,height:900});
@@ -131,6 +145,15 @@ async function settled(p){
         const violations=await p.evaluate(async()=>(await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,targets:v.nodes.map(n=>n.target)})));
         assert.deepEqual(violations,[],state);
       }
+    }
+    await p.evaluate(()=>{closeSheet();SUIVI='stats';go('suivi');});
+    assert.match(await p.locator('.statgrid').textContent(),/Exos en progrès/);
+    assert.match(await p.locator('.charttitle').allTextContents().then(x=>x.join(' ')),/Séries par semaine/);
+    assert.doesNotMatch(await p.locator('#app').textContent(),/Tonnage|kg soulevés/);
+    for(const width of [320,390,1440]){
+      await p.setViewportSize({width,height:900});await settled(p);
+      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`stats overflow ${width}`);
+      await p.screenshot({path:path.join(out,'progress-stats-'+width+'.png'),animations:'disabled'});
     }
     await p.evaluate(()=>{closeSheet();stopTimer();DB.active=null;DB.workouts=[];go('seance',PROGRAM[0].id);startWorkout(PROGRAM[0].id);});
     assert.equal(await p.evaluate(()=>Object.keys(DB.active.restByEx||{}).length),0);

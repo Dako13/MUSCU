@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.35.1';
+const APP_VERSION='4.36.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -714,7 +714,7 @@ function comparisonSummary(current){
     if(a.sets&&b.sets){
       if(!current.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))a.vol=null;
       if(!previous.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))b.vol=null;
-      rows.push({name:now.name,now:a,before:b});
+      rows.push({name:now.name,unit:now.unit||'kg',now:{...a,best:topComparableSet(current.ex[id])},before:{...b,best:topComparableSet(previous.ex[id])}});
     }
   }
   return rows.length?{date:previous.date,rows}:null;
@@ -744,6 +744,45 @@ function workoutStats(w){
     else if(s.done)sets++;
   return{vol:Math.round(vol),sets};
 }
+function topComparableSet(sets){
+  let best=null;
+  for(const s of sets||[]){
+    if(!s.done||s.r==null||!Number.isFinite(Number(s.r))||Number(s.r)<=0)continue;
+    const w=s.w==null?null:Number(s.w),r=Number(s.r);
+    if(w!=null&&(!Number.isFinite(w)||w<0))continue;
+    if(!best||(w??-1)>(best.w??-1)||(w===best.w&&r>best.r))best={w,r};
+  }
+  return best;
+}
+function workoutProgressMap(){
+  const previous=new Map(),results=new Map();
+  const ordered=DB.workouts.map((w,i)=>({w,i})).sort((a,b)=>a.w.date.localeCompare(b.w.date)||a.i-b.i);
+  for(const {w} of ordered){
+    const outcomes=new Map();let compared=0,improved=0;
+    for(const [id,sets] of Object.entries(w.ex||{})){
+      const meta=w.exMeta?.[id],best=topComparableSet(sets);
+      if(!meta||!best)continue;
+      const prior=previous.get(id),unit=meta.unit||'kg';
+      if(prior&&prior.name===meta.name&&prior.unit===unit&&((best.w==null)===(prior.best.w==null))){
+        const up=best.w==null?best.r>prior.best.r:
+          best.w>=prior.best.w&&best.r>=prior.best.r&&(best.w>prior.best.w||best.r>prior.best.r);
+        outcomes.set(id,up);compared++;if(up)improved++;
+      }
+      previous.set(id,{name:meta.name,unit,best});
+    }
+    results.set(w,{compared,improved,outcomes});
+  }
+  return results;
+}
+function periodProgress(sinceIso,endIso=null,progress=workoutProgressMap()){
+  const latest=new Map();
+  for(const [w,result] of progress){
+    if(w.date<sinceIso||(endIso&&w.date>=endIso))continue;
+    for(const [id,up] of result.outcomes)latest.set(id,up);
+  }
+  return{compared:latest.size,improved:[...latest.values()].filter(Boolean).length};
+}
+function progressText(value){return value?.compared?value.improved+'/'+value.compared:'—'}
 function sessionProgress(a){
   let done=0,total=0;
   for(const exId in a.ex){total+=a.ex[exId].length;done+=a.ex[exId].filter(s=>s.done).length}
@@ -1018,18 +1057,18 @@ function weeklyTrendHTML(now){
     const start=weekStart(now);start.setDate(start.getDate()-i*7);
     const end=new Date(start);end.setDate(end.getDate()+7);
     const a=isoOf(start),b=isoOf(end);
-    const vol=DB.workouts.filter(w=>w.date>=a&&w.date<b).reduce((sum,w)=>sum+workoutStats(w).vol,0);
-    weeks.push({date:start,label:start.getDate()+'/'+(start.getMonth()+1),vol});
+    const sets=DB.workouts.filter(w=>w.date>=a&&w.date<b).reduce((sum,w)=>sum+workoutStats(w).sets,0);
+    weeks.push({date:start,label:start.getDate()+'/'+(start.getMonth()+1),sets});
   }
-  const max=Math.max(1,...weeks.map(w=>w.vol));
-  return '<div class="weekly-trend"><div class="section-caption">Tonnage · 6 semaines</div><div class="trend-bars">'
-    +weeks.map((w,i)=>'<div class="trend-column" role="img" aria-label="'+esc('Semaine du '+w.label+' : '+fmtKg(w.vol)+' kg')+'" title="'+esc(fmtKg(w.vol)+' kg')+'"><div class="trend-track"><i class="'+(i===5?'current':'')+'" style="height:'+Math.max(w.vol?3:0,w.vol/max*100)+'%"></i></div><span>'+w.label+'</span></div>').join('')
+  const max=Math.max(1,...weeks.map(w=>w.sets));
+  return '<div class="weekly-trend"><div class="section-caption">Séries validées · 6 semaines</div><div class="trend-bars">'
+    +weeks.map((w,i)=>'<div class="trend-column" role="img" aria-label="'+esc('Semaine du '+w.label+' : '+w.sets+' séries')+'" title="'+esc(w.sets+' séries')+'"><div class="trend-track"><i class="'+(i===5?'current':'')+'" style="height:'+Math.max(w.sets?3:0,w.sets/max*100)+'%"></i></div><span>'+w.label+'</span></div>').join('')
     +'</div></div>';
 }
 function homeHTML(){
   const now=new Date(),weekW=DB.workouts.filter(w=>w.date>=isoOf(weekStart(now)));
-  const weekVol=weekW.reduce((sum,w)=>sum+workoutStats(w).vol,0);
   const weekSets=weekW.reduce((sum,w)=>sum+workoutStats(w).sets,0);
+  const weekProgress=periodProgress(isoOf(weekStart(now)));
   const reco=recommendSeance(),ap=activeProgram();
   const next=DB.active?SEANCE[DB.active.seance]:(reco?SEANCE[reco.id]:PROGRAM[0]);
   let h='<header class="dash-top"><div class="dash-brand"><h1>Dko<span>.</span></h1><span class="brand-caption">Journal d’entraînement</span></div>'
@@ -1057,7 +1096,7 @@ function homeHTML(){
   h+='<section class="week-panel" aria-labelledby="weekTitle"><div class="section-heading"><h2 id="weekTitle">Ta semaine</h2><button class="text-link" data-act="weeklystats">Tout le suivi '+uiIcon('arrow-up-right')+'</button></div>'
     +'<div class="weekly-lead"><b class="num">'+String(weekW.length).padStart(2,'0')+'</b><span>séance'+(weekW.length>1?'s':'')+'<br>réalisée'+(weekW.length>1?'s':'')+'</span></div>'
     +weekStripHTML(now)
-    +'<div class="weekly-metrics"><div><b class="num">'+weekSets+'</b><span>séries validées</span></div><div><b class="num">'+fmtKg(weekVol)+'</b><span>kg soulevés</span></div></div>'
+    +'<div class="weekly-metrics"><div><b class="num">'+weekSets+'</b><span>séries validées</span></div><div><b class="num">'+progressText(weekProgress)+'</b><span>exos en progrès</span></div></div>'
     +weeklyTrendHTML(now)+'</section></div>';
   h+='<section class="program-section"><div class="section-heading"><div><div class="eyebrow">Ton programme</div><h2>'+esc(ap?ap.name:'Mes séances')+'</h2></div><button class="text-link" data-act="programs">Gérer '+uiIcon('arrow-up-right')+'</button></div><div class="session-library">';
   PROGRAM.forEach((s,i)=>{
@@ -1222,8 +1261,9 @@ function historyHTML(embed){
   if(!arr.length)return h+'<div class="empty">Aucune séance terminée.<br>Démarre une séance dans l’onglet Entraîner.</div>';
   const tot=arr.length;
   h+='<div class="subdate">'+tot+' séance'+(tot>1?'s':'')+' enregistrée'+(tot>1?'s':'')+'</div>';
+  const progress=workoutProgressMap();
   DB.workouts.slice().map((w,i)=>({w,i})).reverse().forEach(({w,i})=>{
-    const s=w.session||SEANCE[w.seance];const st=workoutStats(w);const musHTML=workoutMusclesHTML(w);
+    const s=w.session||SEANCE[w.seance];const st=workoutStats(w),pr=progress.get(w);const musHTML=workoutMusclesHTML(w);
     let det='';
     for(const exId of workoutExerciseIds(w)){
       const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
@@ -1241,7 +1281,7 @@ function historyHTML(embed){
      +musHTML
      +'<div class="hstats">'
      +(w.dur?'<div class="hstat"><div class="v num">'+fmtDur(w.dur)+'</div><div class="l">Durée</div></div>':'')
-     +'<div class="hstat"><div class="v num">'+fmtKg(st.vol)+' kg</div><div class="l">Tonnage</div></div>'
+     +'<div class="hstat"><div class="v num">'+progressText(pr)+'</div><div class="l">Exos en progrès</div></div>'
      +'<div class="hstat"><div class="v num">'+st.sets+'</div><div class="l">Séries</div></div>'
      +'</div></div></summary><div class="hdetail">'+det+'</div></details></div>';
   });
@@ -1793,7 +1833,6 @@ function periodEndIso(isMonth,shift){
 }
 function workoutsInRange(a,b){return DB.workouts.filter(w=>w.date>=a&&w.date<b)}
 function signed(n){return (n>0?'+':'')+n}
-function signedKg(n){return (n>0?'+':'')+fmtKg(Math.round(n))+' kg'}
 function muscleGroupScores(mvol){
   return STAT_MUSCLE_GROUPS.map(g=>{let v=0;g[1].forEach(m=>v+=mvol[m]||0);return{label:g[0],v:Math.round(v)}}).sort((a,b)=>b.v-a.v);
 }
@@ -1830,26 +1869,27 @@ function refreshDataHealth(){const el=document.getElementById('dataHealth');if(!
 function suiviSummaryHTML(){
   const now=new Date(),weekIso=isoOf(weekStart(now));
   const week=DB.workouts.filter(w=>w.date>=weekIso),wt=totalsOfWorkouts(week);
+  const progress=periodProgress(weekIso);
   const last=DB.workouts.length?DB.workouts[DB.workouts.length-1]:null;
   const bs=backupState();
   const title=last?'Dernière séance '+fmtDateShort(last.date):'Pas encore de séance validée';
   const sub=last?(SEANCE[last.seance]?SEANCE[last.seance].tab+' · '+SEANCE[last.seance].title:last.seance):'Démarre une séance pour alimenter ton suivi.';
   return '<div class="suivihero"><div class="suivi-k">Tableau de bord</div><div class="suivi-title">'+esc(title)+'</div><div class="suivi-sub">'+esc(sub)+'</div>'
-   +'<div class="suivigrid"><div><b class="num">'+wt.sessions+'</b><span>Séances cette sem.</span></div><div><b class="num">'+wt.sets+'</b><span>Séries cette sem.</span></div><div><b class="num">'+fmtKg(wt.vol)+'</b><span>Kg cette sem.</span></div></div>'
+   +'<div class="suivigrid"><div><b class="num">'+wt.sessions+'</b><span>Séances cette sem.</span></div><div><b class="num">'+wt.sets+'</b><span>Séries cette sem.</span></div><div><b class="num">'+progressText(progress)+'</b><span>Exos en progrès</span></div></div>'
    +'<div class="suivi-safe '+bs.tone+'"><span>'+esc(bs.label)+'</span><small>'+esc(bs.detail)+'</small></div></div>';
 }
-function statsInsightHTML(isMonth,winW,winVol,prevW,prevVol,grp,rng){
+function statsInsightHTML(isMonth,winW,winSets,prevW,prevSets,grp,rng){
   const unit=isMonth?'mois':'semaine';
-  const sessDelta=winW.length-prevW.length,volDelta=winVol-prevVol;
+  const sessDelta=winW.length-prevW.length,setsDelta=winSets-prevSets;
   const low=grp.filter(g=>g.v>0&&g.v<rng.low),miss=grp.filter(g=>g.v===0);
   const focus=low[0]||miss[0]||grp[0];
   const pr=bestRecentProgress();
-  const volTxt=prevVol?signedKg(volDelta)+' vs période précédente':(winVol?'Première période chargée':'Aucune donnée cette période');
+  const setsTxt=prevW.length?signed(setsDelta)+' séries vs période précédente':(winSets?'Première période enregistrée':'Aucune série cette période');
   const focusTxt=focus?(focus.v>=rng.low?'Volume solide sur '+focus.label+'.':'À remonter : '+focus.label+' ('+focus.v+'/'+rng.low+' séries).'):'Valide des séries pour voir les priorités.';
   const prTxt=pr?esc(pr.tab+' · '+pr.name)+' · +'+fmtN(pr.delta)+' kg':'Aucun nouveau record récent détecté.';
   return '<div class="coachpulse"><div class="pulsehead"><span>Résumé coach</span><b>'+esc(unit)+'</b></div><div class="pulsegrid">'
    +'<div class="pulsecard"><div class="pulsek">Rythme</div><div class="pulsev num">'+signed(sessDelta)+'</div><div class="pulses">séance'+(Math.abs(sessDelta)>1?'s':'')+' vs période précédente</div></div>'
-   +'<div class="pulsecard"><div class="pulsek">Tonnage</div><div class="pulsev">'+esc(volTxt)+'</div><div class="pulses">sur les séries avec kg + reps</div></div>'
+   +'<div class="pulsecard"><div class="pulsek">Séries réalisées</div><div class="pulsev">'+esc(setsTxt)+'</div><div class="pulses">séries validées, avec ou sans charge</div></div>'
    +'<div class="pulsecard"><div class="pulsek">Priorité</div><div class="pulsev">'+esc(focusTxt)+'</div><div class="pulses">équilibre volume / muscle</div></div>'
    +'<div class="pulsecard"><div class="pulsek">Progression</div><div class="pulsev">'+prTxt+'</div><div class="pulses">record récent</div></div>'
    +'</div></div>';
@@ -1942,9 +1982,10 @@ function statsHTML(embed){
   const rng=isMonth?{low:40,high:80}:{low:10,high:20};
   const unit=isMonth?'mois':'sem.';
   const winW=DB.workouts.filter(w=>w.date>=sinceIso);
-  let winVol=0,winSets=0;winW.forEach(w=>{const st=workoutStats(w);winVol+=st.vol;winSets+=st.sets;});
+  const winSets=winW.reduce((sum,w)=>sum+workoutStats(w).sets,0);
   const prevW=workoutsInRange(periodStartIso(isMonth,-1),periodEndIso(isMonth,-1));
   const prevT=totalsOfWorkouts(prevW);
+  const progress=periodProgress(sinceIso);
   const mvol=volumeByMuscle(sinceIso);
   const grp=muscleGroupScores(mvol);
   h+='<div class="subdate">Depuis le '+fmtDateShort(DB.workouts[0].date)+'</div>'
@@ -1953,9 +1994,9 @@ function statsHTML(embed){
    +'<div class="statgrid">'
    +'<div class="statbox"><div class="v num">'+winSets+'</div><div class="l">Séries · '+unit+'</div></div>'
    +'<div class="statbox"><div class="v num">'+winW.length+'</div><div class="l">Séances · '+unit+'</div></div>'
-   +'<div class="statbox"><div class="v num">'+fmtKg(winVol)+'</div><div class="l">kg · '+unit+'</div></div>'
+   +'<div class="statbox"><div class="v num">'+progressText(progress)+'</div><div class="l">Exos en progrès · '+unit+'</div></div>'
    +'</div>'
-   +statsInsightHTML(isMonth,winW,winVol,prevW,prevT.vol,grp,rng);
+   +statsInsightHTML(isMonth,winW,winSets,prevW,prevT.sets,grp,rng);
   /* volume par muscle (séries / muscle sur la fenêtre) */
   h+='<div class="chartcard"><div class="charttitle">Volume par muscle · séries / '+unit+'</div>';
   if(grp.some(g=>g.v>0)){
@@ -1972,25 +2013,25 @@ function statsHTML(embed){
   h+=exProgressCard();
   /* plateaux : charge max stagnante ≥ 4 sem (coach local, sans IA) */
   h+=plateauCard();
-  /* tonnage hebdomadaire — 8 dernières semaines */
+  /* séries validées par semaine — 8 dernières semaines */
   const weeks=[];
   for(let i=7;i>=0;i--){
     const st=weekStart(now);st.setDate(st.getDate()-7*i);
     const en=new Date(st);en.setDate(en.getDate()+7);
     const a=isoOf(st),b=isoOf(en);
-    let vol=0;DB.workouts.filter(w=>w.date>=a&&w.date<b).forEach(w=>{vol+=workoutStats(w).vol});
-    weeks.push({label:String(st.getDate()).padStart(2,'0')+'/'+String(st.getMonth()+1).padStart(2,'0'),vol,cur:i===0});
+    let sets=0;DB.workouts.filter(w=>w.date>=a&&w.date<b).forEach(w=>{sets+=workoutStats(w).sets});
+    weeks.push({label:String(st.getDate()).padStart(2,'0')+'/'+String(st.getMonth()+1).padStart(2,'0'),sets,cur:i===0});
   }
-  const mx=Math.max(1,...weeks.map(w=>w.vol));
+  const mx=Math.max(1,...weeks.map(w=>w.sets));
   const W=300,H=100,bw=26,gap=(W-8*bw)/8;
   let bars='';
   weeks.forEach((wk,i)=>{
-    const bh=Math.max(wk.vol?3:0,Math.round(78*wk.vol/mx));
+    const bh=Math.max(wk.sets?3:0,Math.round(78*wk.sets/mx));
     const x=(gap/2+i*(bw+gap)).toFixed(1);
-    bars+='<rect class="'+(wk.cur?'cur':'')+'" x="'+x+'" y="'+(86-bh)+'" width="'+bw+'" height="'+bh+'" rx="3"/>'
+    bars+='<rect class="'+(wk.cur?'cur':'')+'" x="'+x+'" y="'+(86-bh)+'" width="'+bw+'" height="'+bh+'" rx="3"><title>'+wk.sets+' séries</title></rect>'
      +'<text x="'+(+x+bw/2)+'" y="97" text-anchor="middle">'+wk.label+'</text>';
   });
-  h+='<div class="chartcard"><div class="charttitle">Tonnage hebdomadaire</div>'
+  h+='<div class="chartcard"><div class="charttitle">Séries par semaine</div>'
    +'<svg class="wchart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'+bars+'</svg></div>';
   /* records */
   const recs=[];
@@ -2460,7 +2501,8 @@ function finishWorkout({automatic=false}={}){
     if(sets.length)ex[exId]=sets;
   }
   const previousWorkouts=DB.workouts;
-  DB.workouts=[...DB.workouts,snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)})];
+  const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)});
+  DB.workouts=[...DB.workouts,saved];
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
   if(!STORAGE_WRITABLE){DB.workouts=previousWorkouts;DB.active=a;return false;}
@@ -2471,7 +2513,7 @@ function finishWorkout({automatic=false}={}){
     toast('Séance clôturée automatiquement après 3 h');
     return true;
   }
-  showSummary({seance:a.seance,dur,stats,recs,comparison});
+  showSummary({seance:a.seance,dur,stats,recs,comparison,progress:workoutProgressMap().get(saved)});
   go('home');
   return true;
 }
@@ -2831,14 +2873,14 @@ function showSummary(o){
     if(entries.length)recs+='<div class="recwrap"><div class="rectitle">'+(first?'Premières références':'Records de charge')+'</div>'
       +entries.map(r=>'<div class="recline"><b>'+fmtN(r.w)+' kg</b> · '+esc(r.name)+(r.prev!=null?' (préc. '+fmtN(r.prev)+')':'')+'</div>').join('')+'</div>';
   }
-  const metric=value=>value.sets+' série'+(value.sets>1?'s':'')+(value.vol!=null?' · '+fmtKg(value.vol)+' kg':'');
+  const metric=(value,unit)=>value.sets+' série'+(value.sets>1?'s':'')+(value.best?' · '+(value.best.w==null?'':fmtN(value.best.w)+' '+esc(unit)+' × ')+fmtN(value.best.r)+' reps':'');
   const comparison=o.comparison?'<section class="summary-comparison"><h3>Par rapport au '+esc(fmtDateShort(o.comparison.date))+'</h3><p>Exercices communs · séries validées</p>'
     +'<table><thead><tr><th scope="col">Exercice</th><th scope="col">Avant</th><th scope="col">Aujourd’hui</th></tr></thead><tbody>'
-    +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+esc(metric(r.before))+'</td><td>'+esc(metric(r.now))+'</td></tr>').join('')+'</tbody></table></section>':'';
+    +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+metric(r.before,r.unit)+'</td><td>'+metric(r.now,r.unit)+'</td></tr>').join('')+'</tbody></table></section>':'';
   sheet.innerHTML='<h2>Séance terminée'+(s?' · '+esc(s.tab):'')+'</h2><div class="sp">'+esc(s?s.title:'')+'</div>'
    +'<div class="sumgrid">'
    +'<div class="sumbox"><div class="v num">'+fmtDur(o.dur)+'</div><div class="l">Durée</div></div>'
-   +'<div class="sumbox"><div class="v num">'+fmtKg(o.stats.vol)+'</div><div class="l">kg soulevés</div></div>'
+   +'<div class="sumbox"><div class="v num">'+progressText(o.progress)+'</div><div class="l">Exos en progrès</div></div>'
    +'<div class="sumbox"><div class="v num">'+o.stats.sets+'</div><div class="l">Séries</div></div>'
    +'</div>'+comparison+recs
    +'<div class="sbtns"><button class="sbtn pri" id="shOk">OK</button></div>';
