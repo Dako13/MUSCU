@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.34.0';
+const APP_VERSION='4.35.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;

@@ -93,8 +93,10 @@ These are intentional initial limits, not pagination guarantees.
    author. Do not edit the student's historical workout records to add comments.
 3. One-shot reports as immutable, explicitly generated snapshots with a separate
    consent and recipient scope. They must not create a permanent relationship.
-4. Reusable coach templates as coach-owned documents, copied with fresh IDs into
-   a student draft. A template update must never mutate students implicitly.
+4. Reusable coach templates are coach-owned documents, copied with fresh IDs into
+   a student draft. A template update never mutates students implicitly. Shipped
+   in v4.35.0 with a private RPC, revision checks, a 50-template limit and
+   student-specific target loads removed from saved/imported copies.
 5. Program calendars and review reminders as independent records referencing
    program/session IDs and revisions, not embedded account settings.
 6. Optional delivery notifications only after a reliable provider and consent
@@ -137,6 +139,7 @@ the feature resumes. No guarantee of unlimited free use.
   Chromium tests do not replace physical iPhone/Safari validation.
 
 Deployment: Supabase migration `20260923092448_dko_coaching`, applied 2026-09-23.
+Template migration: `20260923145548_coach_templates` (v4.35.0).
 `tests/coach-remote-rls.sql` also passes against the deployed database, with
 synthetic users and a full rollback (no emails or retained test accounts).
 

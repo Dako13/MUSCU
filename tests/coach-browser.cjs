@@ -7,14 +7,15 @@ const {PGlite}=require(process.env.PGLITE_PATH||'@electric-sql/pglite');
 const root=path.resolve(__dirname,'../MuscuApp'),db=new PGlite();
 const student='00000000-0000-0000-0000-000000000001',coach='00000000-0000-0000-0000-000000000002';
 let queue=Promise.resolve();
-function queryAs(id,action,args={}){
- const p=queue.then(async()=>{await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);return (await db.query('select dko_coach($1,$2::jsonb) as r',[action,JSON.stringify({account:id,...args})])).rows[0].r;});
+function queryAs(id,action,args={},fn='dko_coach'){
+ if(!['dko_coach','dko_coach_template'].includes(fn))throw new Error('Unknown RPC');
+ const p=queue.then(async()=>{await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);return (await db.query(`select ${fn}($1,$2::jsonb) as r`,[action,JSON.stringify({account:id,...args})])).rows[0].r;});
  queue=p.catch(()=>{});return p;
 }
 const server=http.createServer(async(req,res)=>{
  if(req.url==='/test-rpc'){
   let body='';for await(const part of req)body+=part;
-  try{const {id,action,args}=JSON.parse(body);const data=await queryAs(id,action,args);res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data,error:null}));}
+  try{const {id,action,args,fn}=JSON.parse(body);const data=await queryAs(id,action,args,fn);res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data,error:null}));}
   catch(e){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:null,error:{code:e.code,message:e.message}}));}return;
  }
  const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname),target=file===root?path.join(root,'index.html'):file;
@@ -26,7 +27,7 @@ const server=http.createServer(async(req,res)=>{
  try{
   await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,is_anonymous boolean default false);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to anon,authenticated;`);
   for(const id of [student,coach])await db.query('insert into auth.users(id) values($1)',[id]);
-  for(const name of ['202609200001_private_backups.sql','20260923092448_dko_coaching.sql'])await db.exec(await fs.readFile(path.join(__dirname,'../supabase/migrations',name),'utf8'));
+  for(const name of ['202609200001_private_backups.sql','20260923092448_dko_coaching.sql','20260923145548_coach_templates.sql'])await db.exec(await fs.readFile(path.join(__dirname,'../supabase/migrations',name),'utf8'));
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   browser=await chromium.launch({channel:'msedge',headless:true});
   const errors=[];
@@ -38,7 +39,7 @@ const server=http.createServer(async(req,res)=>{
    await page.goto('http://127.0.0.1:'+server.address().port+'/');await page.locator('#splash').waitFor({state:'detached'});
    await page.evaluate(id=>{
     window.testState={user:{id},enabled:true,phase:'saved',mismatch:false};
-    DKOCloudUI.coachContext=()=>({project:'test',state:testState,client:{rpc:async(_,body)=>fetch('/test-rpc',{method:'POST',body:JSON.stringify({id:testState.user.id,...body})}).then(r=>r.json())}});
+    DKOCloudUI.coachContext=()=>({project:'test',state:testState,client:{rpc:async(fn,body)=>fetch('/test-rpc',{method:'POST',body:JSON.stringify({id:testState.user.id,fn,...body})}).then(r=>r.json())}});
     DKOCoachUI.accountChanged();
    },id);return page;
   }
@@ -55,6 +56,20 @@ const server=http.createServer(async(req,res)=>{
   for(const [page,label] of [[s,'Élève test'],[c,'Coach test']]){
    await page.evaluate(()=>DKOCoachUI.open());await page.locator('#coachRegister input').fill(label);await page.locator('#coachRegister button').click();await page.locator('.coach-identity').waitFor();
   }
+  await c.locator('[data-mode="templates"]').click();await c.locator('[data-coach="new-template"]').click();
+  await c.locator('[data-field="p.name"]').fill('Jambes modèle');await c.locator('[data-coach="new-session"]').click();
+  await c.locator('[data-field="s.title"]').fill('Jambes modèle');await c.locator('[data-coach="new-exercise"]').click();
+  await c.locator('[data-field="e.name"]').fill('Presse à cuisses');await c.locator('[data-field="e.ref"]').fill('99');
+  await c.locator('#coachEditor button[type="submit"]').click();await c.getByText('Modèle enregistré.',{exact:true}).waitFor();
+  assert(await c.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'template list overflows mobile');
+  await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-templates-mobile.png'),fullPage:true,animations:'disabled'});
+  await c.setViewportSize({width:320,height:568});
+  assert(await c.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'template list overflows 320px');
+  await c.setViewportSize({width:390,height:844});
+  const model=(await queryAs(coach,'list',{},'dko_coach_template'))[0];
+  assert.equal((await queryAs(coach,'read',{id:model.id},'dko_coach_template')).program.seances[0].ex[0].ref,null);
+  assert.deepEqual(await queryAs(student,'list',{},'dko_coach_template'),[]);
+  await c.locator('[data-mode="coach"]').click();await c.locator('#coachJoin').waitFor();
   await s.locator('#coachConsent').check();await s.locator('[data-coach="enable"]').click();await s.locator('.coach-code code').waitFor();
   const code=await s.locator('.coach-code code').textContent();
   await c.locator('[data-mode="coach"]').click();await c.locator('#coachJoin input').fill(code);await c.locator('#coachJoin button').click();await c.locator('[data-coach="edit"]').waitFor();
@@ -69,10 +84,19 @@ const server=http.createServer(async(req,res)=>{
   await c.locator('[data-coach="edit"]').click();await c.locator('[data-field="e.sets"]').fill('4');await c.locator('[data-field="s.rest"]').fill('240');
   await c.locator('[data-coach="library"]').click();await c.locator('#coachSearch').fill('exercice-introuvable-xyz');await c.getByText('Aucun exercice répertorié.').waitFor();await c.locator('#coachLibrary [data-coach="custom"]').click();
   await c.locator('[data-field="e.name"]').nth(1).fill('Exercice sur mesure');await c.locator('[data-field="summary"]').fill('Repos augmenté et exercice ajouté');
+  await c.locator('[data-coach="template-save-current"]').click();await c.getByText(/Modèle enregistré. Les charges cibles personnelles/).waitFor();
+  await c.locator('[data-coach="template-import"]').click();await c.locator(`[data-template-id="${model.id}"]`).click();
+  await c.waitForFunction(()=>document.querySelectorAll('#coachProgram option').length===2);
+  assert.equal(await c.locator('#coachProgram option').count(),2);
+  assert.equal(await c.locator('[data-field="e.ref"]').first().inputValue(),'');
+  await c.locator('#coachProgram').selectOption('0');
   await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-editor-mobile.png'),fullPage:true,animations:'disabled'});
   await c.locator('#coachEditor button[type="submit"]').click();await c.getByText(/Version 2 publiée/).waitFor();
   await s.locator('[data-coach="refresh"]').click();await ready(s);await s.getByText('Programmes à jour',{exact:true}).waitFor();
   assert.equal(await s.evaluate(()=>PROGRAMS[0].seances[0].ex[0].sets),4);assert.equal(await s.evaluate(()=>PROGRAMS[0].seances[0].rest),240);
+  assert.equal(await s.evaluate(()=>PROGRAMS.length),2);
+  assert.equal(await s.evaluate(()=>PROGRAMS[1].seances[0].ex[0].ref),null);
+  assert.notEqual(await s.evaluate(()=>PROGRAMS[0].id),await s.evaluate(()=>PROGRAMS[1].id));
   assert.equal(await c.evaluate(()=>JSON.stringify(PROGRAMS)),ownCoach,'coach personal programs untouched');
   assert.deepEqual(await s.evaluate(()=>({workouts:JSON.stringify(DB.workouts),settings:JSON.stringify(SETTINGS),body:JSON.stringify(BODY)})),before);
   await c.locator('[data-coach="history"]').click();await c.locator('[data-coach="restore-version"]').last().click();
@@ -98,6 +122,14 @@ const server=http.createServer(async(req,res)=>{
   remote=await queryAs(student,'self');assert.equal(remote.programs[0].seances[0].ex[0].sets,5);
   await s.locator('[data-permission]').selectOption('blocked');await ready(s);await s.getByText('Programmes à jour',{exact:true}).waitFor();
   await c.locator('#coachJoin input').fill(code);await c.locator('#coachJoin button').click();await c.getByText('Code invalide ou accès bloqué.').waitFor();
+  const revisionBeforeTemplateEdit=(await queryAs(student,'self')).revision;
+  await c.locator('[data-mode="templates"]').click();await c.locator(`[data-coach="template-edit"][data-id="${model.id}"]`).click();
+  await c.locator('[data-field="p.name"]').fill('Jambes modèle révisé');await c.locator('#coachEditor button[type="submit"]').click();
+  await c.getByText('Jambes modèle révisé',{exact:true}).waitFor();
+  assert.equal((await queryAs(student,'self')).revision,revisionBeforeTemplateEdit,'editing a template must not publish to students');
+  await c.locator(`[data-coach="template-delete"][data-id="${model.id}"]`).click();
+  await c.getByText('Modèle supprimé.',{exact:true}).waitFor();
+  assert.equal((await queryAs(student,'self')).revision,revisionBeforeTemplateEdit,'deleting a template must not alter students');
   // Missing sync base after a restored backup must not publish stale programs.
   await s.evaluate(()=>{DKOCoachUI.restored();PROGRAMS[0].name='Copie restaurée';savePrograms();});await s.locator('[data-coach="refresh"]').click();await s.getByText(/Deux versions différentes/).waitFor();
   await s.locator('[data-coach="compare"]').click();await s.locator('[data-coach="use-remote"]').click();await s.getByText('Programmes à jour',{exact:true}).waitFor();assert.equal(await s.evaluate(()=>PROGRAMS[0].name),'Programme élève');
@@ -108,6 +140,6 @@ const server=http.createServer(async(req,res)=>{
   }
   await c.setViewportSize({width:1280,height:900});await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-dashboard-desktop.png'),fullPage:true,animations:'disabled'});
   await s.evaluate(()=>{testState.user=null;DKOCoachUI.accountChanged();});await s.getByText('Connecte-toi pour accéder au suivi coach.').waitFor();assert.equal(await s.locator('.coach-code').count(),0);
-  assert.deepEqual(errors,[]);console.log('PASS coach browser: two accounts + real SQL, publish/receive, custom exercise fallback, unchanged private data, active session freeze, permission revocation, restore conflict, sign-out, mobile/desktop and both themes.');
+  assert.deepEqual(errors,[]);console.log('PASS coach browser: two accounts + real SQL, private coach templates, fresh IDs and stripped personal loads, explicit publish/receive, custom exercise fallback, unchanged private data, active session freeze, permission revocation, restore conflict, sign-out, mobile/desktop and both themes.');
  }finally{await browser?.close();await new Promise(r=>server.close(r));await db.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

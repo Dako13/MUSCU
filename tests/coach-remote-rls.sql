@@ -4,7 +4,7 @@ do $$
 declare
   student uuid:=gen_random_uuid(); coach uuid:=gen_random_uuid(); stranger uuid:=gen_random_uuid();
   doc jsonb:='[{"id":"p_test","name":"Test","seances":[{"id":"s_test","title":"Session","ex":[{"id":"e_test","name":"Squat","sets":3,"reps":"8"}]}]}]';
-  result jsonb; code text;
+  result jsonb; code text; template_id uuid;
 begin
   insert into auth.users(id,aud,role,email,is_anonymous)
     values(student,'authenticated','authenticated',student::text||'@dko-test.invalid',false),
@@ -34,6 +34,16 @@ begin
   perform set_config('request.jwt.claims',jsonb_build_object('sub',coach,'role','authenticated')::text,true);
   execute 'set local role authenticated';
   perform public.dko_coach('register',jsonb_build_object('account',coach,'label','Synthetic coach'));
+  result:=public.dko_coach_template('save',jsonb_build_object('account',coach,'program',doc->0));
+  template_id:=(result->>'id')::uuid;
+  if (public.dko_coach_template('read',jsonb_build_object('account',coach,'id',template_id))->>'revision')<>'1' then
+    raise exception 'Template save failed';
+  end if;
+  begin
+    perform * from dko_coach_private.templates;
+    raise exception 'Direct template read unexpectedly allowed';
+  exception when insufficient_privilege then null;
+  end;
   result:=public.dko_coach('join',jsonb_build_object('account',coach,'code',code));
   if result->>'mode'<>'full' then raise exception 'Full link missing'; end if;
   result:=public.dko_coach('read',jsonb_build_object('account',coach,'student',student));
@@ -50,11 +60,21 @@ begin
   perform set_config('request.jwt.claim.sub',student::text,true);
   perform set_config('request.jwt.claims',jsonb_build_object('sub',student,'role','authenticated')::text,true);
   execute 'set local role authenticated';
+  begin
+    perform public.dko_coach_template('read',jsonb_build_object('account',student,'id',template_id));
+    raise exception 'Student read coach template';
+  exception when insufficient_privilege then null;
+  end;
   perform public.dko_coach('permission',jsonb_build_object('account',student,'coach',coach,'mode','read'));
   execute 'reset role';
   perform set_config('request.jwt.claim.sub',coach::text,true);
   perform set_config('request.jwt.claims',jsonb_build_object('sub',coach,'role','authenticated')::text,true);
   execute 'set local role authenticated';
+  begin
+    perform public.dko_coach_template('read',jsonb_build_object('account',stranger,'id',template_id));
+    raise exception 'Stranger read coach template';
+  exception when insufficient_privilege then null;
+  end;
   begin
     perform public.dko_coach('publish',jsonb_build_object('account',coach,'student',student,'revision',2,'programs',doc));
     raise exception 'Read-only publication accepted';
@@ -74,4 +94,4 @@ begin
   execute 'reset role';
 end $$;
 rollback;
-select 'PASS: coach access, private fields, JWT ownership, program CAS, read-only rights and unlinked account isolation; all fixtures rolled back' as result;
+select 'PASS: coach access, private templates, JWT ownership, program CAS, read-only rights and unlinked account isolation; all fixtures rolled back' as result;
