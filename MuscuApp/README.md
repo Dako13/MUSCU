@@ -15,6 +15,10 @@ rechargement sur le même appareil, après contrôle des droits et de la révisi
 Il n'est jamais publié automatiquement ni inclus dans la sauvegarde privée.
 Déconnexion et changement de compte l'effacent.
 
+Depuis la version 4.40, la liste des élèves dispose d'une recherche par nom
+(insensible aux accents) et de filtres pour les dossiers à vérifier ou les
+programmes en attente de réception. Le filtrage reste local à l'écran du coach.
+
 ## Catalogue étendu (4.33)
 
 Ajout de 141 mouvements et variantes génériques et de 26 fiches Matrix

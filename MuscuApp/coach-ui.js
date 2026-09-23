@@ -2,7 +2,7 @@
 /* Coach dossiers never enter the student's local database or private backups.
    This adapter owns consent, account boundaries and guarded program application. */
 window.DKOCoachUI=(()=>{
-  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,savedDraft=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='';
+  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,savedDraft=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='',studentQuery='',studentFilter='all';
   const ctx=()=>window.DKOCloudUI?.coachContext()||{};
   const clone=v=>structuredClone(v),normalize=v=>DKO_DATA.programs(v);
   const local=()=>normalize(PROGRAMS);
@@ -73,7 +73,7 @@ window.DKOCoachUI=(()=>{
     if(next===owner)return;
     const previous=owner;
     if(previous){try{localStorage.removeItem(`dko_coach_draft:${previous}`)}catch{}}
-    epoch++;service?.dispose();service=null;owner=next;profile=null;students=[];templates=[];dossier=null;draft=null;draftTarget=null;baseline='';notice='';phase='idle';busy=false;
+    epoch++;service?.dispose();service=null;owner=next;profile=null;students=[];templates=[];dossier=null;draft=null;draftTarget=null;baseline='';notice='';phase='idle';busy=false;studentQuery='';studentFilter='all';
     savedDraft=owner?readDraft():null;
     if(owner&&!savedDraft){try{localStorage.removeItem(draftKey())}catch{}}
     clearTimeout(timer);
@@ -153,9 +153,22 @@ window.DKOCoachUI=(()=>{
     const pending=students.filter(s=>s.appliedRevision<s.revision).length;
     const stale=students.filter(s=>!s.lastSync||Date.now()-new Date(s.lastSync).getTime()>7*86400000).length;
     const ordered=[...students].sort((a,b)=>Number(needsReview(b))-Number(needsReview(a))||a.label.localeCompare(b.label,'fr'));
-    return draftBanner()+'<div class="coach-overview"><div><b>'+students.length+'</b><span>Élèves</span></div><div><b>'+pending+'</b><span>Programmes en attente</span></div><div><b>'+stale+'</b><span>Sauvegardes à vérifier</span></div></div>'
-      +'<form id="coachJoin"><h2>Ajouter un élève</h2><label class="coach-field"><span>Code personnel de l’élève</span><input name="code" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="Code transmis par l’élève"></label><button class="sbtn pri" type="submit">'+uiIcon('plus')+'Associer l’élève</button></form><h2>Mes élèves <span class="coach-count">'+students.length+'</span></h2>'
-      +(students.length?'<div class="coach-students">'+ordered.map(s=>`<button class="coach-student" data-coach="student" data-id="${esc(s.id)}"><span class="coach-avatar">${esc(s.label.slice(0,1).toUpperCase())}</span><span><strong>${esc(s.label)}</strong><small>${s.sessions} séances · ${s.mode==='full'?'Accès complet':'Lecture seule'}</small><small>Dernière sauvegarde : ${esc(stamp(s.lastSync))}</small></span>${uiIcon('chevron-right')}<span class="coach-delivery${needsReview(s)?' attention':''}">${s.appliedRevision<s.revision?'Programme en attente de réception':!s.lastSync?'Aucune sauvegarde disponible':Date.now()-new Date(s.lastSync).getTime()>7*86400000?'Sauvegarde de plus de 7 jours':'Programme reçu'}</span></button>`).join('')+'</div>':'<p class="sp">Aucun élève associé.</p>')+'<p class="sp">La date de sauvegarde ne prouve pas la date du dernier entraînement. Jusqu’à 200 élèves affichés.</p>';
+    const filters=students.length?'<div class="coach-list-tools"><label class="coach-field"><span>Rechercher un élève</span><input id="coachStudentSearch" type="search" value="'+esc(studentQuery)+'" autocomplete="off" placeholder="Nom ou pseudonyme"></label><div class="coach-list-filters" role="group" aria-label="Filtrer les élèves">'+[['all','Tous'],['review','À vérifier'],['pending','En attente']].map(([key,label])=>'<button type="button" data-coach="student-filter" data-filter="'+key+'" aria-pressed="'+(studentFilter===key)+'">'+label+'</button>').join('')+'</div><p id="coachListCount" class="coach-list-count" role="status"></p></div>':'';
+    const overview=draftBanner()+'<div class="coach-overview"><div><b>'+students.length+'</b><span>Élèves</span></div><div><b>'+pending+'</b><span>Programmes en attente</span></div><div><b>'+stale+'</b><span>Sauvegardes à vérifier</span></div></div>';
+    const join='<form id="coachJoin"><h2>Ajouter un élève</h2><label class="coach-field"><span>Code personnel de l’élève</span><input name="code" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="Code transmis par l’élève"></label><button class="sbtn pri" type="submit">'+uiIcon('plus')+'Associer l’élève</button></form>';
+    const list='<h2>Mes élèves <span class="coach-count">'+students.length+'</span></h2>'+filters
+      +(students.length?'<div class="coach-students">'+ordered.map(s=>`<button class="coach-student" data-coach="student" data-id="${esc(s.id)}" data-review="${needsReview(s)}" data-pending="${s.appliedRevision<s.revision}"><span class="coach-avatar">${esc(s.label.slice(0,1).toUpperCase())}</span><span><strong>${esc(s.label)}</strong><small>${s.sessions} séances · ${s.mode==='full'?'Accès complet':'Lecture seule'}</small><small>Dernière sauvegarde : ${esc(stamp(s.lastSync))}</small></span>${uiIcon('chevron-right')}<span class="coach-delivery${needsReview(s)?' attention':''}">${s.appliedRevision<s.revision?'Programme en attente de réception':!s.lastSync?'Aucune sauvegarde disponible':Date.now()-new Date(s.lastSync).getTime()>7*86400000?'Sauvegarde de plus de 7 jours':'Programme reçu'}</span></button>`).join('')+'</div>':'<p class="sp">Aucun élève associé.</p>')+'<p class="sp">La date de sauvegarde ne prouve pas la date du dernier entraînement. Jusqu’à 200 élèves affichés.</p>';
+    return overview+(students.length?list+join:join+list);
+  }
+  function filterStudentRows(){
+    const rows=[...document.querySelectorAll('#coachRoot .coach-student')],query=studentQuery.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    let visible=0;
+    for(const row of rows){
+      const name=row.querySelector('strong').textContent.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      row.hidden=!(name.includes(query)&&(studentFilter==='all'||row.dataset[studentFilter]==='true'));
+      if(!row.hidden)visible++;
+    }
+    const count=document.getElementById('coachListCount');if(count)count.textContent=visible+' sur '+rows.length+' élève'+(rows.length>1?'s':'');
   }
   function templatesHTML(){
     return draftBanner()+'<div class="coach-section-head"><h2>Mes modèles <span class="coach-count">'+templates.length+'</span></h2>'+button('new-template','Créer un modèle','plus','',true)+'</div>'
@@ -216,7 +229,7 @@ window.DKOCoachUI=(()=>{
   function mount(){
     const root=document.getElementById('coachRoot');if(!root)return;
     root.onclick=e=>{const b=e.target.closest('[data-coach]');if(b)action(b.dataset.coach,b);};
-    root.oninput=e=>editInput(e.target);
+    root.oninput=e=>{if(e.target.id==='coachStudentSearch'){studentQuery=e.target.value;filterStudentRows();}else editInput(e.target);};
     root.onchange=e=>{
       const el=e.target;
       if(el.id==='coachProgram'){selectedProgram=+el.value;selectedSession=0;persistDraft();paint();}
@@ -232,6 +245,7 @@ window.DKOCoachUI=(()=>{
       else if(form.id==='coachEditor')publish(form);
     };
     if(busy)toggleBusy();
+    filterStudentRows();
   }
   async function loadStudent(id){
     const d=await api('read',{student:id});d.programs=normalize(d.programs);d.workouts=(d.workouts||[]).map(w=>DKO_DATA.workout(w));
@@ -275,6 +289,11 @@ window.DKOCoachUI=(()=>{
   function action(a,b){
     if(busy)return;
     if(a==='account'){window.DKOCloudUI.show();return;}
+    if(a==='student-filter'){
+      studentFilter=b.dataset.filter;
+      document.querySelectorAll('#coachRoot [data-coach="student-filter"]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+      filterStudentRows();return;
+    }
     if(a==='resume-draft'){run(resumeDraft);return;}
     if(a==='export-saved-draft'){if(savedDraft)download({app:'dako',version:7,programmes:savedDraft.programs},'dko-brouillon-coach.json');return;}
     if(a==='discard-saved-draft'){if(!confirm('Effacer ce brouillon enregistré sur cet appareil ?'))return;clearDraft();paint();return;}
