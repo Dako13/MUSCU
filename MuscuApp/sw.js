@@ -1,7 +1,7 @@
 /* Service worker — cache hors ligne.
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.33.0');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.34.0');
 const ASSETS=[
   './',
   './index.html',
@@ -13,6 +13,9 @@ const ASSETS=[
   './supabase-config.js',
   './cloud-sync.js',
   './cloud-ui.js',
+  './coach-sync.js',
+  './coach-ui.js',
+  './coach.css',
   './vendor/supabase-2.116.0.js',
   './bodymap.js',
   './icons/ui.svg',
@@ -40,7 +43,7 @@ self.addEventListener('fetch',e=>{
   if(url.searchParams.has('code')||url.searchParams.has('error'))return;
   const p=url.pathname;
   const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/exercise-catalog.js')||p.endsWith('/data-integrity.js')||p.endsWith('/supabase-config.js')||p.endsWith('/cloud-sync.js')||p.endsWith('/cloud-ui.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
-  if(shell){
+  if(shell||/\/coach(?:-sync|-ui)?\.(js|css)$/.test(p)){
     /* réseau d'abord : la dernière version s'affiche dès qu'on est en ligne (repli cache hors-ligne) */
     e.respondWith(
       fetch(e.request).then(res=>{

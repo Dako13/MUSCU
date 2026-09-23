@@ -29,6 +29,7 @@ window.DKOCloudUI=(()=>{
         for(const key of Object.keys(next)){const old=before.data[key];if(old==null)localStorage.removeItem(key);else localStorage.setItem(key,old);}
         return false;
       }
+      window.DKOCoachUI?.restored();
       committed();
       clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
       loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();
@@ -46,6 +47,7 @@ window.DKOCloudUI=(()=>{
   }
   function update(){
     refreshBadge();
+    window.DKOCoachUI?.accountChanged();
     if(!sheet.classList.contains('on')||!document.getElementById('cloudPanel'))return;
     const s=cloud?.state();
     if(document.getElementById('cloudGoogle')&&!s?.user){
@@ -203,5 +205,5 @@ window.DKOCloudUI=(()=>{
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloud?.changed();});
   document.addEventListener('app:sheet-closed',()=>setTimeout(offer,0));
   if(STORAGE_READY)init();else document.addEventListener('app:ready',init,{once:true});
-  return {show,refreshBadge,changed:()=>{cloud?.changed();refreshBadge();}};
+  return {show,refreshBadge,coachContext:()=>({client,project:config.url,state:cloud?.state(),loading}),changed:()=>{cloud?.changed();refreshBadge();}};
 })();

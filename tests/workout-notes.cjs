@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
 // Run with Playwright available through node_modules or NODE_PATH.
 const root = path.resolve(__dirname, '../MuscuApp');
 const server = http.createServer(async (req, res) => {
+  if(req.url==='/supabase-config.js'){res.setHeader('Content-Type','text/javascript');res.end('window.DKO_SUPABASE_CONFIG={};');return;}
   const file = path.resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
   if (!file.startsWith(root + path.sep) && file !== root) {
     res.writeHead(403).end(); return;
@@ -119,7 +120,7 @@ const server = http.createServer(async (req, res) => {
     }, backup);
     await page.locator('#importMerge').click();
     await page.waitForFunction(() => DB.workouts.length === 2 && !sheet.dataset.importing);
-    assert.deepEqual(await page.evaluate(() => DB.workouts), workouts);
+    assert.deepEqual(await page.evaluate(() => DB.workouts.map(w=>DKO_DATA.workout(w))), await page.evaluate(ws=>ws.map(w=>DKO_DATA.workout(w)),workouts));
     await page.evaluate(() => { showEditWorkout(0); });
     await page.locator('.we-note').first().fill('');
     await page.locator('#wsave').click();

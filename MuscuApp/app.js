@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.33.0';
+const APP_VERSION='4.34.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -630,7 +630,7 @@ function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db
 function storageSnapshot(){const snap={v:1,t:Date.now(),data:{}};for(const k of MIRROR_KEYS){const v=localStorage.getItem(k);if(v!=null)snap.data[k]=v}return snap;}
 function mirrorSnapshot(){if(!STORAGE_READY||!STORAGE_WRITABLE)return Promise.resolve(false);try{return idbSet('snapshot',storageSnapshot())}catch(e){return Promise.resolve(false)}}
 var _mirT=null; /* var volontaire (anti-TDZ) : mirrorSoon peut être appelé pendant la migration au chargement (loadProgram->savePrograms), AVANT cette ligne — ne pas repasser en let */
-function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400);window.DKOCloudUI?.changed();}
+function mirrorSoon(){if(!STORAGE_READY)return;clearTimeout(_mirT);_mirT=setTimeout(mirrorSnapshot,400);window.DKOCloudUI?.changed();window.DKOCoachUI?.changed();}
 function maybeRestoreFromIDB(){
   return idbGet('snapshot').then(snap=>{
     if(!snap||!snap.data)return false;
@@ -957,15 +957,16 @@ function editorDirty(){return route.view==='edit'&&editBaseline!==null&&editorSt
 function go(view,seance){
   if(view==='edit'&&DB.active?.seance===seance){toast('Termine la séance en cours avant de la modifier');return;}
   if(editorDirty()&&!window.confirm('Quitter sans enregistrer les modifications de cette séance ?'))return;
+  if(route.view==='coach'&&view!=='coach'&&!window.DKOCoachUI?.leave())return;
   if(view==='edit'&&(route.view!=='edit'||route.seance!==seance)){LIBSELECT.clear();LIBDRAFT=null;LIBFILTER.mode='browse';}
   route={view,seance:seance||null};render();
   editBaseline=view==='edit'?editorState():null;
   window.scrollTo({top:0});
 }
-window.addEventListener('beforeunload',ev=>{if(editorDirty()){ev.preventDefault();ev.returnValue='';}});
+window.addEventListener('beforeunload',ev=>{if(editorDirty()||window.DKOCoachUI?.dirty()){ev.preventDefault();ev.returnValue='';}});
 
 function render(){
-  const tabFor={home:'home',seance:'home',edit:'programs',suivi:'suivi',stats:'suivi',history:'suivi',programs:'programs',machines:'programs'};
+  const tabFor={home:'home',seance:'home',edit:'programs',suivi:'suivi',stats:'suivi',history:'suivi',programs:'programs',machines:'programs',coach:'programs'};
   document.querySelectorAll('.tabbtn').forEach(b=>{
     const active=b.dataset.v===tabFor[route.view];b.classList.toggle('on',active);
     if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
@@ -978,10 +979,12 @@ function render(){
   else if(route.view==='edit')app.innerHTML=editHTML(route.seance);
   else if(route.view==='suivi'||route.view==='stats'||route.view==='history')app.innerHTML=suiviHTML();
   else if(route.view==='programs')app.innerHTML=programsHTML();
+  else if(route.view==='coach')app.innerHTML=window.DKOCoachUI?.html()||'';
   else app.innerHTML=homeHTML();
   labelFields(app);
   syncExerciseFocus();
   window.DKOCloudUI?.refreshBadge?.();
+  if(route.view==='coach')window.DKOCoachUI?.mount();
   const filters=app.querySelector('#machineFilters');
   if(filters)filters.addEventListener('toggle',()=>{MFILTER.open=filters.open});
   app.classList.remove('vin');void app.offsetWidth;app.classList.add('vin'); /* transition d'entrée */
@@ -2294,7 +2297,7 @@ function showReplaceExercise(sourceId){
 /* ---------- gestion des programmes (vue) ---------- */
 function programsHTML(){
   const ap=activeProgram();
-  let h='<div class="top"><h1>Programmes</h1></div>'
+  let h='<div class="top"><h1>Programmes</h1><button class="hbtn" data-act="coach">'+uiIcon('users')+'Coaching</button></div>'
    +'<div class="subdate">'+PROGRAMS.length+' programme'+(PROGRAMS.length>1?'s personnels':' personnel')+'</div>'
    +'<button class="progpill" data-act="machines"><span class="ppl">Bibliothèque</span><span class="ppn">Explorer les exercices</span><span class="ppx">Ouvrir ›</span></button>';
   for(const p of PROGRAMS){
@@ -2515,6 +2518,7 @@ app.addEventListener('click',ev=>{
   }
   else if(act==='data')showData();
   else if(act==='cloud')window.DKOCloudUI?.show();
+  else if(act==='coach')window.DKOCoachUI?.open();
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
   else if(act==='suivitab'){SUIVI=actEl.dataset.t;render();}
@@ -3015,7 +3019,7 @@ function showSettings(){
    +'<div class="efield"><label>Niveau</label><div class="chips" id="nivChips" style="flex-wrap:wrap">'
    +['Débutant','Intermédiaire','Avancé'].map(v=>'<button class="chip'+(SETTINGS.niveau===v?' on':'')+'" data-niv="'+esc(v)+'" style="flex:0 1 auto;padding:10px 16px">'+v+'</button>').join('')
    +'</div></div>'
-   +'<div class="rectitle">Compte</div><div class="sbtns"><button class="sbtn" id="setCloud">Compte et sauvegarde</button></div>'
+   +'<div class="rectitle">Compte</div><div class="sbtns"><button class="sbtn" id="setCloud">Compte et sauvegarde</button><button class="sbtn" id="setCoach">'+uiIcon('users')+'Coaching</button></div>'
    +'<div class="rectitle">Outils</div>'
    +'<div class="sbtns"><button class="sbtn" id="setCalc">Calculateurs (1RM · plaques)</button><button class="sbtn" id="setBackup">Sauvegarde</button></div>'
    +'<div class="sbtns"><button class="sbtn danger" id="setReset">Réinitialiser le programme</button></div>'
@@ -3048,6 +3052,7 @@ function showSettings(){
   });
   document.getElementById('setCalc').addEventListener('click',showCalculators);
   document.getElementById('setCloud').addEventListener('click',()=>window.DKOCloudUI?.show());
+  document.getElementById('setCoach').addEventListener('click',()=>window.DKOCoachUI?.open());
   document.getElementById('setBackup').addEventListener('click',downloadBackup);
   document.getElementById('setReset').addEventListener('click',()=>{
     if(!window.confirm('Revenir au programme par défaut ? Tes modifications de programme seront perdues (l’historique est conservé).'))return;
@@ -3277,6 +3282,7 @@ async function applyImport(incoming,replace){
       for(const key of Object.keys(updates)){if(before.data[key]==null)localStorage.removeItem(key);else localStorage.setItem(key,before.data[key]);}
       throw error;
     }
+    if(incoming.programs)window.DKOCoachUI?.restored();
     clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
     loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();
     applyTheme();closeSheet();go('home');

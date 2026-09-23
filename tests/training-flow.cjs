@@ -6,6 +6,7 @@ const os=require('node:os');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'../MuscuApp'),out=path.join(os.tmpdir(),'dko-training');
 const server=http.createServer(async(req,res)=>{
+  if(req.url==='/supabase-config.js'){res.setHeader('Content-Type','text/javascript');res.end('window.DKO_SUPABASE_CONFIG={};');return;}
   const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
   if(file!==root&&!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
   const target=file===root?path.join(root,'index.html'):file;

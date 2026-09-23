@@ -1,0 +1,66 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {PGlite}=require(process.env.PGLITE_PATH||'@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite();
+ try{
+  const ids=[1,2,3,4].map(n=>'00000000-0000-0000-0000-'+String(n).padStart(12,'0'));
+  const [student,coach,stranger,anonymous]=ids;
+  await db.exec(`create role anon;create role authenticated;create schema auth;
+   create table auth.users(id uuid primary key,is_anonymous boolean default false);
+   create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+   grant usage on schema auth to authenticated,anon;`);
+  for(const id of ids)await db.query('insert into auth.users values($1,$2)',[id,id===anonymous]);
+  for(const file of ['202609200001_private_backups.sql','20260923092448_dko_coaching.sql'])await db.exec(await fs.readFile(path.join(__dirname,'../supabase/migrations',file),'utf8'));
+  let caller='';
+  const auth=async id=>{caller=id;await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);};
+  const api=async(action,args={})=>(await db.query('select public.dko_coach($1,$2::jsonb) as result',[action,JSON.stringify({account:caller,...args})])).rows[0].result;
+  const programs=[{id:'p',name:'Test',seances:[{id:'s',title:'Jambes',ex:[{id:'e',name:'Squat',sets:3,reps:'8'}]}]}];
+  await db.exec('set role anon');await assert.rejects(()=>api('self'),/permission denied/);
+  await auth(anonymous);await assert.rejects(()=>api('register',{label:'Anonymous'}),/Authentication required/);
+  await auth(student);assert.equal(await api('self'),null);
+  await assert.rejects(()=>api('register',{account:coach,label:'Wrong'}),/Account changed/);
+  await api('register',{label:'Student'});await api('enable',{programs});
+  const own=await api('self');assert.match(own.code,/^[A-F0-9]{32}$/);assert.equal(own.revision,1);
+  const workouts=[{id:'w',date:'2026-09-22',seance:'s',ex:{e:[{w:40,r:8,done:true}]},exNotes:{e:'Ressenti'},dur:100}];
+  await db.query('select public.dko_save_backup($1::jsonb,0,$2::uuid)',[JSON.stringify({schema:1,programs,activeId:'p',workouts,active:{secret:true},settings:{private:true},body:[{private:true}]}),student]);
+  await auth(coach);await api('register',{label:'Coach'});
+  await assert.rejects(()=>api('read',{student}),/Access denied/);
+  assert.equal((await api('join',{code:own.code})).mode,'full');
+  let dossier=await api('read',{student});assert.equal(dossier.code,undefined);assert.equal(dossier.coaches,undefined);
+  assert.deepEqual(dossier.workouts[0].exNotes,{});assert.equal(dossier.settings,undefined);assert.equal(dossier.active,undefined);assert.equal(dossier.body,undefined);
+  await assert.rejects(()=>db.query('select * from dko_coach_private.members'),/permission denied/);
+  assert.equal((await db.query('select * from public.dko_backups')).rows.length,0);
+  const changed=structuredClone(programs);changed[0].seances[0].ex[0].sets=4;
+  assert.equal((await api('publish',{student,revision:1,programs:changed})).revision,2);
+  await assert.rejects(()=>api('publish',{student,revision:1,programs}),/Program conflict/);
+  assert.equal((await api('history',{student})).length,2);
+  await auth(stranger);await api('register',{label:'Other'});await assert.rejects(()=>api('history',{student}),/Access denied/);
+  await auth(student);await api('notes',{enabled:true});await api('permission',{coach,mode:'read'});
+  await api('ack',{revision:2});assert.equal((await api('self')).appliedRevision,2);
+  await auth(coach);assert.equal((await api('join',{code:own.code})).mode,'read');
+  assert.equal((await api('read',{student})).workouts[0].exNotes.e,'Ressenti');
+  await assert.rejects(()=>api('publish',{student,revision:2,programs}),/Read only/);
+  await auth(student);await api('rotate');const rotated=(await api('self')).code;assert.notEqual(rotated,own.code);
+  await auth(stranger);assert.equal((await api('join',{code:own.code})).error,'invalid_code');
+  await auth(coach);assert.equal((await api('read',{student})).revision,2);
+  await auth(student);await api('permission',{coach,mode:'blocked'});
+  await auth(coach);await assert.rejects(()=>api('read',{student}),/Access denied/);
+  assert.equal((await api('join',{code:rotated})).error,'invalid_code');assert.deepEqual(await api('students'),[]);
+  await auth(stranger);for(let i=0;i<19;i++)assert.equal((await api('join',{code:'bad'})).error,'invalid_code');
+  assert.equal((await api('join',{code:rotated})).error,'rate_limit');
+  await auth(student);const bad=structuredClone(programs);bad[0].seances[0].ex[0].id='p';
+  await assert.rejects(()=>api('publish',{revision:2,programs:bad}),/Invalid programs/);
+  for(const patch of [{ref:-1},{rest:0},{increment:101},{reps:'x'.repeat(81)},{musP:[{}]},{name:{}},{sets:2.5}]){
+   const malformed=structuredClone(programs);Object.assign(malformed[0].seances[0].ex[0],patch);
+   await assert.rejects(()=>api('publish',{revision:2,programs:malformed}),/Invalid programs/);
+  }
+  await api('disable');assert.equal((await api('self')).code,null);
+  await api('enable',{programs});assert.equal((await api('self')).revision,2);
+  await auth(coach);assert.equal((await api('join',{code:(await (async()=>{await auth(student);const c=(await api('self')).code;await auth(coach);return c;})())})).error,'invalid_code');
+  await db.exec('reset role');await db.query('delete from auth.users where id=$1',[student]);
+  assert.equal((await db.query('select * from dko_coach_private.links')).rows.length,0);
+  console.log('PASS coaching SQL: authenticated access, private backup isolation, full/read/blocked, no rejoin elevation, permanent code rotation, consent, CAS, history, rate limit and deletion cascade.');
+ }finally{await db.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});
