@@ -28,7 +28,7 @@ window.DKOCoachUI=(()=>{
   }
   const readBase=()=>{try{return JSON.parse(localStorage.getItem(ownKey()))||null;}catch{return null;}};
   const writeBase=value=>{if(value)localStorage.setItem(ownKey(),JSON.stringify(value));else localStorage.removeItem(ownKey());};
-  const ownAllowed=()=>{const s=ctx().state;return STORAGE_READY&&STORAGE_WRITABLE&&s?.enabled&&!s.mismatch&&!['conflict','error'].includes(s.phase);};
+  const ownAllowed=()=>{const s=ctx().state;return STORAGE_READY&&STORAGE_WRITABLE&&localDataCurrent()&&s?.enabled&&!s.mismatch&&!['conflict','error'].includes(s.phase);};
   const blocked=()=>!ownAllowed()||!!DB.active||route.view==='edit'||!!sheet.dataset.importing;
   const dirty=()=>!!draft&&JSON.stringify(draft)!==baseline;
   const check=token=>{if(token!==epoch||!ctx().state?.user)throw new Error('Compte changé');};

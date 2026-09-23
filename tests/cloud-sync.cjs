@@ -7,7 +7,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'../MuscuApp/cloud-sync.js')
 const {create}=context.factory;
 const accounts=new Map(),instances=[];
 function device(id,initial={value:'original'},storage=new Map()){
-  let authUser={id,email:id+'@example.test'},listener,local=structuredClone(initial),calls=0,fail=false,restoreFails=false,mutateRead=null;
+  let authUser={id,email:id+'@example.test'},listener,local=structuredClone(initial),calls=0,fail=false,restoreFails=false,mutateRead=null,allowed=true;
   const client={
     auth:{
       onAuthStateChange(cb){listener=cb;return{data:{subscription:{unsubscribe(){}}}};},
@@ -31,9 +31,9 @@ function device(id,initial={value:'original'},storage=new Map()){
   const store={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
   const cloud=create({client,project:'test',store,read:()=>structuredClone(local),validate:p=>{
     if(typeof p.value!=='string')throw new Error('invalid');return {programs:[],workouts:[],...structuredClone(p)};
-  },restore:async(p,check,next,committed)=>{if(restoreFails)return false;check();local=structuredClone(p);store.setItem('dko_cloud_link',JSON.stringify(next));committed();return true;},canSync:()=>true});
+  },restore:async(p,check,next,committed)=>{if(restoreFails)return false;check();local=structuredClone(p);store.setItem('dko_cloud_link',JSON.stringify(next));committed();return true;},canSync:()=>allowed});
   instances.push(cloud);
-  return{cloud,storage,get local(){return local;},set(v){local=v;},get calls(){return calls;},fail(v){fail=v;},restoreFails(v){restoreFails=v;},race(fn){mutateRead=fn;},
+  return{cloud,storage,get local(){return local;},set(v){local=v;},get calls(){return calls;},fail(v){fail=v;},restoreFails(v){restoreFails=v;},allow(v){allowed=v;},race(fn){mutateRead=fn;},
     account(id){authUser={id,email:id+'@example.test'};listener('SIGNED_IN',{user:authUser});}};
 }
 (async()=>{
@@ -76,6 +76,10 @@ function device(id,initial={value:'original'},storage=new Map()){
     during.race(()=>{during.set({value:'edit during save'});during.cloud.changed();});
     await during.cloud.sync({enable:true});assert.equal(during.cloud.state().pending,true,'new edit must not be marked saved');
     during.race(null);await during.cloud.sync();assert.equal(during.cloud.state().pending,false);
+    const stale=device('stale-tab');await stale.cloud.init();
+    stale.race(()=>stale.allow(false));
+    assert.equal(await stale.cloud.sync({enable:true}),false,'stale tab cannot upload after remote read');
+    assert.equal(stale.calls,0);assert.equal(accounts.has('stale-tab'),false);
     console.log('PASS: consent, account isolation, offline retry, reload, conflicts, stale force-save, restore failure, sign-out and auth race.');
   }finally{instances.forEach(c=>c.dispose());}
 })().catch(e=>{console.error(e);process.exitCode=1;});

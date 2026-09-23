@@ -9,7 +9,7 @@ window.DKOCloudUI=(()=>{
   }
   async function restore(payload,current,link,committed){
     if(DB.active||route.view==='edit')throw new Error('Finish the current session or editor first');
-    if(!STORAGE_WRITABLE||sheet.dataset.importing)return false;
+    if(!STORAGE_WRITABLE||!localDataCurrent()||sheet.dataset.importing)return false;
     sheet.dataset.importing='1';
     const before=storageSnapshot();
     try{
@@ -191,7 +191,7 @@ window.DKOCloudUI=(()=>{
       }
       const store={getItem:key=>localStorage.getItem(key),setItem:(key,value)=>{localStorage.setItem(key,value);mirrorSnapshot();}};
       cloud=DKO_CLOUD.create({client,project:config.url.replace(/\/$/,''),store,read,validate:DKO_DATA.cloud,restore,
-        canSync:()=>STORAGE_READY&&STORAGE_WRITABLE&&!sheet.dataset.importing,onChange:update});
+        canSync:()=>STORAGE_READY&&STORAGE_WRITABLE&&localDataCurrent()&&!sheet.dataset.importing,onChange:update});
       await cloud.init();
     }catch{notice='Service cloud indisponible. Tes données restent locales.';}
     finally{loading=false;update();setTimeout(offer,0);}

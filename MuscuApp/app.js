@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.42.0';
+const APP_VERSION='4.42.1';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -601,6 +601,11 @@ function loadDB(){
 var _storeWarned=false; /* var volontaire (anti-TDZ) : storeFailed peut être appelé pendant la migration au chargement, AVANT cette ligne — ne pas repasser en let */
 function storeFailed(){STORAGE_WRITABLE=false;if(_storeWarned)return;_storeWarned=true;try{toast('Sauvegarde impossible : exporte tes données avant de fermer l’app')}catch(e){}}
 function localBaselineChanged(){return LOCAL_KEYS.some(key=>localStorage.getItem(key)!==LOCAL_BASELINE.get(key))}
+function localDataCurrent(){
+  if(STORAGE_CONFLICT)return false;
+  if(STORAGE_READY&&localBaselineChanged()){showStorageConflict();return false}
+  return true;
+}
 function showStorageConflict(){
   if(STORAGE_CONFLICT)return;
   STORAGE_CONFLICT=true;STORAGE_WRITABLE=false;
@@ -617,7 +622,7 @@ function showStorageConflict(){
 }
 function writeLocalBatch(updates){
   const keys=Object.keys(updates);
-  if(STORAGE_CONFLICT)throw new Error('Données modifiées dans un autre onglet');
+  if(!localDataCurrent())throw new Error('Données modifiées dans un autre onglet');
   for(const key of keys)if(LOCAL_BASELINE.has(key)&&localStorage.getItem(key)!==LOCAL_BASELINE.get(key)){
     showStorageConflict();throw new Error('Données modifiées dans un autre onglet');
   }

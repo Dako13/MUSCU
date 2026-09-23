@@ -9,7 +9,9 @@ la fenêtre devenue périmée bloque les écritures pour ne pas écraser ces don
 Elle propose d'exporter sa copie locale avant de recharger la version récente.
 Cet export de secours ne modifie pas la date de la dernière sauvegarde normale.
 Ce mécanisme protège aussi les imports et les restaurations cloud/coach ; il ne
-fusionne pas automatiquement deux modifications concurrentes.
+fusionne pas automatiquement deux modifications concurrentes. Depuis 4.42.1,
+l'état local est également revérifié avant un envoi Supabase ou coach, même
+si l'événement de l'autre onglet n'est pas encore arrivé.
 
 ## Suivi et dossier coach (4.41)
 

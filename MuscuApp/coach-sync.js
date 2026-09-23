@@ -30,6 +30,7 @@ const DKO_COACH_SYNC=(()=>{
           if(blocked()||await hash(read())!==localHash){emit('waiting');return;}guard();
           await apply(p.programs,guard);guard();await mark(p.programs,p.revision,guard);onApplied(p);
         }else if(action==='upload'){
+          if(blocked()){emit('waiting');return;}
           const result=await api('publish',{revision:p.revision,programs:local,summary:'Modifications de l’élève'});guard();
           await mark(local,result.revision,guard);p.revision=result.revision;p.programs=local;
         }else await mark(local,p.revision,guard);
@@ -47,6 +48,7 @@ const DKO_COACH_SYNC=(()=>{
           if(blocked())return false;
           await apply(latest.programs,guard);guard();await mark(latest.programs,latest.revision,guard);onApplied(latest);
         }else{
+          if(blocked())return false;
           const doc=read();const result=await api('publish',{revision:latest.revision,programs:doc,summary:'Version locale choisie après comparaison'});guard();
           await mark(doc,result.revision,guard);latest.revision=result.revision;latest.programs=doc;
         }

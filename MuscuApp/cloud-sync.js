@@ -62,6 +62,7 @@ const DKO_CLOUD=(()=>{
         if(!enable&&(!bound()||!link.enabled))return false;
         if(phase==='conflict'&&!enable&&!overwrite)return false;
         const revisionAtRead=changeCounter,local=validate(read()),hash=await fingerprint(local);current();
+        if(!canSync()){phase='waiting';message='Sauvegarde en attente';return false;}
         if(!enable&&!overwrite&&bound()&&hash===link.hash){savedCounter=revisionAtRead;phase='saved';message='Sauvegarde à jour';return true;}
         phase='saving';message='Sauvegarde en cours';emit();
         // A force-save uses the revision actually shown in the conflict dialog.
@@ -70,6 +71,7 @@ const DKO_CLOUD=(()=>{
         if(overwrite&&expected==null)throw new Error('No reviewed revision');
         const revision=row?.revision||0;
         if(row&&await fingerprint(row.payload)===hash){
+          if(!canSync()){phase='waiting';message='Sauvegarde en attente';return false;}
           current();save({owner:owner(),revision,hash,enabled:true,lastSync:row.updated_at});
           savedCounter=revisionAtRead;
           phase='saved';message='Sauvegarde à jour';return true;
@@ -78,6 +80,7 @@ const DKO_CLOUD=(()=>{
         if(!overwrite&&revision!==(bound()?link.revision:0)){
           phase='conflict';message='Une sauvegarde différente existe en ligne. Choisis laquelle conserver.';return false;
         }
+        if(!canSync()){phase='waiting';message='Sauvegarde en attente';return false;}
         const {data,error}=await client.rpc('dko_save_backup',{p_payload:local,p_expected_revision:revision,p_user_id:user.id});
         current();if(error)throw error;
         if(!data||!Number.isSafeInteger(data.revision))throw new Error('Invalid save response');
