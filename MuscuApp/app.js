@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.35.0';
+const APP_VERSION='4.35.1';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2182,26 +2182,33 @@ function machinesHTML(){
   h=h.replace('<div id="mlist">','<div id="machineCount" class="subdate" role="status">'+n+' exercice'+(n>1?'s':'')+'</div><div id="mlist">');
   return h;
 }
-function showMachine(i){
-  const m=MACHINES[i];if(!m)return;
+function machineInfoHTML(m){
+  if(m.personal){
+    const e=m.exercise;
+    return '<div class="sp">Exercice personnel · '+esc((e.musP||[]).map(mLabel).join(', ')||'Muscles non renseignés')+'</div>'
+      +(e.notes?'<div class="rectitle">Consignes techniques</div><div class="notes">'+esc(e.notes)+'</div>':'');
+  }
   const chips=(m.p||[]).map(x=>'<span class="mchip pri">'+esc(mLabel(x))+'</span>').join('')
     +(m.s||[]).map(x=>'<span class="mchip">'+esc(mLabel(x))+'</span>').join('');
-  const ap=activeProgram();
-  const seances=ap?ap.seances:[];
-  const opts=seances.map(s=>'<button class="sbtn" data-act="machadd" data-m="'+i+'" data-s="'+esc(s.id)+'">'+esc(s.tab)+' · '+esc(s.title)+'</button>').join('');
   const chains=machineChains(m);
   const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+(m.generic?' exercice musculation':' '+m.b+' machine musculation'));
   const load=machineLoad(m);
   const p=exPattern({name:m.n});
-  sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'
-   +'<div class="sp">'+esc(m.generic?m.t:m.b)+(m.model?' · '+esc(m.model):'')+' · '+esc(LOAD_SHORT[load])+(chains.length?' · Enseignes indicatives : '+chains.map(esc).join(', ')+'. Modèle à vérifier dans ton club.':'')+'</div>'
+  return '<div class="sp">'+esc(m.generic?m.t:m.b)+(m.model?' · '+esc(m.model):'')+' · '+esc(LOAD_SHORT[load])+(chains.length?' · Enseignes indicatives : '+chains.map(esc).join(', ')+'. Modèle à vérifier dans ton club.':'')+'</div>'
    +exPhotoHTML(m.n)
    +'<div class="sbtns" style="margin:4px 0 14px"><a class="sbtn pri" href="'+imgURL+'" target="_blank" rel="noopener">Voir en photos ›</a></div>'
    +machineVisualHTML(m,p,load)
    +'<div class="mchips">'+chips+'</div>'
    +'<div class="rectitle">Chargement</div><div class="notes" style="margin-bottom:14px">'+esc(LOAD_DESC[load])+'</div>'
    +'<div class="rectitle">Conseil d’exécution</div><div class="notes" style="margin-bottom:14px">'+esc(machineTip(m))+'</div>'
-   +(m.tip?'':machineCoachHTML(p,load))
+   +(m.tip?'':machineCoachHTML(p,load));
+}
+function showMachine(i){
+  const m=MACHINES[i];if(!m)return;
+  const ap=activeProgram();
+  const seances=ap?ap.seances:[];
+  const opts=seances.map(s=>'<button class="sbtn" data-act="machadd" data-m="'+i+'" data-s="'+esc(s.id)+'">'+esc(s.tab)+' · '+esc(s.title)+'</button>').join('');
+  sheet.innerHTML='<h2>'+esc(m.n)+'</h2>'+machineInfoHTML(m)
    +'<div class="rectitle">Ajouter à une séance'+(ap?' · '+esc(ap.name):'')+'</div>'
    +'<div class="machadd">'+(opts||'<div class="hempty">Crée d’abord une séance dans ce programme.</div>')+'</div>';
   openSheet();bindExPhoto();
@@ -2878,7 +2885,7 @@ function libraryMatch(m){
 }
 function filterLibraryRows(){
   const q=searchKey(LIBFILTER.q);let count=0;
-  sheet.querySelectorAll('#liblist .mrow').forEach(row=>{
+  sheet.querySelectorAll('#liblist .library-entry').forEach(row=>{
     const visible=matchesSearch(row.dataset.search,q);row.hidden=!visible;if(visible)count++;
   });
   const countEl=document.getElementById('libCount');if(countEl)countEl.textContent=count+' exercice'+(count>1?'s':'');
@@ -2954,7 +2961,7 @@ function showLibPicker(){
     const muscles=(m.p||[]).map(mLabel).join(', '),load=m.personal?'':LOAD_SHORT[machineLoad(m)],search=machineSearch(m);
     const detail=[m.b,muscles,load].filter(Boolean).join(' · ');
     const favorite=(SETTINGS.exerciseFavorites||[]).includes(m.key);
-    h+='<div class="mrow library-choice" data-search="'+esc(search)+'"><label><input type="checkbox" data-libmachine="'+i+'"'+(LIBSELECT.has(m.key)?' checked':'')+'><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(detail)+'</span></span></label><button class="icon-button" data-libfavorite="'+i+'" aria-pressed="'+favorite+'" aria-label="Favori : '+esc(m.n)+'" data-tooltip="Favori">'+uiIcon('star')+'</button></div>';
+    h+='<div class="library-entry" data-search="'+esc(search)+'"><div class="mrow library-choice"><label><input type="checkbox" data-libmachine="'+i+'"'+(LIBSELECT.has(m.key)?' checked':'')+'><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(detail)+'</span></span></label><button class="icon-button" data-libdetail="'+i+'" aria-expanded="false" aria-controls="libDetail-'+i+'" aria-label="Détails : '+esc(m.n)+'" title="Détails">'+uiIcon('info')+'</button><button class="icon-button" data-libfavorite="'+i+'" aria-pressed="'+favorite+'" aria-label="Favori : '+esc(m.n)+'" data-tooltip="Favori">'+uiIcon('star')+'</button></div><div id="libDetail-'+i+'" class="library-detail" hidden></div></div>';
   });
   h+='</div><div id="libEmpty" class="library-empty"'+(matches.length?' hidden':'')+'><div class="hempty">Aucun exercice ne correspond à cette recherche.</div><button class="sbtn pri" data-libmode="custom">Créer un exercice non répertorié</button></div>';
   h+='<div class="library-add"><button class="sbtn pri" id="libAddSelected"></button></div>';
@@ -2968,6 +2975,16 @@ function showLibPicker(){
     const m=catalog[+input.dataset.libmachine];
     if(input.checked)LIBSELECT.set(m.key,m.exercise);else LIBSELECT.delete(m.key);
     refreshLibrarySelection();
+  }));
+  sheet.querySelectorAll('[data-libdetail]').forEach(button=>button.addEventListener('click',()=>{
+    const panel=document.getElementById('libDetail-'+button.dataset.libdetail),opening=panel.hidden;
+    sheet.querySelectorAll('[data-libdetail][aria-expanded="true"]').forEach(other=>{
+      other.setAttribute('aria-expanded','false');document.getElementById('libDetail-'+other.dataset.libdetail).hidden=true;
+    });
+    if(!opening)return;
+    const m=catalog[+button.dataset.libdetail];
+    panel.innerHTML='<h3>'+esc(m.n)+'</h3>'+machineInfoHTML(m);
+    panel.hidden=false;button.setAttribute('aria-expanded','true');bindExPhoto();
   }));
   sheet.querySelectorAll('[data-libfavorite]').forEach(button=>button.addEventListener('click',()=>{
     const key=catalog[+button.dataset.libfavorite].key,favorites=new Set(SETTINGS.exerciseFavorites||[]);

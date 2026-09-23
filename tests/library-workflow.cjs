@@ -72,6 +72,18 @@ const server=http.createServer(async(req,res)=>{
     await p.evaluate(()=>{LIBFILTER.c=null;LIBFILTER.b=null;LIBFILTER.l=null;showLibPicker();});
     await p.locator('#libq').fill('bayesian');
     assert.equal(await p.locator('#liblist .mrow:visible').count(),1);
+    await p.locator('#liblist [data-libdetail]:visible').click();
+    assert(await p.locator('#liblist .library-detail').getByText('Place la poulie basse derrière toi',{exact:false}).isVisible());
+    assert.equal(await p.locator('#libq').inputValue(),'bayesian');
+    assert.equal(await p.locator('#liblist input:checked').count(),0);
+    await p.locator('#liblist input[type=checkbox]:visible').check();
+    assert.match(await p.locator('#libAddSelected').textContent(),/\(1\)/);
+    await p.locator('#liblist input[type=checkbox]:visible').uncheck();
+    for(const width of [320,390]){
+      await p.setViewportSize({width,height:844});
+      assert(await p.locator('#sheet').evaluate(el=>el.scrollWidth<=el.clientWidth),`library detail overflow ${width}`);
+      await p.screenshot({path:path.join(out,'picker-detail-'+width+'.png'),animations:'disabled'});
+    }
     await p.locator('#libq').fill('Ma machine introuvable');
     assert(await p.locator('#libEmpty').isVisible());
     await p.locator('#libEmpty [data-libmode=custom]').click();
@@ -96,6 +108,8 @@ const server=http.createServer(async(req,res)=>{
     await p.locator('#libq').fill('Ma machine introuvable');
     const custom=p.locator('#liblist .library-choice:visible');
     await custom.locator('[data-libfavorite]').click();
+    await custom.locator('[data-libdetail]').click();
+    assert(await p.locator('#liblist .library-detail').getByText('Un bras a la fois <test>',{exact:true}).isVisible());
     await custom.locator('input').check();
     await p.locator('[data-libscope=all]').click();
     await p.locator('#libq').fill('leg press');

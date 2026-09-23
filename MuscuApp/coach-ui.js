@@ -289,13 +289,18 @@ window.DKOCoachUI=(()=>{
     const show=()=>{
       const q=searchKey(document.getElementById('coachSearch').value),mus=document.getElementById('coachMuscle').value,load=document.getElementById('coachLoad').value;
       const filtered=entries.map((m,i)=>({m,i})).filter(({m})=>(!q||searchKey(m.n+' '+m.b).includes(q))&&(!mus||m.p.includes(mus))&&(!load||machineLoad(m)===load));
-      document.getElementById('coachResults').innerHTML='<p class="sp">'+filtered.length+' résultats'+(filtered.length>80?' · 80 affichés, affine ta recherche':'')+'</p>'+filtered.slice(0,80).map(({m,i})=>`<button class="coach-library-row" data-add="${i}"><span><strong>${esc(m.n)}</strong><small>${esc(m.b)} · ${esc(LOAD_SHORT[machineLoad(m)])}</small></span>${uiIcon('plus')}</button>`).join('')+(filtered.length?'':'<p>Aucun exercice répertorié.</p>');
+      document.getElementById('coachResults').innerHTML='<p class="sp">'+filtered.length+' résultats'+(filtered.length>80?' · 80 affichés, affine ta recherche':'')+'</p>'+filtered.slice(0,80).map(({m,i})=>`<div class="coach-library-entry"><div class="coach-library-row"><span><strong>${esc(m.n)}</strong><small>${esc(m.b)} · ${esc(LOAD_SHORT[machineLoad(m)])}</small></span>${iconButton('detail','Détails','info',`data-index="${i}" aria-controls="coachDetail-${i}" aria-expanded="false"`)}${iconButton('add','Ajouter cet exercice','plus',`data-index="${i}"`)}</div><div id="coachDetail-${i}" class="library-detail" hidden></div></div>`).join('')+(filtered.length?'':'<p>Aucun exercice répertorié.</p>');
     };
     document.getElementById('coachLibrary').oninput=show;
     document.getElementById('coachLibrary').onclick=e=>{
       if(token!==epoch||!draft){closeSheet();return;}
-      const b=e.target.closest('[data-add]');
-      if(b){const s=draft[selectedProgram].seances[selectedSession];if(s.ex.length>=100){toast('100 exercices maximum par séance');return;}s.ex.push({...clone(entries[+b.dataset.add].exercise),id:uid('e_')});closeSheet();paint();}
+      const b=e.target.closest('[data-coach="add"],[data-coach="detail"]');
+      if(b?.dataset.coach==='detail'){
+        const panel=document.getElementById('coachDetail-'+b.dataset.index),opening=panel.hidden;
+        sheet.querySelectorAll('[data-coach="detail"][aria-expanded="true"]').forEach(other=>{other.setAttribute('aria-expanded','false');document.getElementById('coachDetail-'+other.dataset.index).hidden=true;});
+        if(opening){const m=entries[+b.dataset.index];panel.innerHTML='<h3>'+esc(m.n)+'</h3>'+machineInfoHTML(m);panel.hidden=false;b.setAttribute('aria-expanded','true');bindExPhoto();}
+      }
+      else if(b){const s=draft[selectedProgram].seances[selectedSession];if(s.ex.length>=100){toast('100 exercices maximum par séance');return;}s.ex.push({...clone(entries[+b.dataset.index].exercise),id:uid('e_')});closeSheet();paint();}
       else if(e.target.closest('[data-coach="custom"]')){closeSheet();action('new-exercise',{});}
     };show();
   }

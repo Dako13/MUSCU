@@ -82,8 +82,16 @@ const server=http.createServer(async(req,res)=>{
   await c.locator('[data-coach="student"]').click();await c.locator('[data-coach="edit"]').waitFor();await c.setViewportSize({width:390,height:844});
   const ownCoach=await c.evaluate(()=>JSON.stringify(PROGRAMS));
   await c.locator('[data-coach="edit"]').click();await c.locator('[data-field="e.sets"]').fill('4');await c.locator('[data-field="s.rest"]').fill('240');
-  await c.locator('[data-coach="library"]').click();await c.locator('#coachSearch').fill('exercice-introuvable-xyz');await c.getByText('Aucun exercice répertorié.').waitFor();await c.locator('#coachLibrary [data-coach="custom"]').click();
-  await c.locator('[data-field="e.name"]').nth(1).fill('Exercice sur mesure');await c.locator('[data-field="summary"]').fill('Repos augmenté et exercice ajouté');
+  await c.locator('[data-coach="library"]').click();await c.locator('#coachSearch').fill('Curl bayésien');
+  await c.locator('#coachResults [data-coach="detail"]').first().click();
+  assert(await c.locator('#coachResults .library-detail').getByText('Place la poulie basse derrière toi',{exact:false}).isVisible());
+  assert.equal(await c.locator('#coachSearch').inputValue(),'Curl bayésien');
+  await c.locator('#coachSearch').fill('exercice-introuvable-xyz');await c.getByText('Aucun exercice répertorié.').waitFor();await c.locator('#coachLibrary [data-coach="custom"]').click();
+  await c.locator('[data-field="e.name"]').nth(1).fill('Exercice sur mesure');
+  await c.locator('[data-coach="library"]').click();await c.locator('#coachSearch').fill('Curl bayésien');
+  await c.locator('#coachResults [data-coach="add"]').first().click();
+  assert.match(await c.locator('[data-field="e.name"]').nth(2).inputValue(),/Curl bayésien/);
+  await c.locator('[data-field="summary"]').fill('Repos augmenté et exercices ajoutés');
   await c.locator('[data-coach="template-save-current"]').click();await c.getByText(/Modèle enregistré. Les charges cibles personnelles/).waitFor();
   await c.locator('[data-coach="template-import"]').click();await c.locator(`[data-template-id="${model.id}"]`).click();
   await c.waitForFunction(()=>document.querySelectorAll('#coachProgram option').length===2);
