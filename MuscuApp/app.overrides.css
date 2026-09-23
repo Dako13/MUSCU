@@ -18,6 +18,30 @@
   --ac-soft:rgba(238,141,187,.10);--ac-veil:transparent;--ac-glow:transparent;
   --ok:#91d7c1;--danger:#ff9aab;
 }
+:root[data-theme="emerald"]{
+  --bg:#0c1110;--card:#151d1a;--card2:#111815;--input:#202b25;--elev:#2b362f;
+  --txt:#f3f7f4;--dim:#b9cac1;--faint:#93a89b;
+  --line:#2a3b32;--line2:#4b6254;
+  --ac:#65dab0;--ac-hi:#96efcb;--ac-deep:#40b58a;--button-ac:#4bc594;
+  --ac-soft:rgba(101,218,176,.12);--ac-veil:transparent;--ac-glow:transparent;
+  --ok:#8dbdff;--danger:#ff9b91;--on-ac:#092017;
+}
+:root[data-theme="gold"]{
+  --bg:#12100c;--card:#1e1a13;--card2:#17140f;--input:#2b251a;--elev:#362e21;
+  --txt:#f6f3eb;--dim:#cbbfa9;--faint:#a99c85;
+  --line:#393225;--line2:#61533c;
+  --ac:#e9c57a;--ac-hi:#f4dda5;--ac-deep:#cfa757;--button-ac:#d5ad60;
+  --ac-soft:rgba(233,197,122,.12);--ac-veil:transparent;--ac-glow:transparent;
+  --ok:#8ad7b4;--danger:#ff9b91;--on-ac:#20170a;
+}
+:root[data-theme="glacier"]{
+  --bg:#0e1112;--card:#181d1f;--card2:#121719;--input:#252d30;--elev:#30383b;
+  --txt:#f0f6f6;--dim:#bbcbd0;--faint:#91a6ac;
+  --line:#2f3c40;--line2:#4f6369;
+  --ac:#75d7e4;--ac-hi:#a7ebf2;--ac-deep:#48aebd;--button-ac:#55b9c8;
+  --ac-soft:rgba(117,215,228,.12);--ac-veil:transparent;--ac-glow:transparent;
+  --ok:#98d6ae;--danger:#ff9e95;--on-ac:#071b1e;
+}
 body,:root[data-theme="rose"] body{background:var(--bg);line-height:1.5;letter-spacing:0}
 *,*::before,*::after{letter-spacing:0 !important}
 [hidden]{display:none !important}
@@ -311,6 +335,14 @@ summary{font-size:13px;min-height:44px}
 .mfilters{gap:8px}
 .mfchip,.chip{min-height:40px;border-radius:6px;font-size:12px;text-transform:none;background:none;box-shadow:none;padding:8px 10px}
 .mfchip.on,.chip.on,.mfchip.alt.on{color:var(--txt);border-color:var(--ac);background:var(--ac-soft);box-shadow:none}
+#themeChips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#themeChips .theme-option{display:flex;align-items:center;justify-content:flex-start;gap:10px;min-height:48px;min-width:0;padding:10px 12px;text-align:left;white-space:normal}
+#themeChips .theme-swatch{width:18px;height:18px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.28)}
+#themeChips .theme-swatch.dark{background:#ff4353}
+#themeChips .theme-swatch.rose{background:#ee8dbb}
+#themeChips .theme-swatch.emerald{background:#65dab0}
+#themeChips .theme-swatch.gold{background:#e9c57a}
+#themeChips .theme-swatch.glacier{background:#75d7e4}
 .mrow{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;margin:0;padding:16px 0;gap:14px}
 .mrow-main,.mrow-n{min-width:0;overflow-wrap:anywhere;white-space:normal}
 .mrow-n{font-size:15px;font-weight:600}

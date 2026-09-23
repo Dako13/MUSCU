@@ -77,7 +77,7 @@ const DKO_DATA=(()=>{
     object(s,'Réglages');const out={};
     for(const [k,min,max] of [['poids',1,1000],['taille',1,300],['age',1,130],['rest',1,86400]])if(k in s)out[k]=number(s[k],min,max);
     for(const k of ['objectif','salle','niveau'])if(k in s)out[k]=str(s[k]);
-    if('theme' in s){if(!['dark','rose'].includes(s.theme))fail('Thème non reconnu');out.theme=s.theme;}
+    if('theme' in s){if(!['dark','rose','emerald','gold','glacier'].includes(s.theme))fail('Thème non reconnu');out.theme=s.theme;}
     if('exerciseLibrary' in s)out.exerciseLibrary=list(s.exerciseLibrary,'Bibliothèque personnelle').map(e=>meta(object(e,'Exercice personnel')));
     for(const key of ['exerciseFavorites','exerciseRecent'])if(key in s)out[key]=[...new Set(list(s[key],'Exercices').map(x=>str(x,'',6000)))];
     return out;

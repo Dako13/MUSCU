@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.36.0';
+const APP_VERSION='4.37.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -329,7 +329,7 @@ function loadSettings(){
     objectif:(typeof s.objectif==='string'?s.objectif:''),
     salle:(typeof s.salle==='string'&&s.salle)?s.salle:'On Air',
     niveau:(typeof s.niveau==='string')?s.niveau:'',
-    theme:(['dark','rose'].indexOf(s.theme)>=0?s.theme:'dark'),
+    theme:(['dark','rose','emerald','gold','glacier'].includes(s.theme)?s.theme:'dark'),
     ...(Array.isArray(s.exerciseLibrary)?{exerciseLibrary:s.exerciseLibrary}:{}),
     ...(Array.isArray(s.exerciseFavorites)?{exerciseFavorites:s.exerciseFavorites}:{}),
     ...(Array.isArray(s.exerciseRecent)?{exerciseRecent:s.exerciseRecent}:{})
@@ -3059,8 +3059,8 @@ function showSettings(){
   const inp='width:100%;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none';
   sheet.innerHTML='<h2>Réglages</h2><div class="sp">Appliqués immédiatement.</div>'
    +'<div class="rectitle">Apparence</div>'
-   +'<div class="efield"><label>Thème</label><div class="chips" id="themeChips" style="flex-wrap:wrap">'
-   +[['dark','Sombre'],['rose','Rosé']].map(t=>'<button class="chip'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" style="flex:0 1 auto;padding:10px 16px">'+t[1]+'</button>').join('')
+   +'<div class="efield"><label>Thème</label><div id="themeChips">'
+   +[['dark','Rouge'],['rose','Rosé'],['emerald','Émeraude'],['gold','Or'],['glacier','Glacier']].map(t=>'<button type="button" class="chip theme-option'+(((SETTINGS.theme||'dark')===t[0])?' on':'')+'" data-th="'+t[0]+'" aria-pressed="'+(((SETTINGS.theme||'dark')===t[0])?'true':'false')+'"><span class="theme-swatch '+t[0]+'" aria-hidden="true"></span>'+t[1]+'</button>').join('')
    +'</div></div>'
    +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
    +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')
@@ -3093,7 +3093,7 @@ function showSettings(){
   document.getElementById('themeChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
     SETTINGS.theme=c.dataset.th;saveSettings();applyTheme();render();
-    document.querySelectorAll('#themeChips .chip').forEach(x=>x.classList.toggle('on',x===c));
+    document.querySelectorAll('#themeChips .chip').forEach(x=>{x.classList.toggle('on',x===c);x.setAttribute('aria-pressed',String(x===c))});
   });
   document.getElementById('setPoids').addEventListener('input',ev=>{const v=numOrNull(ev.target.value);if(v!=null){SETTINGS.poids=v;saveSettings()}});
   document.getElementById('setTaille').addEventListener('input',ev=>{const v=intOrNull(ev.target.value);SETTINGS.taille=v;saveSettings()});
