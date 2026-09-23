@@ -497,3 +497,7 @@ body:has(#timerbar.on) #app{padding-bottom:calc(240px + env(safe-area-inset-bott
 .cloud-status{min-height:36px;font-size:.78rem;color:var(--dim);text-align:left;white-space:normal}
 .cloud-status[data-saved=true]{color:var(--ok)}
 .machineviz{grid-template-columns:minmax(0,1fr)}
+#storageConflict{box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;margin:auto;padding:24px;border:1px solid var(--line2);border-radius:8px;background:var(--card);color:var(--txt);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+#storageConflict::backdrop{background:rgba(0,0,0,.78)}
+#storageConflict h2{font-size:20px;line-height:1.25;margin:0 0 12px}#storageConflict p{font-size:14px;line-height:1.5;color:var(--dim);margin:0 0 22px}
+.storage-conflict-actions{display:grid;gap:10px}.storage-conflict-actions button{min-height:48px;padding:10px 14px;border:1px solid var(--line2);border-radius:6px;background:var(--input);color:var(--txt);font:inherit;font-weight:700;cursor:pointer}.storage-conflict-actions #conflictReload{background:var(--ac);border-color:var(--ac);color:#fff}

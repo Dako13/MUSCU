@@ -68,7 +68,8 @@ pas un audit manuel complet d'accessibilite ni un essai sur iPhone physique.
   exacte heure par heure (l'historique enregistre la date de seance).
 - Les nouvelles installations demarrent sur un profil et un programme neutres
   depuis 4.39 ; les programmes anterieurs restent inchanges.
-- Deux onglets modifiant les memes donnees en parallele ne sont pas synchronises.
+- Depuis 4.42, un onglet perime bloque ses ecritures et demande un rechargement.
+  Les modifications concurrentes ne sont pas fusionnees automatiquement.
 - IndexedDB et localStorage restent sur le meme appareil : une suppression
   complete des donnees du navigateur peut effacer les deux. Le fichier exporte
   reste necessaire comme sauvegarde independante.

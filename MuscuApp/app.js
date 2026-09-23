@@ -7,10 +7,14 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.41.0';
+const APP_VERSION='4.42.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
+let STORAGE_CONFLICT=false;
+const LOCAL_KEYS=['dako_programs','muscu_v3','muscu_settings','dako_body'];
+const LOCAL_BASELINE=new Map();
+for(const key of LOCAL_KEYS)try{LOCAL_BASELINE.set(key,localStorage.getItem(key))}catch(e){LOCAL_BASELINE.set(key,null)}
 const FRESH_INSTALL=(()=>{try{return !['dako_programs','muscu_program','muscu_settings','muscu_v3','dako_onboarded'].some(k=>localStorage.getItem(k)!==null)}catch{return false}})();
 
 /* ================== UTILITAIRES ================== */
@@ -271,7 +275,7 @@ function buildMaps(){
   const act=activeProgram();
   PROGRAM=act?act.seances:[]; /* PROGRAM = séances du programme actif (accueil, reco, records) */
 }
-function savePrograms(){if(STORAGE_READY){try{localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID}))}catch(e){storeFailed()}mirrorSoon();}buildMaps()}
+function savePrograms(){if(STORAGE_READY){try{writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID})});mirrorSoon()}catch(e){if(!STORAGE_CONFLICT)storeFailed()}}buildMaps()}
 const saveProgram=savePrograms; /* compat : édition de séance */
 function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
   const act=activeProgram();if(!act)return false;
@@ -347,7 +351,7 @@ function loadSettings(){
     ...(Array.isArray(s.exerciseRecent)?{exerciseRecent:s.exerciseRecent}:{})
   };
 }
-function saveSettings(){try{localStorage.setItem(KEY_SETTINGS,JSON.stringify(SETTINGS))}catch(e){storeFailed()}mirrorSoon()}
+function saveSettings(){try{writeLocalBatch({[KEY_SETTINGS]:JSON.stringify(SETTINGS)});mirrorSoon()}catch(e){if(!STORAGE_CONFLICT)storeFailed()}}
 
 /* ================== BILAN FORME (poids + mensurations) ================== */
 const MEASURES=[
@@ -370,7 +374,7 @@ function loadBody(){
   a.sort((x,y)=>x.date<y.date?-1:1);
   return a;
 }
-function saveBody(){try{localStorage.setItem(KEY_BODY,JSON.stringify(BODY))}catch(e){storeFailed()}mirrorSoon()}
+function saveBody(){try{writeLocalBatch({[KEY_BODY]:JSON.stringify(BODY)});mirrorSoon()}catch(e){if(!STORAGE_CONFLICT)storeFailed()}}
 function addBody(entry){
   const i=BODY.findIndex(b=>b.date===entry.date);
   if(i>=0)BODY[i]={date:entry.date,vals:Object.assign({},BODY[i].vals,entry.vals)};
@@ -596,7 +600,41 @@ function loadDB(){
 }
 var _storeWarned=false; /* var volontaire (anti-TDZ) : storeFailed peut être appelé pendant la migration au chargement, AVANT cette ligne — ne pas repasser en let */
 function storeFailed(){STORAGE_WRITABLE=false;if(_storeWarned)return;_storeWarned=true;try{toast('Sauvegarde impossible : exporte tes données avant de fermer l’app')}catch(e){}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){storeFailed()}mirrorSoon()}
+function localBaselineChanged(){return LOCAL_KEYS.some(key=>localStorage.getItem(key)!==LOCAL_BASELINE.get(key))}
+function showStorageConflict(){
+  if(STORAGE_CONFLICT)return;
+  STORAGE_CONFLICT=true;STORAGE_WRITABLE=false;
+  const dialog=document.createElement('dialog');dialog.id='storageConflict';
+  dialog.setAttribute('aria-labelledby','storageConflictTitle');
+  dialog.innerHTML='<h2 id="storageConflictTitle">Données modifiées dans un autre onglet</h2>'
+    +'<p>Cet onglet est en pause pour éviter d’écraser des changements plus récents. Recharge pour les récupérer. Tu peux d’abord exporter une copie de ce qui était ouvert ici.</p>'
+    +'<div class="storage-conflict-actions"><button type="button" id="conflictExport">Exporter cette fenêtre</button><button type="button" id="conflictReload">Recharger les données</button></div>';
+  document.body.appendChild(dialog);
+  dialog.addEventListener('cancel',e=>e.preventDefault());
+  dialog.querySelector('#conflictExport').addEventListener('click',()=>downloadBackup(true));
+  dialog.querySelector('#conflictReload').addEventListener('click',()=>location.reload());
+  dialog.showModal();dialog.querySelector('#conflictReload').focus();
+}
+function writeLocalBatch(updates){
+  const keys=Object.keys(updates);
+  if(STORAGE_CONFLICT)throw new Error('Données modifiées dans un autre onglet');
+  for(const key of keys)if(LOCAL_BASELINE.has(key)&&localStorage.getItem(key)!==LOCAL_BASELINE.get(key)){
+    showStorageConflict();throw new Error('Données modifiées dans un autre onglet');
+  }
+  const before=Object.fromEntries(keys.map(key=>[key,localStorage.getItem(key)]));
+  try{for(const [key,value] of Object.entries(updates))localStorage.setItem(key,value)}
+  catch(error){
+    for(const key of keys)try{if(before[key]==null)localStorage.removeItem(key);else localStorage.setItem(key,before[key])}catch(e){storeFailed()}
+    throw error;
+  }
+  for(const key of keys)if(LOCAL_BASELINE.has(key))LOCAL_BASELINE.set(key,updates[key]);
+}
+window.addEventListener('storage',e=>{
+  if(!STORAGE_READY||STORAGE_CONFLICT||e.storageArea!==localStorage)return;
+  const keys=e.key==null?LOCAL_KEYS:[e.key];
+  if(keys.some(key=>LOCAL_BASELINE.has(key)&&localStorage.getItem(key)!==LOCAL_BASELINE.get(key)))showStorageConflict();
+});
+function persist(){try{writeLocalBatch({[KEY]:JSON.stringify(DB)});mirrorSoon()}catch(e){if(!STORAGE_CONFLICT)storeFailed()}}
 
 /* Les ressentis appartiennent a une seance realisee, jamais au programme. */
 function workoutNote(w,exId){
@@ -662,7 +700,7 @@ function maybeRestoreFromIDB(){
     let restored=false;
     for(const k of MIRROR_KEYS){
       if(localStorage.getItem(k)==null&&typeof snap.data[k]==='string'){
-        try{localStorage.setItem(k,snap.data[k]);restored=true;}catch(e){storeFailed();}
+        try{localStorage.setItem(k,snap.data[k]);if(LOCAL_BASELINE.has(k))LOCAL_BASELINE.set(k,snap.data[k]);restored=true;}catch(e){storeFailed();}
       }
     }
     return restored;
@@ -1814,18 +1852,17 @@ function showCalculators(){
 }
 
 /* ---------- sauvegarde fichier (anti-perte) ---------- */
-function downloadBackup(){
+function downloadBackup(conflictCopy=false){
   try{
     const txt=JSON.stringify(exportPayload(),null,1);
     const blob=new Blob([txt],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;a.download='dako-sauvegarde-'+todayISO()+'.json';
+    a.href=url;a.download=(conflictCopy===true?'dako-copie-onglet-':'dako-sauvegarde-')+todayISO()+'.json';
     document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1500);
-    try{localStorage.setItem('dako_lastbackup',todayISO())}catch(e){}
-    mirrorSoon();
-    toast('Sauvegarde téléchargée');
+    if(conflictCopy!==true){try{localStorage.setItem('dako_lastbackup',todayISO())}catch(e){}mirrorSoon()}
+    toast(conflictCopy===true?'Copie de cet onglet téléchargée':'Sauvegarde téléchargée');
   }catch(e){toast('Échec de la sauvegarde')}
 }
 function backupReminder(){
@@ -3392,11 +3429,7 @@ async function applyImport(incoming,replace){
       [KEY_BODY]:JSON.stringify(body.slice().sort((a,b)=>a.date.localeCompare(b.date))),
       [KEY_SETTINGS]:JSON.stringify(settings)
     };
-    try{for(const [key,value] of Object.entries(updates))localStorage.setItem(key,value);}
-    catch(error){
-      for(const key of Object.keys(updates)){if(before.data[key]==null)localStorage.removeItem(key);else localStorage.setItem(key,before.data[key]);}
-      throw error;
-    }
+    writeLocalBatch(updates);
     if(incoming.programs)window.DKOCoachUI?.restored();
     clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();
     loadProgram();DB=loadDB();SETTINGS=loadSettings();BODY=loadBody();
@@ -3464,7 +3497,8 @@ maybeRestoreFromIDB().then(restored=>{
   }
   DB.workouts.forEach(snapshotWorkout);
   if(DB.active)snapshotWorkout(DB.active);
-  STORAGE_READY=true;if(FRESH_INSTALL&&!restored)saveSettings();savePrograms();persist();render();
+  if(localBaselineChanged())showStorageConflict();
+  STORAGE_READY=true;if(!STORAGE_CONFLICT){if(FRESH_INSTALL&&!restored)saveSettings();savePrograms();persist()}render();
   checkWorkoutTimeout();
   document.dispatchEvent(new Event('app:ready'));
   if(restored)toast('Données restaurées depuis la sauvegarde de secours');

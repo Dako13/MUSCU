@@ -2,6 +2,15 @@
 
 Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
+## Plusieurs onglets (4.42)
+
+Quand un autre onglet modifie les programmes, séances, réglages ou mensurations,
+la fenêtre devenue périmée bloque les écritures pour ne pas écraser ces données.
+Elle propose d'exporter sa copie locale avant de recharger la version récente.
+Cet export de secours ne modifie pas la date de la dernière sauvegarde normale.
+Ce mécanisme protège aussi les imports et les restaurations cloud/coach ; il ne
+fusionne pas automatiquement deux modifications concurrentes.
+
 ## Suivi et dossier coach (4.41)
 
 Le résumé du suivi compare les jours écoulés de la semaine ou du mois aux mêmes

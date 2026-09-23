@@ -24,11 +24,7 @@ window.DKOCloudUI=(()=>{
         [KEY_SETTINGS]:JSON.stringify(payload.settings),[KEY_BODY]:JSON.stringify(payload.body),
         dko_cloud_link:JSON.stringify(link)
       };
-      try{for(const [key,value] of Object.entries(next))localStorage.setItem(key,value);}
-      catch(e){
-        for(const key of Object.keys(next)){const old=before.data[key];if(old==null)localStorage.removeItem(key);else localStorage.setItem(key,old);}
-        return false;
-      }
+      try{writeLocalBatch(next)}catch(e){return false;}
       window.DKOCoachUI?.restored();
       committed();
       clearInterval(tInt);tInt=null;tbar.classList.remove('on','fin');releaseWake();

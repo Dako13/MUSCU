@@ -64,7 +64,7 @@ window.DKOCoachUI=(()=>{
     if(blocked()||JSON.stringify(PROGRAMS)!==before||localStorage.getItem(KEY_PROGRAMS)!==old)throw new Error('Programme local modifié');
     const activeId=programs.some(p=>p.id===ACTIVE_PID)?ACTIVE_PID:programs[0].id;
     // No await between the last guard and commit. History keeps its exercise snapshots.
-    localStorage.setItem(KEY_PROGRAMS,JSON.stringify({programs,activeId}));
+    writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId})});
     loadProgram();mirrorSoon();
     if(route.view!=='coach')render();
   }
