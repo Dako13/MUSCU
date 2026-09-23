@@ -2,6 +2,18 @@
 
 Application web installable (PWA), utilisable hors ligne. Données stockées localement sur l'appareil (localStorage + IndexedDB), export/import JSON intégré. Sauvegarde privée Supabase optionnelle, désactivée tant que le projet n'est pas configuré.
 
+## Suivi et dossier coach (4.41)
+
+Le résumé du suivi compare les jours écoulés de la semaine ou du mois aux mêmes
+jours de la période précédente. Les séances datées dans le futur sont exclues
+de ce résumé. Dans un dossier élève, l'historique affiche 20 séances puis charge
+les suivantes à la demande, sans supprimer les données plus anciennes.
+
+Pour les machines assistées reconnues, l'historique montre l'assistance utilisée
+(moins signifie moins d'aide). Ces charges ne créent ni record ni score automatique
+de progression : le poids du corps et les répétitions comptent aussi. Le coach
+voit une colonne « Assistance min. » au lieu de « Charge max. ».
+
 ## Premier lancement et coaching (4.39)
 
 Une installation neuve commence avec un profil non prérempli et un programme

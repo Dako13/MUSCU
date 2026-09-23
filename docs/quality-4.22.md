@@ -56,16 +56,18 @@ pas un audit manuel complet d'accessibilite ni un essai sur iPhone physique.
 
 ## Points restant a traiter
 
-- Les exercices assistes ont besoin d'un modele propre : moins d'assistance
-  n'est pas moins de performance. Les records et cibles restent generiques.
+- Les machines assistees reconnues sont exclues des records et scores generiques
+  depuis 4.41, et leur historique indique l'assistance. Un modele complet
+  devrait encore integrer le poids de corps et les repetitions pour juger
+  automatiquement la performance.
 - Certaines machines generiques ne permettent pas de connaitre leur chargement
   exact sans leur gamme/modele. Les marques presentes varient selon le club.
 - Les conseils techniques et visuels demandent encore une verification par
   variante (notamment kickback fessier versus hip thrust).
-- La comparaison avec la periode precedente utilise encore la periode entiere;
-  une comparaison a duree ecoulee egale serait plus pertinente.
-- Le profil et le programme par defaut sont encore bases sur le profil initial.
-  Un vrai parcours de creation de programme neutre reste a concevoir.
+- Le bilan compare les memes jours calendaires depuis 4.41, sans equivalence
+  exacte heure par heure (l'historique enregistre la date de seance).
+- Les nouvelles installations demarrent sur un profil et un programme neutres
+  depuis 4.39 ; les programmes anterieurs restent inchanges.
 - Deux onglets modifiant les memes donnees en parallele ne sont pas synchronises.
 - IndexedDB et localStorage restent sur le meme appareil : une suppression
   complete des donnees du navigateur peut effacer les deux. Le fichier exporte

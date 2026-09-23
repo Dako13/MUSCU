@@ -74,6 +74,38 @@ async function settled(p){
       }finally{DB.workouts=original;}
     });
     assert.deepEqual(progressChecks,{first:'—',second:{compared:3,improved:2},third:'0/1',period:{compared:3,improved:1}});
+    const assistedChecks=await p.evaluate(()=>{
+      const original=DB.workouts,oldStat=STATEX,meta={name:'Dips (machine assistée)',unit:'kg'};
+      const make=(id,date,w)=>({id,date,seance:'s_test',ex:{assist:[{w,r:8,done:true}]},exMeta:{assist:meta}});
+      DB.workouts=[make('assist-1','2026-09-01',45),make('assist-2','2026-09-08',30)];STATEX='assist';
+      try{return{
+        classified:isAssistedExercise(meta)&&!isAssistedExercise({name:'Nordic curl assisté'}),
+        minimum:assistanceMin([{w:45,done:true},{w:30,done:true}]),
+        record:bestEver('assist'),comparable:comparableBest('assist',meta,'2026-09-09'),
+        progress:[...workoutProgressMap().values()].map(v=>v.compared),
+        history:progHTML({id:'assist',...meta}),chart:exProgressCard(),
+        summary:comparisonSummary({...make('assist-now','2026-09-09',30),ex:{assist:[{w:40,r:8,done:true},{w:30,r:8,done:true}]}})?.rows[0]
+      }}finally{DB.workouts=original;STATEX=oldStat;}
+    });
+    assert.equal(assistedChecks.classified,true);
+    assert.equal(assistedChecks.minimum,30);
+    assert.equal(assistedChecks.record,null);
+    assert.equal(assistedChecks.comparable,null);
+    assert.deepEqual(assistedChecks.progress,[0,0]);
+    assert.match(assistedChecks.history,/Assistance · moins = moins d’aide/);
+    assert.doesNotMatch(assistedChecks.history,/Record :/);
+    assert.match(assistedChecks.chart,/assistance utilisée 45 → 30 kg/);
+    assert.equal(assistedChecks.summary.assisted,true);
+    assert.equal(assistedChecks.summary.before.best.w,30);
+    assert.equal(assistedChecks.summary.now.best.w,30);
+    const elapsedBounds=await p.evaluate(()=>({
+      week:elapsedPeriodEndIso(false,new Date(2026,8,23)),
+      month:elapsedPeriodEndIso(true,new Date(2026,8,23)),
+      shortMonth:elapsedPeriodEndIso(true,new Date(2025,2,31)),
+      leapMonth:elapsedPeriodEndIso(true,new Date(2024,2,31)),
+      yearBoundary:elapsedPeriodEndIso(true,new Date(2026,0,5))
+    }));
+    assert.deepEqual(elapsedBounds,{week:'2026-09-17',month:'2026-08-24',shortMonth:'2025-03-01',leapMonth:'2024-03-01',yearBoundary:'2025-12-06'});
 
     // Per-workout rests never edit the program or an already-running timer.
     await card.locator('[data-act="restset"]').click();

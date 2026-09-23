@@ -2,7 +2,7 @@
 /* Coach dossiers never enter the student's local database or private backups.
    This adapter owns consent, account boundaries and guarded program application. */
 window.DKOCoachUI=(()=>{
-  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,savedDraft=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='',studentQuery='',studentFilter='all';
+  let owner='',epoch=0,service=null,timer=null,mode='student',profile=null,students=[],templates=[],dossier=null,draft=null,draftTarget=null,savedDraft=null,baseline='',busy=false,notice='',phase='idle',selectedProgram=0,selectedSession=0,progressExercise='',studentQuery='',studentFilter='all',historyShown=20;
   const ctx=()=>window.DKOCloudUI?.coachContext()||{};
   const clone=v=>structuredClone(v),normalize=v=>DKO_DATA.programs(v);
   const local=()=>normalize(PROGRAMS);
@@ -73,7 +73,7 @@ window.DKOCoachUI=(()=>{
     if(next===owner)return;
     const previous=owner;
     if(previous){try{localStorage.removeItem(`dko_coach_draft:${previous}`)}catch{}}
-    epoch++;service?.dispose();service=null;owner=next;profile=null;students=[];templates=[];dossier=null;draft=null;draftTarget=null;baseline='';notice='';phase='idle';busy=false;studentQuery='';studentFilter='all';
+    epoch++;service?.dispose();service=null;owner=next;profile=null;students=[];templates=[];dossier=null;draft=null;draftTarget=null;baseline='';notice='';phase='idle';busy=false;studentQuery='';studentFilter='all';historyShown=20;
     savedDraft=owner?readDraft():null;
     if(owner&&!savedDraft){try{localStorage.removeItem(draftKey())}catch{}}
     clearTimeout(timer);
@@ -189,19 +189,24 @@ window.DKOCoachUI=(()=>{
     const ws=(d.workouts||[]).map(w=>DKO_DATA.workout(w));
     const since=new Date();since.setDate(since.getDate()-28);const count=ws.filter(w=>w.date>=since.toISOString().slice(0,10)).length;
     h+=`<div class="coach-metrics"><div><strong>${count}</strong><span>Séances / 28 jours</span></div><div><strong>${ws.length}</strong><span>Séances disponibles</span></div></div>`+progressHTML(ws)+'<h3>Historique d’entraînement</h3>';
-    h+=ws.length?ws.map(w=>`<details class="coach-workout"><summary><strong>${esc(w.session?.title||'Séance')}</strong><span>${esc(w.date)} · ${Math.round((w.dur||0)/60)} min</span></summary>${Object.entries(w.ex).map(([id,sets])=>`<div class="coach-performance"><strong>${esc(w.exMeta?.[id]?.name||d.programs.flatMap(p=>p.seances).flatMap(s=>s.ex).find(e=>e.id===id)?.name||'Exercice')}</strong><p>${sets.filter(s=>s.done).map(s=>esc(`${s.w??'–'} ${w.exMeta?.[id]?.unit||'kg'} × ${s.r??'–'}`)).join(' · ')||'Aucune série validée'}</p>${w.exNotes[id]?'<p class="coach-feeling">'+esc(w.exNotes[id])+'</p>':''}</div>`).join('')}</details>`).join(''):'<p class="sp">Aucune séance sauvegardée pour le moment.</p>';
+    h+=ws.length?'<div id="coachHistoryList">'+historyItemsHTML(ws.slice(0,historyShown),d.programs)+'</div><p id="coachHistoryCount" class="sp">'+Math.min(historyShown,ws.length)+' sur '+ws.length+' séances</p>'+(ws.length>historyShown?button('history-more','Afficher 20 séances de plus','chevron-down'):''):'<p class="sp">Aucune séance sauvegardée pour le moment.</p>';
     return h+'<p class="sp">Les 500 dernières séances sont disponibles. Les performances enregistrées ne sont pas modifiables par le coach.</p>';
+  }
+  function historyItemsHTML(workouts,programs){
+    const exercises=new Map(programs.flatMap(p=>p.seances).flatMap(s=>s.ex).map(e=>[e.id,e.name]));
+    return workouts.map(w=>`<details class="coach-workout"><summary><strong>${esc(w.session?.title||'Séance')}</strong><span>${esc(w.date)} · ${Math.round((w.dur||0)/60)} min</span></summary>${Object.entries(w.ex).map(([id,sets])=>`<div class="coach-performance"><strong>${esc(w.exMeta?.[id]?.name||exercises.get(id)||'Exercice')}</strong><p>${sets.filter(s=>s.done).map(s=>esc(`${s.w??'–'} ${w.exMeta?.[id]?.unit||'kg'} × ${s.r??'–'}`)).join(' · ')||'Aucune série validée'}</p>${w.exNotes[id]?'<p class="coach-feeling">'+esc(w.exNotes[id])+'</p>':''}</div>`).join('')}</details>`).join('');
   }
   function programSummary(programs){return (programs||[]).map(p=>`<div class="coach-summary"><strong>${esc(p.name)}</strong>${p.seances.map(s=>`<details><summary>${esc(s.title)} · ${s.ex.length} exercices</summary>${s.ex.map(e=>`<p>${esc(e.name)}<small>${e.sets} × ${esc(e.reps)} · ${e.ref==null?'Charge libre':esc(e.ref+' '+e.unit)} · repos ${e.rest??s.rest??'personnel'}${e.rest||s.rest?' s':''}</small></p>`).join('')}</details>`).join('')}</div>`).join('');}
   function progressHTML(workouts){
     const exercises=new Map();for(const w of workouts)for(const id of Object.keys(w.ex))if(!exercises.has(id))exercises.set(id,w.exMeta?.[id]?.name||id);
     if(!exercises.size)return '';
     if(!exercises.has(progressExercise))progressExercise=exercises.keys().next().value;
+    const assisted=isAssistedExercise({name:exercises.get(progressExercise)});
     const rows=workouts.filter(w=>w.ex[progressExercise]?.some(s=>s.done)).slice(0,12);
-    return '<h3>Progression par exercice</h3><label class="coach-field"><span>Exercice suivi</span><select id="coachProgressExercise">'+[...exercises].map(([id,name])=>`<option value="${esc(id)}" ${id===progressExercise?'selected':''}>${esc(name)}</option>`).join('')+'</select></label><div class="coach-progress-table"><table><thead><tr><th>Date</th><th>Charge max.</th><th>Reps totales</th></tr></thead><tbody>'+rows.map(w=>{
+    return '<h3>Progression par exercice</h3><label class="coach-field"><span>Exercice suivi</span><select id="coachProgressExercise">'+[...exercises].map(([id,name])=>`<option value="${esc(id)}" ${id===progressExercise?'selected':''}>${esc(name)}</option>`).join('')+'</select></label><div class="coach-progress-table"><table><thead><tr><th>Date</th><th>'+(assisted?'Assistance min.':'Charge max.')+'</th><th>Reps totales</th></tr></thead><tbody>'+rows.map(w=>{
       const sets=w.ex[progressExercise].filter(s=>s.done),weights=sets.map(s=>s.w).filter(v=>v!=null);
-      return `<tr><td>${esc(w.date)}</td><td>${weights.length?esc(Math.max(...weights)+' '+(w.exMeta?.[progressExercise]?.unit||'kg')):'–'}</td><td>${esc(sets.reduce((sum,s)=>sum+(s.r||0),0))}</td></tr>`;
-    }).join('')+'</tbody></table></div><p class="sp">Les 12 dernières séances de cet exercice. Charge affichée telle que saisie, y compris pour une machine assistée.</p>';
+      return `<tr><td>${esc(w.date)}</td><td>${weights.length?esc((assisted?Math.min(...weights):Math.max(...weights))+' '+(w.exMeta?.[progressExercise]?.unit||'kg')):'–'}</td><td>${esc(sets.reduce((sum,s)=>sum+(s.r||0),0))}</td></tr>`;
+    }).join('')+'</tbody></table></div><p class="sp">Les 12 dernières séances de cet exercice. '+(assisted?'Moins d’assistance signifie moins d’aide, à répétitions et poids de corps comparables.':'Charge affichée telle que saisie.')+'</p>';
   }
   function editorHTML(){
     const template=draftTarget?.kind==='template';
@@ -249,7 +254,7 @@ window.DKOCoachUI=(()=>{
   }
   async function loadStudent(id){
     const d=await api('read',{student:id});d.programs=normalize(d.programs);d.workouts=(d.workouts||[]).map(w=>DKO_DATA.workout(w));
-    dossier=d;draft=null;draftTarget=null;baseline='';selectedProgram=selectedSession=0;
+    dossier=d;draft=null;draftTarget=null;baseline='';selectedProgram=selectedSession=0;historyShown=20;
   }
   function startDraft(programs,target={kind:'student'}){
     if(savedDraft&&!draft&&!confirm('Remplacer le brouillon conservé sur cet appareil ?'))return false;
@@ -289,6 +294,12 @@ window.DKOCoachUI=(()=>{
   function action(a,b){
     if(busy)return;
     if(a==='account'){window.DKOCloudUI.show();return;}
+    if(a==='history-more'){
+      const ws=dossier?.workouts||[],next=Math.min(historyShown+20,ws.length);
+      document.getElementById('coachHistoryList')?.insertAdjacentHTML('beforeend',historyItemsHTML(ws.slice(historyShown,next),dossier.programs));
+      historyShown=next;const count=document.getElementById('coachHistoryCount');if(count)count.textContent=next+' sur '+ws.length+' séances';
+      if(next===ws.length)b.remove();return;
+    }
     if(a==='student-filter'){
       studentFilter=b.dataset.filter;
       document.querySelectorAll('#coachRoot [data-coach="student-filter"]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));

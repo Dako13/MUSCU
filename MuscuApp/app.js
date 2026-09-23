@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.40.0';
+const APP_VERSION='4.41.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -739,12 +739,14 @@ function comparisonSummary(current){
     if(a.sets&&b.sets){
       if(!current.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))a.vol=null;
       if(!previous.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))b.vol=null;
-      rows.push({name:now.name,unit:now.unit||'kg',now:{...a,best:topComparableSet(current.ex[id])},before:{...b,best:topComparableSet(previous.ex[id])}});
+      const assisted=isAssistedExercise(now);
+      rows.push({name:now.name,unit:now.unit||'kg',assisted,now:{...a,best:topComparableSet(current.ex[id],assisted)},before:{...b,best:topComparableSet(previous.ex[id],assisted)}});
     }
   }
   return rows.length?{date:previous.date,rows}:null;
 }
 function comparableBest(exId,current,date){
+  if(isAssistedExercise(current))return null;
   let best=null;
   for(const w of DB.workouts){
     const meta=workoutExercise(w,exId);
@@ -761,7 +763,9 @@ function lastSessionLine(exId){
   return '<div class="lastline" style="font-size:.8rem;color:var(--dim);padding:10px 2px 2px"><span class="lastlbl" style="color:var(--ac);font-weight:600">Dernière fois</span> '+txt+'</div>';
 }
 function maxW(sets){const ws=sets.map(s=>s.w).filter(w=>w!=null);return ws.length?Math.max(...ws):null}
-function bestEver(exId){const h=exHistory(exId);let b=null;for(const en of h){const m=maxW(en.sets);if(m!=null&&(b==null||m>b))b=m}return b}
+function isAssistedExercise(e){return /(?:assisted pull-up|dips?\s*\(machine assistée\)|tractions? assistées?)/i.test(e?.name||'')}
+function assistanceMin(sets){const ws=sets.filter(s=>s.done&&s.w!=null).map(s=>s.w);return ws.length?Math.min(...ws):null}
+function bestEver(exId){const h=exHistory(exId);if(isAssistedExercise(historicalExercises()[exId]))return null;let b=null;for(const en of h){const m=maxW(en.sets);if(m!=null&&(b==null||m>b))b=m}return b}
 function workoutStats(w){
   let vol=0,sets=0;
   for(const exId in (w.ex||{}))for(const s of w.ex[exId])
@@ -769,13 +773,13 @@ function workoutStats(w){
     else if(s.done)sets++;
   return{vol:Math.round(vol),sets};
 }
-function topComparableSet(sets){
+function topComparableSet(sets,assisted=false){
   let best=null;
   for(const s of sets||[]){
     if(!s.done||s.r==null||!Number.isFinite(Number(s.r))||Number(s.r)<=0)continue;
     const w=s.w==null?null:Number(s.w),r=Number(s.r);
     if(w!=null&&(!Number.isFinite(w)||w<0))continue;
-    if(!best||(w??-1)>(best.w??-1)||(w===best.w&&r>best.r))best={w,r};
+    if(!best||(w!=null&&(best.w==null||(assisted?w<best.w:w>best.w)))||(w===best.w&&r>best.r))best={w,r};
   }
   return best;
 }
@@ -786,7 +790,7 @@ function workoutProgressMap(){
     const outcomes=new Map();let compared=0,improved=0;
     for(const [id,sets] of Object.entries(w.ex||{})){
       const meta=w.exMeta?.[id],best=topComparableSet(sets);
-      if(!meta||!best)continue;
+      if(!meta||!best||isAssistedExercise(meta))continue;
       const prior=previous.get(id),unit=meta.unit||'kg';
       if(prior&&prior.name===meta.name&&prior.unit===unit&&((best.w==null)===(prior.best.w==null))){
         const up=best.w==null?best.r>prior.best.r:
@@ -1243,13 +1247,14 @@ function setRowHTML(e,i,st,targets,previous=previousExercise(e)){
 function progHTML(e){
   const h=exHistory(e.id);
   if(!h.length)return '<div class="hempty">Aucune donnée. Les séries validées apparaîtront ici.</div>';
-  const maxes=h.map(en=>maxW(en.sets)).filter(v=>v!=null).slice(-12);
+  const assisted=isAssistedExercise(e);
+  const maxes=h.map(en=>assisted?assistanceMin(en.sets):maxW(en.sets)).filter(v=>v!=null).slice(-12);
   let out='';
   if(maxes.length>=2){
     const W=260,H=38,P=4,mn=Math.min(...maxes),mx=Math.max(...maxes),span=(mx-mn)||1;
     const pts=maxes.map((v,i)=>(P+i*(W-2*P)/(maxes.length-1)).toFixed(1)+','+(H-P-(v-mn)*(H-2*P)/span).toFixed(1));
     const last=pts[pts.length-1].split(',');
-    out+='<div class="sparkcap">Charge max · '+fmtN(mn)+' → '+fmtN(mx)+' kg</div>'
+    out+='<div class="sparkcap">'+(assisted?'Assistance · moins = moins d’aide':'Charge max')+' · '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg</div>'
      +'<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><polyline points="'+pts.join(' ')+'"/>'
      +'<circle cx="'+last[0]+'" cy="'+last[1]+'" r="2.5"/></svg>';
   }
@@ -1851,10 +1856,15 @@ function periodStartIso(isMonth,shift){
   if(!isMonth)d.setDate(d.getDate()+shift*7);
   return isoOf(d);
 }
-function periodEndIso(isMonth,shift){
-  const now=new Date(),d=isMonth?new Date(now.getFullYear(),now.getMonth()+shift+1,1):weekStart(now);
-  if(!isMonth)d.setDate(d.getDate()+(shift+1)*7);
-  return isoOf(d);
+function elapsedPeriodEndIso(isMonth,now){
+  if(!isMonth){
+    const end=weekStart(now);end.setDate(end.getDate()-7+((now.getDay()+6)%7)+1);
+    return isoOf(end);
+  }
+  const end=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const daysInPreviousMonth=new Date(now.getFullYear(),now.getMonth(),0).getDate();
+  end.setDate(Math.min(now.getDate(),daysInPreviousMonth)+1);
+  return isoOf(end);
 }
 function workoutsInRange(a,b){return DB.workouts.filter(w=>w.date>=a&&w.date<b)}
 function signed(n){return (n>0?'+':'')+n}
@@ -1864,6 +1874,7 @@ function muscleGroupScores(mvol){
 function bestRecentProgress(){
   const out=[],seen={};
   for(const s of PROGRAM)for(const e of s.ex){
+    if(isAssistedExercise(e))continue;
     if(seen[e.id])continue;seen[e.id]=1;
     const h=exHistory(e.id).map(en=>({date:en.date,m:maxW(en.sets)})).filter(x=>x.m!=null);
     if(h.length<2)continue;
@@ -1909,11 +1920,11 @@ function statsInsightHTML(isMonth,winW,winSets,prevW,prevSets,grp,rng){
   const low=grp.filter(g=>g.v>0&&g.v<rng.low),miss=grp.filter(g=>g.v===0);
   const focus=low[0]||miss[0]||grp[0];
   const pr=bestRecentProgress();
-  const setsTxt=prevW.length?signed(setsDelta)+' séries vs période précédente':(winSets?'Première période enregistrée':'Aucune série cette période');
+  const setsTxt=prevW.length?signed(setsDelta)+' séries vs mêmes jours précédents':(winSets?'Première période enregistrée':'Aucune série cette période');
   const focusTxt=focus?(focus.v>=rng.low?'Volume solide sur '+focus.label+'.':'À remonter : '+focus.label+' ('+focus.v+'/'+rng.low+' séries).'):'Valide des séries pour voir les priorités.';
   const prTxt=pr?esc(pr.tab+' · '+pr.name)+' · +'+fmtN(pr.delta)+' kg':'Aucun nouveau record récent détecté.';
   return '<div class="coachpulse"><div class="pulsehead"><span>Résumé coach</span><b>'+esc(unit)+'</b></div><div class="pulsegrid">'
-   +'<div class="pulsecard"><div class="pulsek">Rythme</div><div class="pulsev num">'+signed(sessDelta)+'</div><div class="pulses">séance'+(Math.abs(sessDelta)>1?'s':'')+' vs période précédente</div></div>'
+   +'<div class="pulsecard"><div class="pulsek">Rythme</div><div class="pulsev num">'+signed(sessDelta)+'</div><div class="pulses">séance'+(Math.abs(sessDelta)>1?'s':'')+' vs mêmes jours précédents</div></div>'
    +'<div class="pulsecard"><div class="pulsek">Séries réalisées</div><div class="pulsev">'+esc(setsTxt)+'</div><div class="pulses">séries validées, avec ou sans charge</div></div>'
    +'<div class="pulsecard"><div class="pulsek">Priorité</div><div class="pulsev">'+esc(focusTxt)+'</div><div class="pulses">équilibre volume / muscle</div></div>'
    +'<div class="pulsecard"><div class="pulsek">Progression</div><div class="pulsev">'+prTxt+'</div><div class="pulses">record récent</div></div>'
@@ -1922,11 +1933,11 @@ function statsInsightHTML(isMonth,winW,winSets,prevW,prevSets,grp,rng){
 
 /* ---------- volume par muscle + progression par exercice ---------- */
 const STAT_MUSCLE_GROUPS=[['Dos',['dos']],['Pectoraux',['pecs']],['Épaules',['delt_ant','delt_lat','delt_post']],['Biceps',['biceps']],['Triceps',['triceps']],['Quadriceps',['quadriceps']],['Ischios',['ischios']],['Fessiers',['fessiers']],['Mollets',['mollets']]];
-function volumeByMuscle(sinceIso){
+function volumeByMuscle(sinceIso,endIso=null){
   /* séries par muscle sur la fenêtre : 1 série = 1 pt muscle principal, 0,5 pt secondaire */
   const vol={};
   for(const w of DB.workouts){
-    if(w.date<sinceIso)continue;
+    if(w.date<sinceIso||(endIso&&w.date>=endIso))continue;
     for(const exId in (w.ex||{})){
       const e=workoutExercise(w,exId);if(!e)continue;
       const sets=w.ex[exId].filter(s=>s.done).length;
@@ -1943,13 +1954,13 @@ function exProgressCard(){
   if(!list.length)return '<div class="chartcard"><div class="charttitle">Progression par exercice</div><div class="hempty">Valide des séries pour voir tes courbes de charge.</div></div>';
   list.sort((a,b)=>b.n-a.n);
   if(!STATEX||!list.some(x=>x.id===STATEX))STATEX=list[0].id;
-  const e=archive[STATEX],best=bestEver(STATEX);
+  const e=archive[STATEX],assisted=isAssistedExercise(e),best=bestEver(STATEX);
   let h='<div class="chartcard"><div class="charttitle">Progression par exercice</div>'
    +'<div class="exprow"><button class="exchip" data-act="expick"><span>'+esc(e.name)+'</span>'
    +'<svg class="exchev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
    +(best!=null?'<span class="exrec">RECORD '+fmtN(best)+' KG</span>':'')+'</div>';
   const hh=exHistory(STATEX);
-  const maxes=hh.map(en=>maxW(en.sets)).filter(v=>v!=null);
+  const maxes=hh.map(en=>assisted?assistanceMin(en.sets):maxW(en.sets)).filter(v=>v!=null);
   if(maxes.length>=2){
     const W=290,Hh=104,P=10,top=16,bot=92,mn=Math.min(...maxes),mx=Math.max(...maxes),span=(mx-mn)||1;
     const X=i=>P+i*(W-2*P)/(maxes.length-1);
@@ -1960,7 +1971,7 @@ function exProgressCard(){
      +'<path class="exfill" d="M'+X(0).toFixed(1)+','+bot+' L'+pts.join(' L')+' L'+X(maxes.length-1).toFixed(1)+','+bot+' Z"/>'
      +'<polyline class="exline" points="'+pts.join(' ')+'"/>'
      +'<circle class="exdot" cx="'+last[0]+'" cy="'+last[1]+'" r="4"/></svg>'
-     +'<div class="maplegend" style="text-align:left;padding:6px 2px 0">'+maxes.length+' séances · charge max '+fmtN(mn)+' → '+fmtN(mx)+' kg</div>';
+     +'<div class="maplegend" style="text-align:left;padding:6px 2px 0">'+maxes.length+' séances · '+(assisted?'assistance utilisée '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg (moins = moins d’aide)':'charge max '+fmtN(mn)+' → '+fmtN(mx)+' kg')+'</div>';
   }else{
     h+='<div class="hempty">Pas encore assez de séances pour tracer une courbe (il en faut 2).</div>';
   }
@@ -1980,6 +1991,7 @@ function plateauCard(){
   const flagged=[],seen={};
   for(const s of PROGRAM)for(const e of s.ex){
     if(seen[e.id])continue;seen[e.id]=1;
+    if(isAssistedExercise(e))continue;
     if(e.ceiling)continue; /* exercice plafonné : stagnation de charge voulue */
     const pts=exHistory(e.id).map(en=>({date:en.date,m:maxW(en.sets)})).filter(x=>x.m!=null);
     if(pts.length<3)continue;
@@ -2006,12 +2018,13 @@ function statsHTML(embed){
   const sinceIso=isMonth?(now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01'):isoOf(weekStart(now));
   const rng=isMonth?{low:40,high:80}:{low:10,high:20};
   const unit=isMonth?'mois':'sem.';
-  const winW=DB.workouts.filter(w=>w.date>=sinceIso);
+  const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  const winW=workoutsInRange(sinceIso,isoOf(tomorrow));
   const winSets=winW.reduce((sum,w)=>sum+workoutStats(w).sets,0);
-  const prevW=workoutsInRange(periodStartIso(isMonth,-1),periodEndIso(isMonth,-1));
+  const prevW=workoutsInRange(periodStartIso(isMonth,-1),elapsedPeriodEndIso(isMonth,now));
   const prevT=totalsOfWorkouts(prevW);
-  const progress=periodProgress(sinceIso);
-  const mvol=volumeByMuscle(sinceIso);
+  const progress=periodProgress(sinceIso,isoOf(tomorrow));
+  const mvol=volumeByMuscle(sinceIso,isoOf(tomorrow));
   const grp=muscleGroupScores(mvol);
   h+='<div class="subdate">Depuis le '+fmtDateShort(DB.workouts[0].date)+'</div>'
    +'<div class="seg"><button class="segb'+(!isMonth?' on':'')+'" data-act="srange" data-r="week">Semaine</button>'
@@ -2513,6 +2526,7 @@ function finishWorkout({automatic=false}={}){
   const recs=[];
   const comparison=comparisonSummary(a);
   for(const exId in a.ex){
+    if(isAssistedExercise(workoutExercise(a,exId)))continue;
     const m=maxW(a.ex[exId].filter(s=>s.done));
     if(m==null)continue;
     const prev=comparableBest(exId,workoutExercise(a,exId),a.date);
@@ -2898,10 +2912,10 @@ function showSummary(o){
     if(entries.length)recs+='<div class="recwrap"><div class="rectitle">'+(first?'Premières références':'Records de charge')+'</div>'
       +entries.map(r=>'<div class="recline"><b>'+fmtN(r.w)+' kg</b> · '+esc(r.name)+(r.prev!=null?' (préc. '+fmtN(r.prev)+')':'')+'</div>').join('')+'</div>';
   }
-  const metric=(value,unit)=>value.sets+' série'+(value.sets>1?'s':'')+(value.best?' · '+(value.best.w==null?'':fmtN(value.best.w)+' '+esc(unit)+' × ')+fmtN(value.best.r)+' reps':'');
+  const metric=(value,unit,assisted)=>value.sets+' série'+(value.sets>1?'s':'')+(value.best?' · '+(value.best.w==null?'':fmtN(value.best.w)+' '+esc(unit)+(assisted?' d’assistance':'')+' × ')+fmtN(value.best.r)+' reps':'');
   const comparison=o.comparison?'<section class="summary-comparison"><h3>Par rapport au '+esc(fmtDateShort(o.comparison.date))+'</h3><p>Exercices communs · séries validées</p>'
     +'<table><thead><tr><th scope="col">Exercice</th><th scope="col">Avant</th><th scope="col">Aujourd’hui</th></tr></thead><tbody>'
-    +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+metric(r.before,r.unit)+'</td><td>'+metric(r.now,r.unit)+'</td></tr>').join('')+'</tbody></table></section>':'';
+    +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+metric(r.before,r.unit,r.assisted)+'</td><td>'+metric(r.now,r.unit,r.assisted)+'</td></tr>').join('')+'</tbody></table></section>':'';
   sheet.innerHTML='<h2>Séance terminée'+(s?' · '+esc(s.tab):'')+'</h2><div class="sp">'+esc(s?s.title:'')+'</div>'
    +'<div class="sumgrid">'
    +'<div class="sumbox"><div class="v num">'+fmtDur(o.dur)+'</div><div class="l">Durée</div></div>'

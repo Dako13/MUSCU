@@ -80,6 +80,34 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await c.locator('.coach-progress-table tbody').textContent(),'2026-09-2040 kg8');
   assert.equal(await c.getByText('Bon ressenti',{exact:true}).count(),0);
   await c.setViewportSize({width:1280,height:900});await c.screenshot({path:path.join(require('node:os').tmpdir(),'dko-coach-dossier-desktop.png'),fullPage:true,animations:'disabled'});
+  await c.evaluate(()=>{
+    const original=DKOCloudUI.coachContext;
+    window.restoreCoachContext=()=>{DKOCloudUI.coachContext=original;};
+    DKOCloudUI.coachContext=()=>{
+      const context=original(),rpc=context.client.rpc;
+      return {...context,client:{...context.client,rpc:async(name,body)=>{
+        const result=await rpc(name,body);
+        if(name==='dko_coach'&&body.action==='read'&&result.data?.workouts?.length){
+          const workout=result.data.workouts[0];
+          result.data.workouts=Array.from({length:25},(_,i)=>({...workout,id:'w_page_'+i,
+            ex:{...workout.ex,e_assisted:[{w:45,r:8,done:true},{w:30,r:8,done:true}]},
+            exMeta:{...workout.exMeta,e_assisted:{name:'Dips (machine assistée)',unit:'kg'}}}));
+        }
+        return result;
+      }}};
+    };
+  });
+  await c.locator('[data-coach="back"]').click();await c.locator('[data-coach="student"]').waitFor();await c.locator('[data-coach="student"]').click();
+  await c.locator('#coachHistoryList .coach-workout').first().waitFor();
+  assert.equal(await c.locator('#coachHistoryList .coach-workout').count(),20);
+  assert.equal(await c.locator('#coachHistoryCount').textContent(),'20 sur 25 séances');
+  await c.locator('#coachProgressExercise').selectOption('e_assisted');
+  assert.match(await c.locator('.coach-progress-table thead').textContent(),/Assistance min\./);
+  assert.match(await c.locator('.coach-progress-table tbody tr').first().textContent(),/30 kg/);
+  await c.locator('[data-coach="history-more"]').click();
+  assert.equal(await c.locator('#coachHistoryList .coach-workout').count(),25);
+  assert.equal(await c.locator('[data-coach="history-more"]').count(),0);
+  await c.evaluate(()=>restoreCoachContext());
   await c.locator('[data-coach="back"]').click();await c.locator('[data-coach="student"]').waitFor();
   assert.equal(await c.locator('.coach-overview b').first().textContent(),'1');
   await c.locator('#coachStudentSearch').fill('eleve');
