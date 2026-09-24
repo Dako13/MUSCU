@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.48.0';
+const APP_VERSION='4.49.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -3019,6 +3019,10 @@ function openSheet(){
   sheet.scrollTop=0;
 }
 function closeSheet(){
+  if(sheet.querySelector('.lib-modes')){
+    LIBSELECT.clear();LIBDRAFT=null;LIBSCOPE='all';
+    LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};
+  }
   overlay.classList.remove('on');sheet.classList.remove('on');
   document.querySelectorAll('#app,#tabbar,#timerbar').forEach(el=>{el.inert=false});
   sheet.inert=true;sheet.setAttribute('aria-hidden','true');
@@ -3090,11 +3094,14 @@ function addSelectedLibraryExercises(){
 function refreshLibrarySelection(){
   const button=document.getElementById('libAddSelected');
   if(button){button.disabled=!LIBSELECT.size;button.textContent='Ajouter la sélection ('+LIBSELECT.size+')';}
+  const scope=sheet.querySelector('[data-libscope="selected"]');
+  if(scope)scope.textContent='Sélection ('+LIBSELECT.size+')';
 }
 function libraryMatch(m){
   if(LIBSCOPE==='personal'&&!m.personal)return false;
   if(LIBSCOPE==='favorites'&&!(SETTINGS.exerciseFavorites||[]).includes(m.key))return false;
   if(LIBSCOPE==='recent'&&!(SETTINGS.exerciseRecent||[]).includes(m.key))return false;
+  if(LIBSCOPE==='selected'&&!LIBSELECT.has(m.key))return false;
   if(LIBFILTER.b&&m.b!==LIBFILTER.b)return false;
   if(LIBFILTER.c&&!machineChains(m).includes(LIBFILTER.c))return false;
   if(LIBFILTER.l&&(m.personal||machineLoad(m)!==LIBFILTER.l))return false;
@@ -3162,7 +3169,7 @@ function showLibPicker(){
   let h='<h2>Ajouter des exercices</h2>'
    +'<div class="seg lib-modes"><button class="segb on" data-libmode="browse">Bibliothèque</button><button class="segb" data-libmode="custom">Créer</button></div>'
    +'<input id="libq" type="search" aria-label="Rechercher dans la bibliothèque" class="msearch" placeholder="Rechercher un exercice…" value="'+esc(LIBFILTER.q)+'" style="margin:0 0 10px">'
-   +'<div class="mfilters library-scopes" role="group" aria-label="Origine des exercices">'+[['all','Tous'],['personal','Mes exercices'],['favorites','Favoris'],['recent','Récents']].map(([key,label])=>'<button class="mfchip'+(LIBSCOPE===key?' on':'')+'" data-libscope="'+key+'" aria-pressed="'+(LIBSCOPE===key)+'">'+label+'</button>').join('')+'</div>'
+   +'<div class="mfilters library-scopes" role="group" aria-label="Listes d’exercices">'+[['all','Tous'],['personal','Mes exercices'],['favorites','Favoris'],['recent','Récents'],['selected','Sélection ('+LIBSELECT.size+')']].map(([key,label])=>'<button class="mfchip'+(LIBSCOPE===key?' on':'')+'" data-libscope="'+key+'" aria-pressed="'+(LIBSCOPE===key)+'">'+label+'</button>').join('')+'</div>'
    +'<details class="library-filters"><summary>'+uiIcon('sliders-horizontal')+'Filtres'+(filters?' · '+filters+' actifs':'')+'</summary>'
    +'<div class="mfilters"><button class="mfchip'+(!LIBFILTER.g?' on':'')+'" data-libfilter="g" data-value="">Tous muscles</button>'
    +MACHINE_GROUPS.map(g=>'<button class="mfchip'+(LIBFILTER.g===g[0]?' on':'')+'" data-libfilter="g" data-value="'+g[0]+'">'+esc(g[1])+'</button>').join('')+'</div>'
@@ -3188,11 +3195,15 @@ function showLibPicker(){
   sheet.querySelectorAll('[data-libfilter]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER[button.dataset.libfilter]=button.dataset.value||null;showLibPicker();sheet.querySelector('.library-filters').open=true;sheet.querySelector('[data-libfilter="'+button.dataset.libfilter+'"][data-value="'+CSS.escape(button.dataset.value)+'"]')?.focus();}));
   sheet.querySelectorAll('[data-libmode="custom"]').forEach(button=>button.addEventListener('click',()=>{LIBFILTER.mode='custom';showLibPicker();}));
   document.getElementById('libReset').addEventListener('click',()=>{LIBFILTER={mode:'browse',g:null,b:null,c:null,l:null,q:''};showLibPicker();});
-  sheet.querySelectorAll('[data-libscope]').forEach(button=>button.addEventListener('click',()=>{LIBSCOPE=button.dataset.libscope;showLibPicker();}));
+  sheet.querySelectorAll('[data-libscope]').forEach(button=>button.addEventListener('click',()=>{
+    LIBSCOPE=button.dataset.libscope;
+    if(LIBSCOPE==='selected')LIBFILTER={...LIBFILTER,g:null,b:null,c:null,l:null,q:''};
+    showLibPicker();
+  }));
   sheet.querySelectorAll('[data-libmachine]').forEach(input=>input.addEventListener('change',()=>{
     const m=catalog[+input.dataset.libmachine];
     if(input.checked)LIBSELECT.set(m.key,m.exercise);else LIBSELECT.delete(m.key);
-    refreshLibrarySelection();
+    if(LIBSCOPE==='selected'&&!input.checked)showLibPicker();else refreshLibrarySelection();
   }));
   sheet.querySelectorAll('[data-libdetail]').forEach(button=>button.addEventListener('click',()=>{
     const panel=document.getElementById('libDetail-'+button.dataset.libdetail),opening=panel.hidden;

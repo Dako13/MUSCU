@@ -125,7 +125,22 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(await p.locator('#liblist input:checked').count(),0);
     await p.locator('#liblist input[type=checkbox]:visible').check();
     assert.match(await p.locator('#libAddSelected').textContent(),/\(1\)/);
-    await p.locator('#liblist input[type=checkbox]:visible').uncheck();
+    await p.locator('[data-libscope=selected]').click();
+    assert.equal(await p.locator('#liblist .library-entry:visible').count(),1);
+    assert.equal(await p.locator('#libq').inputValue(),'');
+    await p.screenshot({path:path.join(out,'selected-mobile.png'),animations:'disabled'});
+    await p.locator('#liblist input[type=checkbox]:visible').click();
+    assert.equal(await p.locator('#liblist .library-entry:visible').count(),0);
+    assert(await p.locator('#libAddSelected').isDisabled());
+    await p.locator('[data-libscope=all]').click();
+    await p.locator('#libq').fill('bayesian');
+    await p.locator('#liblist input[type=checkbox]:visible').check();
+    await p.locator('#sheet .sheet-close').click();
+    await p.locator('[data-act=elib]').click();
+    assert.equal(await p.locator('#liblist input:checked').count(),0);
+    assert.equal(await p.locator('[data-libscope=all]').getAttribute('aria-pressed'),'true');
+    assert.equal(await p.locator('#libq').inputValue(),'');
+    await p.locator('#libq').fill('bayesian');
     for(const width of [320,390]){
       await p.setViewportSize({width,height:844});
       assert(await p.locator('#sheet').evaluate(el=>el.scrollWidth<=el.clientWidth),`library detail overflow ${width}`);
