@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.45.0';
+const APP_VERSION='4.46.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -766,7 +766,10 @@ function exHistory(exId){
   for(const w of DB.workouts){
     if(!w.ex||!w.ex[exId])continue;
     const sets=w.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null));
-    if(sets.length)out.push({date:w.date,sets,note:workoutNote(w,exId),bodyWeightKg:w.bodyWeightKg??null});
+    if(sets.length){
+      const meta=workoutExercise(w,exId);
+      out.push({date:w.date,sets,note:workoutNote(w,exId),bodyWeightKg:w.bodyWeightKg??null,name:meta?.name||'',unit:meta?.unit||'kg'});
+    }
   }
   return out;
 }
@@ -826,6 +829,15 @@ function assistanceMin(sets){const ws=sets.filter(s=>s.done&&s.w!=null).map(s=>s
 function assistedEffective(w,best,unit='kg'){
   const weight=w?.bodyWeightKg;
   return unit==='kg'&&Number.isFinite(weight)&&weight>=1&&weight<=1000&&best?.w!=null&&weight>best.w?weight-best.w:null;
+}
+function assistedTrend(history,unit,name){
+  const matching=history.filter(en=>en.unit===unit&&en.name===name);
+  const comparable=matching.map(en=>{
+    const best=topComparableSet(en.sets,true),value=assistedEffective(en,best,unit);
+    return value==null?null:{value,reps:best.r};
+  }).filter(Boolean);
+  if(comparable.length>=2)return {kind:'estimated',values:comparable.map(p=>p.value),reps:comparable.map(p=>p.reps)};
+  return {kind:'assistance',values:matching.map(en=>assistanceMin(en.sets)).filter(v=>v!=null),reps:[]};
 }
 function bestEver(exId){const h=exHistory(exId);if(isAssistedExercise(historicalExercises()[exId]))return null;let b=null;for(const en of h){const m=maxW(en.sets);if(m!=null&&(b==null||m>b))b=m}return b}
 function workoutStats(w){
@@ -1313,14 +1325,19 @@ function progHTML(e){
   const h=exHistory(e.id);
   if(!h.length)return '<div class="hempty">Aucune donnée. Les séries validées apparaîtront ici.</div>';
   const assisted=isAssistedExercise(e);
-  const maxes=h.map(en=>assisted?assistanceMin(en.sets):maxW(en.sets)).filter(v=>v!=null).slice(-12);
+  const trend=assisted?assistedTrend(h,e.unit||'kg',e.name):null;
+  const maxes=(assisted?trend.values:h.map(en=>maxW(en.sets)).filter(v=>v!=null)).slice(-12);
   let out='';
   if(maxes.length>=2){
     const W=260,H=38,P=4,mn=Math.min(...maxes),mx=Math.max(...maxes),span=(mx-mn)||1;
-    const pts=maxes.map((v,i)=>(P+i*(W-2*P)/(maxes.length-1)).toFixed(1)+','+(H-P-(v-mn)*(H-2*P)/span).toFixed(1));
+    const pts=maxes.map((v,i)=>(P+i*(W-2*P)/(maxes.length-1)).toFixed(1)+','+(trend?.kind==='assistance'?P+(v-mn)*(H-2*P)/span:H-P-(v-mn)*(H-2*P)/span).toFixed(1));
     const last=pts[pts.length-1].split(',');
-    out+='<div class="sparkcap">'+(assisted?'Assistance · moins = moins d’aide':'Charge max')+' · '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg</div>'
-     +'<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><polyline points="'+pts.join(' ')+'"/>'
+    const reps=trend?.reps||[];
+    const label=trend?.kind==='estimated'?'Poids - assistance estimé · '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg · '+fmtN(reps.at(-maxes.length))+' → '+fmtN(reps.at(-1))+' reps'
+      :trend?.kind==='assistance'?'Assistance · moins = moins d’aide · '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' '+esc(e.unit||'kg')+' · poids de corps non comparable'
+      :'Charge max · '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg';
+    out+='<div class="sparkcap">'+label+'</div>'
+     +'<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><polyline points="'+pts.join(' ')+'"/>'
      +'<circle cx="'+last[0]+'" cy="'+last[1]+'" r="2.5"/></svg>';
   }
   const best=bestEver(e.id);
@@ -2058,18 +2075,24 @@ function exProgressCard(){
    +'<svg class="exchev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
    +(best!=null?'<span class="exrec">RECORD '+fmtN(best)+' KG</span>':'')+'</div>';
   const hh=exHistory(STATEX);
-  const maxes=hh.map(en=>assisted?assistanceMin(en.sets):maxW(en.sets)).filter(v=>v!=null);
+  const trend=assisted?assistedTrend(hh,e.unit||'kg',e.name):null;
+  const maxes=assisted?trend.values:hh.map(en=>maxW(en.sets)).filter(v=>v!=null);
   if(maxes.length>=2){
     const W=290,Hh=104,P=10,top=16,bot=92,mn=Math.min(...maxes),mx=Math.max(...maxes),span=(mx-mn)||1;
     const X=i=>P+i*(W-2*P)/(maxes.length-1);
-    const Y=v=>top+(1-(v-mn)/span)*(bot-top);
+    const Y=v=>top+(trend?.kind==='assistance'?(v-mn)/span:1-(v-mn)/span)*(bot-top);
     const pts=maxes.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1));
     const last=pts[pts.length-1].split(',');
-    h+='<svg class="excurve" viewBox="0 0 '+W+' '+Hh+'" preserveAspectRatio="xMidYMid meet">'
+    const label=trend?.kind==='estimated'?'poids - assistance estimé '+fmtN(maxes[0])+' → '+fmtN(maxes.at(-1))+' kg'
+      :trend?.kind==='assistance'?'assistance utilisée '+fmtN(maxes[0])+' → '+fmtN(maxes.at(-1))+' '+esc(e.unit||'kg')
+      :'charge max '+fmtN(mn)+' → '+fmtN(mx)+' kg';
+    const detail=trend?.kind==='estimated'?'Série de référence · '+fmtN(trend.reps[0])+' → '+fmtN(trend.reps.at(-1))+' reps'
+      :trend?.kind==='assistance'?'Moins d’aide ; poids de corps non comparable':'';
+    h+='<svg class="excurve" viewBox="0 0 '+W+' '+Hh+'" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
      +'<path class="exfill" d="M'+X(0).toFixed(1)+','+bot+' L'+pts.join(' L')+' L'+X(maxes.length-1).toFixed(1)+','+bot+' Z"/>'
      +'<polyline class="exline" points="'+pts.join(' ')+'"/>'
      +'<circle class="exdot" cx="'+last[0]+'" cy="'+last[1]+'" r="4"/></svg>'
-     +'<div class="maplegend" style="text-align:left;padding:6px 2px 0">'+maxes.length+' séances · '+(assisted?'assistance utilisée '+fmtN(maxes[0])+' → '+fmtN(maxes[maxes.length-1])+' kg (moins = moins d’aide)':'charge max '+fmtN(mn)+' → '+fmtN(mx)+' kg')+'</div>';
+     +'<div class="maplegend trend-caption" style="text-align:left;padding:6px 2px 0">'+maxes.length+' séances · '+label+(detail?'<span>'+detail+'</span>':'')+'</div>';
   }else{
     h+='<div class="hempty">Pas encore assez de séances pour tracer une courbe (il en faut 2).</div>';
   }

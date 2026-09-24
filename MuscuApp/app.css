@@ -348,6 +348,7 @@ details[open] summary::before{transform:rotate(45deg)}
 .exfill{fill:var(--ac-soft);stroke:none}
 .exline{fill:none;stroke:var(--ac);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 0 4px var(--ac-glow))}
 .exdot{fill:var(--ac-hi)}
+.trend-caption span{display:block;margin-top:2px}
 .expicklist{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto}
 .expicklist .sbtn{flex:none}
 

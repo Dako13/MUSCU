@@ -99,23 +99,28 @@ async function settled(p){
     assert.equal(assistedChecks.summary.before.best.w,30);
     assert.equal(assistedChecks.summary.now.best.w,30);
     const assistedProgress=await p.evaluate(()=>{
-      const original=DB.workouts,meta={name:'Dips (machine assistée)',unit:'kg'};
+      const original=DB.workouts,oldStat=STATEX,meta={name:'Dips (machine assistée)',unit:'kg'};
       const make=(id,bodyWeightKg,w,r)=>({id,date:'2026-09-09',seance:'s_assist',bodyWeightKg,
         ex:{assist:[{w,r,done:true}]},exMeta:{assist:meta}});
       DB.workouts=[make('old',null,45,8),make('baseline',80,40,8),make('heavier',82,40,8),
         make('fewer-reps',82,35,6),make('more-reps',82,35,8),make('lighter-body',80,35,8),
         make('missing-weight',null,30,9),make('next',80,30,9)];
+      window.assistedFixture=structuredClone(DB.workouts);
+      STATEX='assist';
       try{
         const results=[...workoutProgressMap().values()].map(x=>({compared:x.compared,improved:x.improved}));
         const valid=DKO_DATA.workout(DB.workouts[1]);
         const invalid={...DB.workouts[1],bodyWeightKg:0};
         let rejected=false;try{DKO_DATA.workout(invalid)}catch{rejected=true}
         const summary=comparisonSummary({...make('now',81,30,9),date:'2026-09-10'});
+        const trend=assistedTrend(exHistory('assist'),'kg',meta.name);
+        const renamed=assistedTrend([{...exHistory('assist')[1],name:'Tractions assistées'},...exHistory('assist').slice(2)],'kg',meta.name);
         return {results,weight:valid.bodyWeightKg,rejected,effective:summary.rows[0].now.effective,
+          trend:trend.values,trendKind:trend.kind,renamed:renamed.values,history:progHTML({id:'assist',...meta}),chart:exProgressCard(),
           lb:assistedEffective(make('lb',80,30,8),{w:30,r:8},'lb'),
           recent:(()=>{const oldBody=BODY;BODY=[{date:'2026-09-05',vals:{poids:81}}];
             try{return [recentBodyWeight('2026-09-09'),recentBodyWeight('2026-09-20')]}finally{BODY=oldBody}})()};
-      }finally{DB.workouts=original}
+      }finally{DB.workouts=original;STATEX=oldStat}
     });
     assert.deepEqual(assistedProgress.results,[
       {compared:0,improved:0},{compared:0,improved:0},{compared:1,improved:1},
@@ -125,8 +130,27 @@ async function settled(p){
     assert.equal(assistedProgress.weight,80);
     assert.equal(assistedProgress.rejected,true);
     assert.equal(assistedProgress.effective,51);
+    assert.equal(assistedProgress.trendKind,'estimated');
+    assert.deepEqual(assistedProgress.trend,[40,42,47,47,45,50]);
+    assert.deepEqual(assistedProgress.renamed,[42,47,47,45,50]);
+    assert.match(assistedProgress.history,/Poids - assistance estimé · 40 → 50 kg · 8 → 9 reps/);
+    assert.match(assistedProgress.chart,/poids - assistance estimé 40 → 50 kg/);
+    assert.match(assistedProgress.chart,/Série de référence · 8 → 9 reps/);
+    assert(!assistedProgress.history.includes('NaN')&&!assistedProgress.chart.includes('NaN'));
     assert.equal(assistedProgress.lb,null);
     assert.deepEqual(assistedProgress.recent,[81,null]);
+    assert.match(await p.evaluate(()=>{
+      const original=DB.workouts,oldStat=STATEX,meta={name:'Dips (machine assistée)',unit:'lb'};
+      DB.workouts=[{date:'2026-09-01',seance:'s_lb',ex:{assist:[{w:50,r:8,done:true}]},exMeta:{assist:meta}},
+        {date:'2026-09-08',seance:'s_lb',ex:{assist:[{w:40,r:8,done:true}]},exMeta:{assist:meta}}];STATEX='assist';
+      try{return exProgressCard()}finally{DB.workouts=original;STATEX=oldStat}
+    }),/assistance utilisée 50 → 40 lb/);
+    await p.evaluate(()=>{window.previousWorkouts=DB.workouts;window.previousStat=STATEX;DB.workouts=window.assistedFixture;STATEX='assist';SUIVI='stats';go('suivi');});
+    await p.setViewportSize({width:320,height:700});await settled(p);
+    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await p.locator('.excurve').scrollIntoViewIfNeeded();
+    await p.screenshot({path:path.join(out,'assisted-progress-320.png'),animations:'disabled'});
+    await p.evaluate(sid=>{DB.workouts=window.previousWorkouts;STATEX=window.previousStat;delete window.assistedFixture;delete window.previousWorkouts;delete window.previousStat;go('seance',sid);},ids.sid);
     await p.evaluate(ex=>{DB.active.exMeta[ex].name='Dips (machine assistée)';render();},ids.ex);
     await p.locator('#assistBodyWeight').fill('81,5');
     assert.equal(await p.evaluate(()=>DKO_DATA.cloud({schema:1,programs:PROGRAMS,activeId:ACTIVE_PID,workouts:DB.workouts,active:DB.active,settings:SETTINGS,body:BODY}).active.bodyWeightKg),81.5);

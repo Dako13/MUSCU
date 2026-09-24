@@ -61,7 +61,9 @@ pas un audit manuel complet d'accessibilite ni un essai sur iPhone physique.
   saisi pour chaque seance, de l'assistance et des repetitions. Une seance
   ancienne sans poids de corps reste visible mais ne produit pas de score
   automatique ; l'effort estime (poids moins assistance) n'est pas une mesure
-  biomecanique exacte de la machine.
+  biomecanique exacte de la machine. Depuis 4.46, les courbes utilisent ce
+  repere avec les repetitions si au moins deux pesees comparables existent ;
+  sinon elles montrent seulement l'assistance, sans conclure a un progres.
 - Certaines machines generiques ne permettent pas de connaitre leur chargement
   exact sans leur gamme/modele. Les marques presentes varient selon le club.
 - Les conseils techniques et visuels demandent encore une verification par

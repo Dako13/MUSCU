@@ -13,7 +13,7 @@ fusionne pas automatiquement deux modifications concurrentes. Depuis 4.42.1,
 l'état local est également revérifié avant un envoi Supabase ou coach, même
 si l'événement de l'autre onglet n'est pas encore arrivé.
 
-## Suivi et dossier coach (4.41)
+## Suivi et dossier coach (4.46)
 
 Le résumé du suivi compare les jours écoulés de la semaine ou du mois aux mêmes
 jours de la période précédente. Les séances datées dans le futur sont exclues
@@ -21,9 +21,13 @@ de ce résumé. Dans un dossier élève, l'historique affiche 20 séances puis c
 les suivantes à la demande, sans supprimer les données plus anciennes.
 
 Pour les machines assistées reconnues, l'historique montre l'assistance utilisée
-(moins signifie moins d'aide). Ces charges ne créent ni record ni score automatique
-de progression : le poids du corps et les répétitions comptent aussi. Le coach
-voit une colonne « Assistance min. » au lieu de « Charge max. ».
+(moins signifie moins d'aide). Elles ne créent pas de record de charge brute.
+Depuis 4.45, le score tient compte de la pesée enregistrée pour chaque séance,
+de l'assistance en kg et des répétitions. Depuis 4.46, les courbes montrent
+également le repère estimé poids moins assistance, avec les répétitions, si au
+moins deux séances ont une pesée comparable. Sinon, elles affichent seulement
+l'assistance, sans la présenter comme une mesure de progression. Le coach voit
+une colonne « Assistance min. » au lieu de « Charge max. ».
 
 ## Premier lancement et coaching (4.39)
 
