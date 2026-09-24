@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.46.0';
+const APP_VERSION='4.47.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2391,7 +2391,7 @@ function machineInfoHTML(m){
   const chips=(m.p||[]).map(x=>'<span class="mchip pri">'+esc(mLabel(x))+'</span>').join('')
     +(m.s||[]).map(x=>'<span class="mchip">'+esc(mLabel(x))+'</span>').join('');
   const chains=machineChains(m);
-  const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+(m.generic?' exercice musculation':' '+m.b+' machine musculation'));
+  const imgURL='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(m.n+(m.generic?' exercice musculation':' '+m.b+(m.model?' '+m.model:'')+' machine musculation'));
   const load=machineLoad(m);
   const p=m.pattern||exPattern({name:m.n});
   return '<div class="sp">'+esc(m.generic?m.t:m.b)+(m.model?' · '+esc(m.model):'')+' · '+esc(LOAD_SHORT[load])+(chains.length?' · Enseignes indicatives : '+chains.map(esc).join(', ')+'. Modèle à vérifier dans ton club.':'')+'</div>'

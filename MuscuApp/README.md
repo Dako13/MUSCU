@@ -48,7 +48,7 @@ programmes en attente de réception. Le filtrage reste local à l'écran du coac
 
 ## Catalogue étendu (4.33)
 
-Ajout de 141 mouvements et variantes génériques et de 26 fiches Matrix
+Ajout de 141 mouvements et variantes génériques et de 41 fiches Matrix
 (Versa, Aura et Magnum), avec conseils individuels et chargement explicite.
 Recherche par mots, synonymes français/anglais et référence constructeur.
 Les données sont dans `exercise-catalog.js`, également disponible hors ligne.

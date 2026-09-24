@@ -20,7 +20,10 @@ for(const entry of catalog){
   assert(entry.aliases&&entry.pattern&&entry.t,entry.n);
 }
 for(const name of ['Tractions pronation','Curl bayésien unilatéral (poulie)','Belt squat (machine à disques)','Dead bug','Soulevé de terre roumain B-stance (haltères)'])assert(names.has(name));
-assert.equal(matrix.length,26);
+assert.equal(matrix.length,41);
+for(const model of ['VS-S13','VS-S23','VS-S33','VS-S34','VS-S71','VS-S331','VS-S401','VS-S531','VS-S601','VS-S711']){
+  assert(matrix.some(entry=>entry.model===model),'Missing Matrix model: '+model);
+}
 for(const entry of matrix){
   assert(entry.b==='Matrix'&&entry.model&&entry.aliases.includes(entry.model));
   assert(!tips.has(entry.tip),'Repeated Matrix tip');tips.add(entry.tip);
