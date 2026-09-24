@@ -258,6 +258,18 @@ async function settled(p){
     // and of per-exercise / current-workout exceptions.
     await p.evaluate(()=>{closeSheet();go('programs');});
     const originals=await p.evaluate(()=>JSON.stringify(PROGRAM));
+    await p.evaluate(()=>showSettings());
+    await p.locator('#setRest').fill('75');await p.locator('#setRest').press('Tab');
+    assert.equal(await p.evaluate(()=>SETTINGS.rest),75);
+    await p.locator('#setRest').fill('0');await p.locator('#setRest').press('Tab');
+    assert.equal(await p.locator('#setRest').inputValue(),'75');
+    await p.locator('#restChips [data-rest="90"]').click();
+    assert.equal(await p.locator('#setRest').inputValue(),'90');
+    await p.locator('#setRest').fill('75');await p.locator('#setRest').press('Tab');
+    await p.locator('#setOk').click();
+    await p.reload();await p.locator('#splash').waitFor({state:'detached'});
+    assert.equal(await p.evaluate(()=>SETTINGS.rest),75);
+    await p.evaluate(()=>go('programs'));
     const personal=await p.evaluate(()=>SETTINGS.rest);
     await p.locator('[data-act="saddseance"]').click();
     const sid=await p.evaluate(()=>route.seance);

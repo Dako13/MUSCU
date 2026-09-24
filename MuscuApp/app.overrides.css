@@ -321,6 +321,8 @@ summary{font-size:13px;min-height:44px}
 .efield input,.efield textarea,.efield select,.wrow .we,#sheet textarea.io{background:var(--input);border:1px solid var(--line2);border-radius:6px}
 .efield label{font-size:12px;text-transform:none;color:var(--dim)}
 .efield{margin-bottom:14px}
+#setRest{margin-bottom:8px}
+#restChips{flex-wrap:wrap}
 .ecard{background:none;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:20px 0}
 #exlist .ecard{margin-bottom:16px}
 .ebtn{background:none;border:1px solid var(--line2);border-radius:6px;min-height:44px}

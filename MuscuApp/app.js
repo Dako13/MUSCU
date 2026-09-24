@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.49.0';
+const APP_VERSION='4.50.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -336,7 +336,7 @@ function loadSettings(){
   if(!s||typeof s!=='object')s={};
   const fresh=FRESH_INSTALL&&!localStorage.getItem(KEY_PROGRAMS);
   return{
-    rest:[90,120,180,240].includes(s.rest)?s.rest:180,
+    rest:Number.isInteger(s.rest)&&s.rest>=1&&s.rest<=86400?s.rest:180,
     poids:s.poids===null?null:(numOrNull(s.poids)||(fresh?null:PROFILE.poids_kg)),
     taille:s.taille===null?null:(intOrNull(s.taille)||(fresh?null:PROFILE.taille_cm)),
     age:s.age===null?null:(intOrNull(s.age)||(fresh?null:PROFILE.age)),
@@ -3261,8 +3261,8 @@ function showSettings(){
    +'<div class="efield"><label>Silhouette</label><div id="silhouetteChips">'
    +[['male','Homme'],['female','Femme']].map(v=>'<button type="button" class="chip'+(SETTINGS.silhouette===v[0]?' on':'')+'" data-silhouette="'+v[0]+'" aria-pressed="'+(SETTINGS.silhouette===v[0])+'">'+v[1]+'</button>').join('')
    +'</div></div>'
-   +'<div class="efield"><label>Repos par défaut</label><div class="chips" id="restChips">'
-   +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'">'+fmtT(v)+'</button>').join('')
+   +'<div class="efield"><label for="setRest">Repos par défaut (secondes)</label><input id="setRest" type="number" inputmode="numeric" min="1" max="86400" step="1" value="'+SETTINGS.rest+'" style="'+inp+'"><div class="chips" id="restChips">'
+   +[90,120,180,240].map(v=>'<button class="chip num'+(SETTINGS.rest===v?' on':'')+'" data-rest="'+v+'" aria-pressed="'+(SETTINGS.rest===v)+'">'+fmtT(v)+'</button>').join('')
    +'</div></div>'
    +'<div class="rectitle">Profil</div>'
    +'<div class="egrid3">'
@@ -3284,10 +3284,22 @@ function showSettings(){
    +'<div class="sbtns"><button class="sbtn pri" id="setOk">Fermer</button></div>'
    +'<div class="about">Dko v'+APP_VERSION+' · '+esc((activeProgram()||{}).name||'')+'</div>';
   openSheet();
+  const restInput=document.getElementById('setRest');
+  const updateRest=seconds=>{
+    SETTINGS.rest=seconds;saveSettings();restInput.value=seconds;
+    document.querySelectorAll('#restChips .chip').forEach(button=>{
+      const active=+button.dataset.rest===seconds;
+      button.classList.toggle('on',active);button.setAttribute('aria-pressed',String(active));
+    });
+  };
+  restInput.addEventListener('change',()=>{
+    const value=intOrNull(restInput.value);
+    if(value==null||value<1||value>86400){restInput.value=SETTINGS.rest;toast('Repos attendu : de 1 à 86400 secondes');return;}
+    updateRest(value);
+  });
   document.getElementById('restChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
-    SETTINGS.rest=+c.dataset.rest;saveSettings();
-    document.querySelectorAll('#restChips .chip').forEach(x=>x.classList.toggle('on',x===c));
+    updateRest(+c.dataset.rest);
   });
   document.getElementById('themeChips').addEventListener('click',ev=>{
     const c=ev.target.closest('.chip');if(!c)return;
