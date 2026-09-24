@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.43.0';
+const APP_VERSION='4.44.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -517,6 +517,11 @@ const CHAINS=['On Air','Basic-Fit','Fitness Park'];
 const BRAND_CHAINS={'Technogym':['On Air','Basic-Fit','Fitness Park'],'Matrix':['Basic-Fit'],'Hammer Strength':['Fitness Park','On Air'],'Gym80':['On Air'],'Eleiko':['Fitness Park','On Air'],'Life Fitness':['Basic-Fit','On Air'],'Charge libre':['On Air','Basic-Fit','Fitness Park']};
 const TIP_BY_PATTERN={
  cardio:'Échauffe-toi progressivement, buste droit et regard loin ; règle l’intensité selon ta zone d’effort.',
+ frontraise:'Garde le tronc stable, lève les bras devant toi jusqu’à hauteur confortable, puis redescends sans élan ni cambrure.',
+ forearm:'Pose les avant-bras sur un support et laisse les mains libres. Fléchis ou étends seulement les poignets selon la variante, lentement.',
+ stepup:'Pose tout le pied sur une marche stable. Monte avec la jambe sur le support et contrôle la descente sans sauter avec l’autre.',
+ backext:'Règle les appuis à ta taille et redresse le tronc dans une amplitude confortable, sans à-coup ni hyperextension.',
+ core:'Garde des appuis stables et le tronc contrôlé. Adapte le mouvement à la variante sans compenser par une cambrure.',
  chestpress:'Règle l’assise pour avoir les poignées à hauteur de poitrine, coudes ~45°, pousse sans verrouiller et contrôle le retour.',
  benchpress:'Omoplates serrées, pieds ancrés, descends au niveau des pectoraux poignets solides, pousse sans rebond sur la poitrine.',
  inclinepress:'Banc à ~30°, descends en haut des pectoraux, coudes ~45°, pousse sans creuser le bas du dos.',
@@ -1478,12 +1483,23 @@ function exPattern(e){
   const catalog=CATALOG_BY_NAME.get(searchKey(e?.name));if(catalog)return catalog.pattern;
   const n=String(e&&e.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   /* du plus spécifique au plus générique — l'ordre compte */
+  if(/dead bug/.test(n))return 'deadbug';
+  if(/bird dog/.test(n))return 'birddog';
+  if(/roue abdominale|ab wheel|rollout/.test(n))return 'abwheel';
+  if(/pallof/.test(n))return 'pallof';
+  if(/rotation diagonale|woodchop/.test(n))return 'woodchop';
+  if(/gainage|planche|plank/.test(n))return 'plank';
+  if(/montee.*(?:banc|step)|step.?up/.test(n))return 'stepup';
+  if(/extension lombaire|back extension/.test(n))return 'backext';
+  if(/poignet|wrist curl/.test(n))return 'forearm';
+  if(/elevation frontale|front raise/.test(n))return 'frontraise';
   if(/cardio|tapis|velo|rameur|elliptique|skillmill|stair|climb|course/.test(n))return 'cardio';
   if(/abdo|crunch|oblique|rotary|gainage|chaise romaine|releve de jambe|sit.?up/.test(n))return 'abs';
   if(/mollet|calf|sural/.test(n))return 'calf';
   if(/leg extension|leg-extension|extension de jambe/.test(n))return 'legext';
   if(/leg curl|leg-curl|ischio|curl assis|curl allonge|curl jambe/.test(n))return 'legcurl';
   if(/fente|bulgare|lunge|split squat/.test(n))return 'lunge';
+  if(/kickback.*triceps|triceps.*kickback/.test(n))return 'triceps';
   if(/kickback|extension de hanche|glute \/ extension/.test(n))return 'kickback';
   if(/hip thrust|fessier|glute/.test(n))return 'hipthrust';
   if(/soulev|roumain|good morning|deadlift/.test(n))return 'hinge';
@@ -1613,12 +1629,6 @@ function demoSVG(p){
        +'<g>'+tr('0 14;0 -4;0 14',2.2)+'<line class="d-bone" x1="52" y1="92" x2="104" y2="110"/><circle class="d-joint" cx="104" cy="110" r="3.5"/><line class="d-move" x1="104" y1="110" x2="132" y2="150"/><line class="d-move" x1="104" y1="110" x2="82" y2="150"/></g>'
        +'<line class="d-gear" x1="82" y1="104" x2="122" y2="104"/>';
       break;
-    case 'kickback':
-      g='<circle class="d-head" cx="65" cy="31" r="10"/><line class="d-bone" x1="65" y1="42" x2="72" y2="95"/>'
-       +'<line class="d-bone" x1="68" y1="55" x2="101" y2="72"/><line class="d-bone" x1="101" y1="72" x2="113" y2="101"/>'
-       +'<line class="d-bone" x1="72" y1="95" x2="79" y2="155"/>'
-       +'<g><line class="d-move" x1="72" y1="95" x2="102" y2="147"/>'+an('0 72 95;-48 72 95;0 72 95',2.2)+'</g>';
-      break;
     case 'hinge':
       g='<circle class="d-head" cx="78" cy="34" r="10"/><g>'+an('0 76 96;34 76 96;0 76 96',2.4)+'<line class="d-bone" x1="76" y1="44" x2="76" y2="96"/><line class="d-move" x1="76" y1="60" x2="58" y2="118"/><line class="d-move" x1="76" y1="60" x2="94" y2="118"/></g>'
        +'<line class="d-bone" x1="76" y1="96" x2="64" y2="156"/><line class="d-bone" x1="76" y1="96" x2="90" y2="156"/>';
@@ -1657,6 +1667,7 @@ function demoSVG(p){
 }
 const PATTERN_LABEL={
  frontraise:'Élévation frontale',forearm:'Poignets',stepup:'Montée sur support',kickback:'Extension de hanche',core:'Contrôle du tronc',backext:'Extension lombaire',
+ deadbug:'Dead bug',birddog:'Bird dog',abwheel:'Roue abdominale',plank:'Gainage',pallof:'Anti-rotation',woodchop:'Rotation diagonale',
  cardio:'Cardio maîtrisé',chestpress:'Poussée poitrine',benchpress:'Développé couché',inclinepress:'Développé incliné',shoulderpress:'Poussée épaules',
  fly:'Ouverture contrôlée',pullover:'Pull-over',pulldown:'Tirage vertical',rowhoriz:'Tirage horizontal',reardelt:'Arrière épaules',
  lateral:'Élévation latérale',shrug:'Trapèzes',curl:'Curl biceps',triceps:'Extension triceps',
@@ -1665,6 +1676,17 @@ const PATTERN_LABEL={
 };
 const COACH_LABELS=['Position','Trajectoire','Respiration','À éviter'];
 const COACH_GUIDE={
+ frontraise:['Pieds stables, tronc gainé, épaules basses.','Lève les bras devant toi jusqu’à hauteur d’épaule, puis redescends sans élan.','Souffle en montant, inspire au retour.','Ne te penche pas en arrière pour soulever la charge.'],
+ forearm:['Avant-bras soutenus, mains libres au bord du support.','Bouge les poignets sans décoller les avant-bras ; adapte le sens à la flexion ou à l’extension.','Souffle en relevant les mains, inspire en les abaissant.','Ne lance pas la charge et ne relâche pas la prise.'],
+ stepup:['Choisis un support stable et pose tout le pied dessus.','Monte avec la jambe sur le support, puis contrôle la descente.','Souffle en montant, inspire en redescendant.','Évite de bondir avec la jambe restée au sol.'],
+ backext:['Règle les appuis à ta taille et garde les pieds stables.','Redresse le tronc dans une amplitude confortable, puis reviens lentement.','Souffle en te redressant, inspire au retour.','Ne termine pas en hyperextension ni avec un à-coup.'],
+ core:['Gaine le tronc et garde des appuis stables.','Bouge les membres ou pivote selon la variante, sans perdre le contrôle du bassin.','Respire en continu pendant l’effort.','Ne compense pas par une cambrure ou un mouvement brusque.'],
+ deadbug:['Allonge-toi sur le dos, bras levés et genoux fléchis.','Éloigne un bras et la jambe opposée sans creuser le bas du dos, puis alterne.','Souffle pendant l’extension, inspire au retour.','Réduis l’amplitude si le bassin se déplace.'],
+ birddog:['À quatre pattes, mains sous les épaules et genoux sous les hanches.','Allonge un bras et la jambe opposée, puis reviens sans tourner le bassin.','Souffle en allongeant, inspire au retour.','Ne lève pas la jambe au prix d’une cambrure.'],
+ abwheel:['À genoux, gaine le bassin avant de déplacer la roue.','Fais rouler la roue seulement jusqu’où tu peux revenir sans perdre la position du tronc.','Souffle pendant le retour, respire sans bloquer.','N’allonge pas davantage si les lombaires se creusent.'],
+ plank:['Appuis solides, tronc aligné, bassin stable.','Maintiens la position ou touche une épaule à la fois selon la variante.','Respire régulièrement sans relâcher le ventre.','Évite de laisser tomber les hanches ou de pivoter.'],
+ pallof:['Place-toi de côté à la poulie, poignée devant le sternum.','Éloigne les mains puis ramène-les sans laisser le tronc tourner.','Souffle en éloignant les mains, inspire au retour.','Ne pivote pas vers la machine pour finir la répétition.'],
+ woodchop:['Pieds stables, poignée prise à deux mains.','Accompagne la diagonale avec les hanches et les pieds, selon le sens de la poulie.','Souffle pendant la diagonale, inspire au retour.','Ne tords pas uniquement le bas du dos.'],
  kickback:['Prends un appui stable et garde le bassin face à l’avant.','Recule la jambe depuis la hanche, puis reviens avec contrôle.','Souffle en reculant la jambe.','Évite de tourner le bassin ou de cambrer pour gagner de l’amplitude.'],
  cardio:['Monte progressivement en intensité, buste grand et regard loin.','Garde un rythme régulier avant de chercher la vitesse.','Respire en continu, sans bloquer la cage.','Ne pars pas trop fort si tu veux tenir la zone ciblée.'],
  chestpress:['Poignées à hauteur de poitrine, omoplates posées, pieds stables.','Pousse en diagonale légère, coudes vers 45°, retour contrôlé.','Souffle en poussant, inspire sur la descente.','Évite de verrouiller brutalement ou de décoller les épaules.'],
@@ -1702,7 +1724,7 @@ const LOAD_SETUP={
  cardio:'Règle vitesse, inclinaison ou résistance avant de monter en intensité.'
 };
 function patternLabel(p){return PATTERN_LABEL[p]||'Mouvement guidé';}
-function guideForPattern(p){return COACH_GUIDE[p]||COACH_GUIDE.chestpress;}
+function guideForPattern(p){return COACH_GUIDE[p]||COACH_GUIDE.core;}
 function coachCardsHTML(lines){
   let h='<div class="coachgrid">';
   for(let i=0;i<COACH_LABELS.length;i++){

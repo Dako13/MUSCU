@@ -45,13 +45,31 @@ const server=http.createServer(async(req,res)=>{
       const generic=MACHINES.find(m=>m.n==='Chest Press'&&m.b==='Technogym');
       const plate=MACHINES.find(m=>m.n==='ISO-Lateral Bench Press'&&m.b==='Hammer Strength');
       const kickback=EXERCISE_CATALOG.find(m=>m.n==='Kickback jambe tendue (poulie, sangle)');
-      return {generic:machineLoad(generic),plate:machineLoad(plate),kickback:exPattern(machineAsExercise(kickback)),visual:demoSVG(kickback.pattern),tip:machineTip(MACHINES.find(m=>m.n==='Glute / Kickback (poulie)'))};
+      return {generic:machineLoad(generic),plate:machineLoad(plate),kickback:exPattern(machineAsExercise(kickback)),tip:machineTip(MACHINES.find(m=>m.n==='Glute / Kickback (poulie)'))};
     });
     assert.equal(loadAndKickback.generic,'variable');
     assert.equal(loadAndKickback.plate,'disques');
     assert.equal(loadAndKickback.kickback,'kickback');
-    assert(loadAndKickback.visual.includes('d-move')&&!loadAndKickback.visual.includes('d-bench'));
     assert(loadAndKickback.tip.includes('recule la jambe'));
+    assert((await p.evaluate(()=>machineTip(MACHINES.find(m=>m.n==='Extension lombaire (banc à 45°)')))).includes('hyperextension'));
+    const guides=await p.evaluate(()=>{
+      const patterns=[...new Set(MACHINES.filter(m=>m.pattern).map(m=>m.pattern))];
+      return {missing:patterns.filter(pattern=>!COACH_GUIDE[pattern]||!PATTERN_LABEL[pattern]),
+        deadbug:exPattern({name:'Dead bug personnalisé'}),
+        pallof:exPattern({name:'Pallof press maison'}),
+        stepup:exPattern({name:'Montée sur banc libre'}),
+        forearm:exPattern({name:'Flexion des poignets personnalisée'}),
+        backext:exPattern({name:'Extension lombaire libre'}),
+        front:exPattern({name:'Élévation frontale libre'}),
+        triceps:exPattern({name:'Kickback triceps personnalisé'}),
+        guide:exerciseGuideHTML('deadbug',[])};
+    });
+    assert.deepEqual(guides.missing,[]);
+    for(const pattern of ['deadbug','pallof','stepup','forearm','backext','frontraise','triceps'])assert.equal(guides[pattern==='frontraise'?'front':pattern],pattern);
+    assert(guides.guide.includes('jambe opposée')&&!guides.guide.includes('poitrine'));
+    await p.evaluate(()=>showMachine(MACHINES.findIndex(m=>m.n==='Glute / Kickback (poulie)')));
+    assert(await p.locator('#sheet').getByText('Recule la jambe depuis la hanche', {exact:false}).isVisible());
+    await p.evaluate(()=>closeSheet());
     await p.evaluate(()=>showMachine(MACHINES.findIndex(m=>m.n==='Chest Press'&&m.b==='Technogym')));
     assert(await p.locator('#sheet').getByText('Le chargement dépend de la gamme', {exact:false}).isVisible());
     await p.evaluate(()=>closeSheet());

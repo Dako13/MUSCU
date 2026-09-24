@@ -254,15 +254,15 @@ const EXERCISE_CATALOG=(()=>{
       ['Crunch bicyclette','Rapproche alternativement une épaule du genou opposé sans tirer sur la tête. Garde le mouvement lent et réduis l’extension des jambes si le dos se creuse.','bicycle crunch']
     ]),
     ...group(['abdos'],[],'Poids du corps','corps','core',[
-      ['Dead bug','Allongé, bras levés et genoux pliés, éloigne un bras et la jambe opposée. Arrête avant que les lombaires se creusent, puis alterne.','deadbug'],
-      ['Bird dog','À quatre pattes, allonge un bras et la jambe opposée. Garde le bassin horizontal et reviens sans déplacer le tronc.','bird-dog'],
-      ['Roue abdominale à genoux','Gaine le bassin avant de faire rouler la roue. Avance seulement jusqu’où tu peux revenir sans laisser les lombaires se creuser.','ab wheel rollout'],
-      ['Gainage avec toucher d’épaule','En appui sur les mains, écarte les pieds pour stabiliser le bassin. Touche lentement l’épaule opposée avec une main, puis alterne sans pivoter.','plank shoulder taps']
+      ['Dead bug','Allongé, bras levés et genoux pliés, éloigne un bras et la jambe opposée. Arrête avant que les lombaires se creusent, puis alterne.','deadbug','deadbug'],
+      ['Bird dog','À quatre pattes, allonge un bras et la jambe opposée. Garde le bassin horizontal et reviens sans déplacer le tronc.','bird-dog','birddog'],
+      ['Roue abdominale à genoux','Gaine le bassin avant de faire rouler la roue. Avance seulement jusqu’où tu peux revenir sans laisser les lombaires se creuser.','ab wheel rollout','abwheel'],
+      ['Gainage avec toucher d’épaule','En appui sur les mains, écarte les pieds pour stabiliser le bassin. Touche lentement l’épaule opposée avec une main, puis alterne sans pivoter.','plank shoulder taps','plank']
     ]),
     ...group(['abdos'],[],'Poulie','poulie','core',[
-      ['Pallof press (poulie)','Place-toi de côté à une poulie à hauteur du sternum. Éloigne les mains devant toi puis ramène-les sans laisser le tronc tourner.','anti rotation pallof press'],
-      ['Rotation diagonale haute vers basse (poulie)','Tiens la poignée à deux mains et pivote avec les hanches et les pieds. Descends en diagonale sans tordre uniquement les lombaires.','cable woodchop high to low'],
-      ['Rotation diagonale basse vers haute (poulie)','Pars près de la hanche et accompagne la diagonale avec le bassin. Garde les bras souples et ne lance pas la charge au-dessus de la tête.','cable lift low to high woodchop']
+      ['Pallof press (poulie)','Place-toi de côté à une poulie à hauteur du sternum. Éloigne les mains devant toi puis ramène-les sans laisser le tronc tourner.','anti rotation pallof press','pallof'],
+      ['Rotation diagonale haute vers basse (poulie)','Tiens la poignée à deux mains et pivote avec les hanches et les pieds. Descends en diagonale sans tordre uniquement les lombaires.','cable woodchop high to low','woodchop'],
+      ['Rotation diagonale basse vers haute (poulie)','Pars près de la hanche et accompagne la diagonale avec le bassin. Garde les bras souples et ne lance pas la charge au-dessus de la tête.','cable lift low to high woodchop','woodchop']
     ])
   ];
 })();
