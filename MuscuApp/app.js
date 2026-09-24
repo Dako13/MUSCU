@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.47.0';
+const APP_VERSION='4.48.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2339,7 +2339,8 @@ function filterMachineRows(){
   const empty=document.getElementById('machineEmpty');if(empty)empty.hidden=count>0;
 }
 function machinesHTML(){
-  const brands=[];MACHINES.forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
+  const personal=libraryCatalog().filter(m=>m.personal);
+  const brands=[];[...MACHINES,...personal].forEach(m=>{if(brands.indexOf(m.b)<0)brands.push(m.b)});
   let h='<button class="back" data-act="programs">‹ Programmes</button>'
    +'<div class="shead"><div><div class="stag">Bibliothèque</div><h2>Exercices</h2></div></div>'
    +'<div class="search-field">'+uiIcon('search')+'<input id="mq" class="msearch" type="search" aria-label="Rechercher un exercice" placeholder="Rechercher un exercice…" value="'+esc(MFILTER.q||'')+'"></div>';
@@ -2358,13 +2359,21 @@ function machinesHTML(){
   LOAD_FILTER.forEach(x=>{h+='<button class="mfchip'+(MFILTER.l===x[0]?' on':'')+'" data-act="mfl" data-l="'+x[0]+'">'+esc(x[1])+'</button>'});
   h+='</div><button class="sbtn" data-act="mfreset">Réinitialiser les filtres</button></details>';
   if(MFILTER.c)h+='<p class="sp">Marques associées à '+esc(MFILTER.c)+' · modèles à vérifier dans ton club.</p>';
-  const personal=libraryCatalog().filter(m=>m.personal);
-  if(personal.length)h+='<details class="personal-library"><summary>Mes exercices · '+personal.length+'</summary>'+personal.map(m=>'<button class="mrow" data-act="personalexercise" data-key="'+esc(m.key)+'"><span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc(m.p.map(mLabel).join(', '))+'</span></span>'+uiIcon('chevron-right')+'</button>').join('')+'</details>';
   const grp=MACHINE_GROUPS.find(g=>g[0]===MFILTER.g);
   const ids=grp?grp[2]:null;
   const q=searchKey(MFILTER.q);
   let n=0;
   h+='<div id="mlist">';
+  personal.forEach(m=>{
+    if(MFILTER.b&&MFILTER.b!==m.b)return;
+    if(MFILTER.c||MFILTER.l)return;
+    const all=(m.p||[]).concat(m.s||[]);
+    if(ids&&!all.some(x=>ids.includes(x)))return;
+    const searchStr=machineSearch(m),visible=matchesSearch(searchStr,q);if(visible)n++;
+    h+='<button class="mrow"'+(visible?'':' hidden')+' data-act="personalexercise" data-key="'+esc(m.key)+'" data-search="'+esc(searchStr)+'">'
+     +'<span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc((m.p||[]).map(mLabel).join(', '))+'</span></span>'
+     +'<span class="mrow-b">Personnel</span></button>';
+  });
   MACHINES.forEach((m,i)=>{
     if(MFILTER.b&&m.b!==MFILTER.b)return;
     if(MFILTER.c&&machineChains(m).indexOf(MFILTER.c)<0)return;

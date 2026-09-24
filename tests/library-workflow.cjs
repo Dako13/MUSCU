@@ -73,6 +73,21 @@ const server=http.createServer(async(req,res)=>{
     await p.evaluate(()=>showMachine(MACHINES.findIndex(m=>m.n==='Chest Press'&&m.b==='Technogym')));
     assert(await p.locator('#sheet').getByText('Le chargement dépend de la gamme', {exact:false}).isVisible());
     await p.evaluate(()=>closeSheet());
+    await p.evaluate(()=>{
+      SETTINGS.exerciseLibrary=[...(SETTINGS.exerciseLibrary||[]),{name:'Presse personnelle test',unit:'kg',musP:['quadriceps'],musS:[],notes:'Mon réglage de siège'}];
+      MFILTER={g:null,b:null,c:null,l:null,q:'',open:false};render();
+    });
+    await p.locator('#mq').fill('presse personnelle test');
+    assert.equal(await p.locator('#mlist .mrow:visible').count(),1);
+    assert((await p.locator('#machineCount').textContent()).includes('1 exercice'));
+    await p.locator('#mlist .mrow:visible').click();
+    assert(await p.locator('#sheet').getByText('Mon réglage de siège').isVisible());
+    await p.evaluate(()=>{closeSheet();MFILTER.b='Personnel';MFILTER.q='';render();});
+    assert(await p.locator('#mlist .mrow:visible').count()>=1);
+    await p.evaluate(()=>{
+      SETTINGS.exerciseLibrary=SETTINGS.exerciseLibrary.filter(e=>e.name!=='Presse personnelle test');
+      MFILTER.b=null;render();
+    });
     await p.locator('#mq').fill('bayesian');
     assert.equal(await p.locator('#mlist .mrow:visible').count(),1);
     await p.locator('#mlist .mrow:visible').click();
