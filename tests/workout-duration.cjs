@@ -48,21 +48,45 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(await p.locator('#elapsed').textContent(),'2:00');
     const active=await p.evaluate(()=>DKO_DATA.workout(exportPayload().active,true));
     assert.equal(Object.values(active.ex)[0][1].doneElapsedMs,120000);
+    const lastDoneAt=await p.evaluate(()=>window.__time);
+    assert.equal(Object.values(active.ex)[0][1].doneAt,lastDoneAt);
     await advance(600000);
     assert.equal(await p.evaluate(()=>elapsedStr()),'2:00');
-    assert.equal((await finish()).dur,120);
+    const finished=await finish();
+    assert.equal(finished.dur,120);
+    assert.equal(finished.endedAt,lastDoneAt);
+    assert.equal(await p.evaluate(()=>DKO_DATA.workout(DB.workouts.at(-1)).endedAt),lastDoneAt);
+    assert.equal(await p.evaluate(()=>DKO_DATA.cloud({schema:1,programs:PROGRAMS,activeId:ACTIVE_PID,workouts:DB.workouts,active:DB.active,settings:SETTINGS,body:BODY}).workouts.at(-1).endedAt),lastDoneAt);
+    const recoveryTime=await p.evaluate(()=>{
+      const w=DB.workouts.at(-1),mid=PROGRAM[0].ex[0].musP[0],hours=(Date.now()-w.endedAt)/3.6e6;
+      const expected=2/6*(1-hours/MUSCLE_BY_ID[mid].rec);
+      const actual=muscleFatigue(mid);
+      const saved=w.endedAt;delete w.endedAt;
+      const legacy=muscleFatigue(mid);w.endedAt=saved;
+      return {expected,actual,legacy};
+    });
+    assert(Math.abs(recoveryTime.actual-recoveryTime.expected)<0.0001);
+    assert.notEqual(recoveryTime.actual,recoveryTime.legacy);
+    await p.evaluate(()=>showEditWorkout(0));
+    await p.locator('.we-note').first().fill('Note après séance');
+    await p.locator('#wsave').click();
+    assert.equal(await p.evaluate(()=>DB.workouts[0].endedAt),lastDoneAt);
+    await p.evaluate(()=>showEditWorkout(0));
+    await p.locator('.wsetdel').last().click();await p.locator('#wsave').click();
+    assert.equal(await p.evaluate(()=>DB.workouts[0].endedAt),undefined);
 
     // Undoing the latest OK must fall back to the previous remaining OK.
     await begin();await advance(20000);await validate(0);
     await advance(10000);await validate(1);
     await p.locator('.card:visible .chk').nth(1).click();
     assert.equal(await p.evaluate(()=>lastValidatedElapsed(DB.active)),20000);
+    assert.equal(await p.evaluate(()=>Object.values(DB.active.ex)[0][1].doneAt),undefined);
     await advance(600000);assert.equal((await finish()).dur,20);
 
     // Invalid edits clear both validation and its timestamp.
     await begin();await advance(10000);await validate(0,'0.5');
     await p.locator('.card:visible [data-act="stepr"][data-d="-1"]').first().click();
-    assert(await p.evaluate(()=>{const st=Object.values(DB.active.ex)[0][0];return !st.done&&st.doneElapsedMs==null;}));
+    assert(await p.evaluate(()=>{const st=Object.values(DB.active.ex)[0][0];return !st.done&&st.doneElapsedMs==null&&st.doneAt==null;}));
     for(const value of ['0','-1','7..5','Infinity','100001']){
       await p.locator('.card:visible .r').first().fill(value);
       await p.locator('.card:visible .chk').first().click();
@@ -79,6 +103,7 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(await p.evaluate(()=>DB.active),null);
     assert.equal(await p.evaluate(()=>DB.workouts.length),count+1);
     assert.equal(await p.evaluate(()=>DB.workouts.at(-1).dur),45);
+    assert.equal(await p.evaluate(()=>DB.workouts.at(-1).endedAt),await p.evaluate(()=>window.__time-AUTO_FINISH_MS+45000));
 
     // Simulate iOS suspending the page, then reopening it after the deadline.
     await begin();await advance(30000);await validate(0);
@@ -127,8 +152,9 @@ const server=http.createServer(async(req,res)=>{
 
     // No guessed duration for an old draft without validation timestamps.
     await begin();await advance(10000);await validate(0);
-    await p.evaluate(()=>{delete Object.values(DB.active.ex)[0][0].doneElapsedMs;window.__time=DB.active.start+AUTO_FINISH_MS;checkWorkoutTimeout();});
+    await p.evaluate(()=>{delete Object.values(DB.active.ex)[0][0].doneElapsedMs;delete Object.values(DB.active.ex)[0][0].doneAt;window.__time=DB.active.start+AUTO_FINISH_MS;checkWorkoutTimeout();});
     assert.equal(await p.evaluate(()=>DB.workouts.at(-1).dur),null);
+    assert.equal(await p.evaluate(()=>DB.workouts.at(-1).endedAt),undefined);
     assert.deepEqual(errors,[]);
     console.log('PASS: decimal reps, pauses, last-OK duration, completed clock freeze, undo, invalid edits, active backup, three-hour closure, reopen, deduplication, draft preservation and quota rollback.');
   }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}

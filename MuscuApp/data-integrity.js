@@ -50,9 +50,11 @@ const DKO_DATA=(()=>{
       if(s.done!=null&&typeof s.done!=='boolean')fail('Validation de série invalide');
       const clean={w:number(s.w,0,10000),r:number(s.r,0,100000),done:s.done!==false};
       if(active&&s.doneElapsedMs!=null)clean.doneElapsedMs=number(s.doneElapsedMs,0,31536000000);
+      if(active&&clean.done&&s.doneAt!=null)clean.doneAt=number(s.doneAt,0,8640000000000000,null,true);
       return clean;
     }).filter(s=>active||s.w!=null||s.r!=null)]));
     const clean={date:date(w.date),seance:id(w.seance),dur:number(w.dur,0,31536000),ex};
+    if(!active&&w.endedAt!=null)clean.endedAt=number(w.endedAt,0,8640000000000000,null,true);
     if(w.bodyWeightKg!=null)clean.bodyWeightKg=number(w.bodyWeightKg,1,1000);
     if(w.id!=null)clean.id=id(w.id);
     if(w.session){object(w.session,'Nom de séance');clean.session={title:str(w.session.title),tab:str(w.session.tab)};}

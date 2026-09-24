@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.51.0';
+const APP_VERSION='4.52.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -970,12 +970,11 @@ function muscleFatigue(mid){
   const rec=(MUSCLE_BY_ID[mid]||{rec:48}).rec;
   const now=Date.now();
   let f=0;
-  const since=new Date(now-rec*3.6e6);
-  const minIso=isoOf(since);
   for(const w of DB.workouts){
-    if(w.date<minIso)continue;
     const[y,mo,d]=w.date.split('-');
-    const t=new Date(+y,mo-1,+d,12).getTime();
+    const day=new Date(+y,mo-1,+d,12).getTime();
+    const exact=Number.isFinite(w.endedAt)&&w.endedAt<=now&&Math.abs(w.endedAt-day)<48*3.6e6;
+    const t=exact?w.endedAt:day;
     const ageH=Math.max(0,(now-t)/3.6e6);
     if(ageH>=rec)continue;
     let load=0;
@@ -1454,8 +1453,10 @@ function showEditWorkout(i){
       if(wv==null&&rv==null)return;
       (ex[exId]=ex[exId]||[]).push({w:wv,r:rv,done:true});
     });
+    const setsChanged=JSON.stringify(ex)!==JSON.stringify(w.ex);
     w.exNotes=cleanWorkoutNotes(Object.fromEntries([...sheet.querySelectorAll('.we-note')].map(input=>[input.dataset.ex,input.value])));
-    w.ex=ex;if(bodyInput)w.bodyWeightKg=bodyWeight;
+    w.ex=ex;if(setsChanged)delete w.endedAt;
+    if(bodyInput)w.bodyWeightKg=bodyWeight;
     persist();closeSheet();render();toast('Séance modifiée');
   });
 }
@@ -2680,12 +2681,14 @@ function finishWorkout({automatic=false}={}){
   const lastElapsed=lastValidatedElapsed(a);
   const dur=lastElapsed==null&&automatic?null:Math.round((lastElapsed??workoutElapsedMs(a))/1000);
   const ex={};
+  let endedAt=null;
   for(const exId in a.ex){
+    for(const set of a.ex[exId])if(set.done&&Number.isFinite(set.doneAt)&&set.doneAt<=Date.now())endedAt=Math.max(endedAt??0,set.doneAt);
     const sets=a.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null)).map(s=>({w:s.w,r:s.r,done:true}));
     if(sets.length)ex[exId]=sets;
   }
   const previousWorkouts=DB.workouts;
-  const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes),bodyWeightKg:a.bodyWeightKg??null});
+  const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes),bodyWeightKg:a.bodyWeightKg??null,...(endedAt==null?{}:{endedAt})});
   DB.workouts=[...DB.workouts,saved];
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
@@ -2862,6 +2865,7 @@ app.addEventListener('click',ev=>{
       if(r==null||r<=0){toast('Ajoute les répétitions avant de valider');reps.focus();return;}
       st.w=w;st.r=r;st.done=true;
       st.doneElapsedMs=workoutElapsedMs(DB.active);
+      st.doneAt=Date.now();
       row.classList.add('done');
       const _pb=comparableBest(exId,workoutExercise(DB.active,exId),DB.active.date),_isPR=st.w!=null&&_pb!=null&&st.w>_pb;
       if(_isPR){
@@ -2872,7 +2876,7 @@ app.addEventListener('click',ev=>{
       if(navigator.vibrate)navigator.vibrate(_isPR?[20,40,20]:10);
       startTimer(e?e.name:'Repos',e?restForExercise(e):null);
     }else{
-      st.done=false;delete st.doneElapsedMs;row.classList.remove('done','pr');
+      st.done=false;delete st.doneElapsedMs;delete st.doneAt;row.classList.remove('done','pr');
       const _t=row.querySelector('.prtag');if(_t)_t.remove();
     }
     persist();
@@ -2912,7 +2916,7 @@ app.addEventListener('input',ev=>{
   const invalidR=!!reps.value.trim()&&(st.r==null||st.r<=0||st.r>100000);
   weight.setAttribute('aria-invalid',String(invalidW));reps.setAttribute('aria-invalid',String(invalidR));
   if(st.done&&(invalidW||invalidR||st.r==null)){
-    st.done=false;delete st.doneElapsedMs;row.classList.remove('done','pr');row.querySelector('.prtag')?.remove();
+    st.done=false;delete st.doneElapsedMs;delete st.doneAt;row.classList.remove('done','pr');row.querySelector('.prtag')?.remove();
     card.classList.remove('complete');updateProgress();refreshWorkoutCoach(card,exId);
   }
   persist();
