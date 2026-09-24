@@ -56,6 +56,10 @@ pas un audit manuel complet d'accessibilite ni un essai sur iPhone physique.
 
 ## Points restant a traiter
 
+- Depuis 4.51, l'app ne chiffre pas la recuperation d'un muscle sans serie
+  validee connue. Une estimation chiffree repose toujours sur la date de la
+  seance (heure precise non disponible dans l'historique) et sur un modele
+  simplifie de decroissance de la fatigue, pas sur une mesure physiologique.
 - Les machines assistees reconnues sont exclues des records de charge generiques
   depuis 4.41. Depuis 4.45, leur progression tient compte du poids de corps
   saisi pour chaque seance, de l'assistance et des repetitions. Une seance

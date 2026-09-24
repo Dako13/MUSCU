@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.50.0';
+const APP_VERSION='4.51.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -999,14 +999,27 @@ function muscleFatigue(mid){
   }
   return Math.min(1,f);
 }
-function muscleRecovery(mid){return Math.round(100*(1-muscleFatigue(mid)))}
+function muscleHasHistory(mid){
+  for(const w of (DB.active?[...DB.workouts,DB.active]:DB.workouts)){
+    for(const [id,sets] of Object.entries(w.ex||{})){
+      if(!sets.some(set=>set.done))continue;
+      const e=workoutExercise(w,id);
+      if(e&&((e.musP||[]).includes(mid)||(e.musS||[]).includes(mid)))return true;
+    }
+  }
+  return false;
+}
+function muscleRecovery(mid){return muscleHasHistory(mid)?Math.round(100*(1-muscleFatigue(mid))):null}
 
 function seanceRecoveryScore(s){
   const counts={};
   for(const e of s.ex)for(const m of (e.musP||[]))counts[m]=(counts[m]||0)+1;
   let sum=0,n=0;
-  for(const m in counts){sum+=muscleRecovery(m)*counts[m];n+=counts[m]}
-  return n?Math.round(sum/n):100;
+  for(const m in counts){
+    const rec=muscleRecovery(m);if(rec==null)return null;
+    sum+=rec*counts[m];n+=counts[m];
+  }
+  return n?Math.round(sum/n):null;
 }
 function recommendSeance(){
   if(!PROGRAM.length||DB.active)return null;
@@ -1020,7 +1033,7 @@ function recommendSeance(){
   if(!info.length)return null;
   const ok=info.filter(x=>x.score>=75);
   const pool=ok.length?ok:info;
-  pool.sort((a,b)=>b.days!==a.days?b.days-a.days:b.score-a.score);
+  pool.sort((a,b)=>b.days!==a.days?b.days-a.days:(b.score??-1)-(a.score??-1));
   return pool[0];
 }
 
@@ -1181,6 +1194,7 @@ function homeHTML(){
   h+='<button class="cloud-status text-link" data-act="cloud" id="cloudStatus">Sauvegarde locale</button><div class="home-date">'+esc(now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'</div><div class="home-layout">';
   if(next){
     const sm=sessionMuscles(next),val=m=>sm.p.has(m)?1:(sm.s.has(m)?.45:0);
+    const recovery=seanceRecoveryScore(next);
     const side=DASH_SIDE.sid===next.id?DASH_SIDE.side:dominantSide(next);
     const muscles=[...sm.p].slice(0,3);
     const sets=next.ex.reduce((sum,e)=>sum+(Number(e.sets)||0),0);
@@ -1191,7 +1205,7 @@ function homeHTML(){
       +'<div class="stage-scene"><div class="stage-muscles">'+muscles.map(m=>'<div class="muscle-callout"><span></span><b>'+esc(mLabel(m))+'</b></div>').join('')+'</div>'
       +'<div class="stage-anatomy" role="img" aria-label="Muscles ciblés, vue '+(side==='front'?'de face':'de dos')+'">'+silhouette(side,val)+'</div>'
       +'<div class="stage-numbers"><div><b class="num">'+next.ex.length+'</b><span>exercices</span></div><div><b class="num">'+sets+'</b><span>séries prévues</span></div></div></div>'
-      +'<div class="stage-foot"><span class="stage-readiness"><i></i>Récup. estimée <b>'+seanceRecoveryScore(next)+' %</b></span>'
+      +'<div class="stage-foot"><span class="stage-readiness'+(recovery==null?' unrated':'')+'"><i></i>'+(recovery==null?'Récup. non estimée':'Récup. estimée <b>'+recovery+' %</b>')+'</span>'
       +'<div class="body-side" role="group" aria-label="Vue anatomique">'+['front','back'].map(v=>'<button data-act="bodyside" data-s="'+esc(next.id)+'" data-side="'+v+'" aria-pressed="'+(side===v)+'">'+(v==='front'?'Face':'Dos')+'</button>').join('')+'</div></div>'
       +'<button class="bigbtn stage-start" data-act="'+(active?'open':'quickstart')+'" data-s="'+esc(next.id)+'">'+uiIcon('play')+'<span>'+(active?'Reprendre la séance':'Commencer')+'</span>'
       +(active?'<span id="elapsed" class="num">'+elapsedStr()+'</span>':uiIcon('arrow-right'))+'</button></section>';
@@ -1249,10 +1263,11 @@ function seanceHTML(sid){
   if(!s)return homeHTML();
   const active=DB.active&&DB.active.seance===sid?DB.active:null;
   const exercises=activeExerciseList(s,active);
+  const recovery=seanceRecoveryScore(s);
   let h='<button class="back" data-act="home">'+uiIcon('chevron-left')+'<span>Séances</span></button>'
    +'<div class="shead"><div><div class="stag">'+esc(s.tab)+'</div><h2>'+esc(s.title)+'</h2>'
    +'<div class="smeta">'+exercises.length+' exercices · repos '+fmtT(s.rest??SETTINGS.rest)
-   +' · <span class="num">récup. '+seanceRecoveryScore(s)+' %</span></div></div>'
+   +' · <span class="num">récup. '+(recovery==null?'non estimée':recovery+' %')+'</span></div></div>'
    +(active?'':'<button class="editbtn" data-act="edit">Modifier</button>')+'</div>';
   if(active){
     const p=sessionProgress(active);
@@ -1505,18 +1520,18 @@ function bodyMapHTML(){
   const front=silhouette('front',muscleFatigue);
   const back=silhouette('back',muscleFatigue);
   let bars='';
-  const list=MUSCLES.map(m=>({m,rec:muscleRecovery(m.id)})).sort((a,b)=>a.rec-b.rec);
+  const list=MUSCLES.map(m=>({m,rec:muscleRecovery(m.id)})).sort((a,b)=>(a.rec??101)-(b.rec??101));
   for(const x of list){
     bars+='<div class="musrow"><span class="musl">'+esc(x.m.label)+'</span>'
-     +'<div class="musbar"><i style="width:'+x.rec+'%"></i></div>'
-     +'<span class="musv num">'+x.rec+' %</span></div>';
+     +'<div class="musbar"><i style="width:'+(x.rec??0)+'%"></i></div>'
+     +'<span class="musv num">'+(x.rec==null?'—':x.rec+' %')+'</span></div>';
   }
   return '<div class="chartcard"><div class="charttitle">Récupération musculaire estimée</div>'
    +'<div class="bodymaps">'
    +'<div class="bmap">'+front+'<div class="bcap">Face</div></div>'
    +'<div class="bmap">'+back+'<div class="bcap">Dos</div></div>'
    +'</div>'
-   +'<div class="maplegend">Estimation selon tes séries et le temps écoulé. Ton ressenti reste prioritaire.</div>'
+   +'<div class="maplegend">Estimation selon tes séries et le temps écoulé. — : aucune série connue. Ton ressenti reste prioritaire.</div>'
    +bars+'</div>';
 }
 /* ---------- démonstrations animées (SVG/SMIL) ---------- */

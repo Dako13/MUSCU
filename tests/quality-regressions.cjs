@@ -44,6 +44,23 @@ async function importMerge(page){
     browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL||'msedge'});
     let p=await open();
     const ids=await p.evaluate(()=>({sid:PROGRAM[0].id,ex:PROGRAM[0].ex[0].id}));
+    const recovery=await p.evaluate(()=>{
+      const session=PROGRAM[0],trained=new Set(session.ex.flatMap(e=>[...(e.musP||[]),...(e.musS||[])]));
+      const unknown=MUSCLES.find(m=>!trained.has(m.id)).id;
+      const empty={muscle:muscleRecovery(session.ex[0].musP[0]),session:seanceRecoveryScore(session),home:homeHTML(),map:bodyMapHTML()};
+      const before=DB.workouts;
+      DB.workouts=[snapshotWorkout({date:todayISO(),seance:session.id,ex:Object.fromEntries(session.ex.map(e=>[e.id,[{w:20,r:8,done:true}]]))})];
+      const observed={muscle:muscleRecovery(session.ex[0].musP[0]),session:seanceRecoveryScore(session),unknown:muscleRecovery(unknown),exported:exportPayload().recuperation_musculaire[unknown]};
+      DB.workouts=before;
+      return {empty,observed};
+    });
+    assert.equal(recovery.empty.muscle,null);
+    assert.equal(recovery.empty.session,null);
+    assert(recovery.empty.home.includes('Récup. non estimée'));
+    assert(recovery.empty.map.includes('aucune série connue'));
+    assert(recovery.observed.muscle<100&&recovery.observed.session<100);
+    assert.equal(recovery.observed.unknown,null);
+    assert.equal(recovery.observed.exported,null);
 
     // The refreshed home controls retain their real actions and visible assets.
     assert.equal(await p.locator('.wk-n').count(),7);
