@@ -53,6 +53,7 @@ const DKO_DATA=(()=>{
       return clean;
     }).filter(s=>active||s.w!=null||s.r!=null)]));
     const clean={date:date(w.date),seance:id(w.seance),dur:number(w.dur,0,31536000),ex};
+    if(w.bodyWeightKg!=null)clean.bodyWeightKg=number(w.bodyWeightKg,1,1000);
     if(w.id!=null)clean.id=id(w.id);
     if(w.session){object(w.session,'Nom de séance');clean.session={title:str(w.session.title),tab:str(w.session.tab)};}
     if(w.exMeta){object(w.exMeta,'Exercices enregistrés');clean.exMeta=Object.fromEntries(Object.entries(w.exMeta).map(([key,e])=>[id(key),meta(object(e,'Exercice enregistré'))]));}

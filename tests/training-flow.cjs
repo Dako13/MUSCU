@@ -98,6 +98,42 @@ async function settled(p){
     assert.equal(assistedChecks.summary.assisted,true);
     assert.equal(assistedChecks.summary.before.best.w,30);
     assert.equal(assistedChecks.summary.now.best.w,30);
+    const assistedProgress=await p.evaluate(()=>{
+      const original=DB.workouts,meta={name:'Dips (machine assistée)',unit:'kg'};
+      const make=(id,bodyWeightKg,w,r)=>({id,date:'2026-09-09',seance:'s_assist',bodyWeightKg,
+        ex:{assist:[{w,r,done:true}]},exMeta:{assist:meta}});
+      DB.workouts=[make('old',null,45,8),make('baseline',80,40,8),make('heavier',82,40,8),
+        make('fewer-reps',82,35,6),make('more-reps',82,35,8),make('lighter-body',80,35,8),
+        make('missing-weight',null,30,9),make('next',80,30,9)];
+      try{
+        const results=[...workoutProgressMap().values()].map(x=>({compared:x.compared,improved:x.improved}));
+        const valid=DKO_DATA.workout(DB.workouts[1]);
+        const invalid={...DB.workouts[1],bodyWeightKg:0};
+        let rejected=false;try{DKO_DATA.workout(invalid)}catch{rejected=true}
+        const summary=comparisonSummary({...make('now',81,30,9),date:'2026-09-10'});
+        return {results,weight:valid.bodyWeightKg,rejected,effective:summary.rows[0].now.effective,
+          lb:assistedEffective(make('lb',80,30,8),{w:30,r:8},'lb'),
+          recent:(()=>{const oldBody=BODY;BODY=[{date:'2026-09-05',vals:{poids:81}}];
+            try{return [recentBodyWeight('2026-09-09'),recentBodyWeight('2026-09-20')]}finally{BODY=oldBody}})()};
+      }finally{DB.workouts=original}
+    });
+    assert.deepEqual(assistedProgress.results,[
+      {compared:0,improved:0},{compared:0,improved:0},{compared:1,improved:1},
+      {compared:1,improved:0},{compared:1,improved:1},{compared:1,improved:0},
+      {compared:0,improved:0},{compared:1,improved:1}
+    ]);
+    assert.equal(assistedProgress.weight,80);
+    assert.equal(assistedProgress.rejected,true);
+    assert.equal(assistedProgress.effective,51);
+    assert.equal(assistedProgress.lb,null);
+    assert.deepEqual(assistedProgress.recent,[81,null]);
+    await p.evaluate(ex=>{DB.active.exMeta[ex].name='Dips (machine assistée)';render();},ids.ex);
+    await p.locator('#assistBodyWeight').fill('81,5');
+    assert.equal(await p.evaluate(()=>DKO_DATA.cloud({schema:1,programs:PROGRAMS,activeId:ACTIVE_PID,workouts:DB.workouts,active:DB.active,settings:SETTINGS,body:BODY}).active.bodyWeightKg),81.5);
+    await p.locator('#assistBodyWeight').fill('0');
+    assert.equal(await p.locator('#assistBodyWeight').getAttribute('aria-invalid'),'true');
+    assert.equal(await p.evaluate(()=>DB.active.bodyWeightKg),null);
+    await p.evaluate(({ex})=>{DB.active.exMeta[ex].name=EXO[ex].name;delete DB.active.bodyWeightKg;persist();render();},ids);
     const elapsedBounds=await p.evaluate(()=>({
       week:elapsedPeriodEndIso(false,new Date(2026,8,23)),
       month:elapsedPeriodEndIso(true,new Date(2026,8,23)),
@@ -245,12 +281,34 @@ async function settled(p){
     await p.locator('[data-act="esave"]').click();
     assert.equal(await p.evaluate(sid=>SEANCE[sid].rest,sid),null);
     assert.equal(await p.evaluate(sid=>restForExercise(EXO[SEANCE[sid].ex[0].id]),sid),personal);
+    await p.evaluate(sid=>{
+      SEANCE[sid].ex[0].name='Dips (machine assistée)';savePrograms();
+      BODY=[{date:todayISO(),vals:{poids:82}}];saveBody();
+      go('seance',sid);startWorkout(sid);
+    },sid);
+    assert.equal(await p.locator('#assistBodyWeight').inputValue(),'82');
+    await p.setViewportSize({width:320,height:700});await settled(p);
+    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await p.screenshot({path:path.join(out,'assisted-session.png')});
+    await p.locator('#assistBodyWeight').fill('82,5');
+    await card.locator('.w').first().fill('30');await card.locator('.r').first().fill('8');await card.locator('.chk').first().click();
+    await p.evaluate(()=>finishWorkout());
+    assert.equal(await p.evaluate(()=>DB.workouts.at(-1).bodyWeightKg),82.5);
+    assert.equal(await p.evaluate(()=>DKO_DATA.workout(exportPayload().seances.at(-1)).bodyWeightKg),82.5);
+    await p.evaluate(()=>{closeSheet();showEditWorkout(DB.workouts.length-1);});
+    assert.equal(await p.locator('#we-bodyweight').inputValue(),'82,5');
+    await p.locator('#we-bodyweight').fill('0');await p.locator('#wsave').click();
+    assert.equal(await p.locator('#we-bodyweight').getAttribute('aria-invalid'),'true');
+    await p.locator('#we-bodyweight').fill('81,5');await p.locator('#wsave').click();
+    assert.equal(await p.evaluate(()=>DB.workouts.at(-1).bodyWeightKg),81.5);
+    assert.equal(await p.evaluate(()=>DKO_DATA.cloud({schema:1,programs:PROGRAMS,activeId:ACTIVE_PID,workouts:DB.workouts,active:DB.active,settings:SETTINGS,body:BODY}).workouts.at(-1).bodyWeightKg),81.5);
     const otherUser=await browser.newPage({serviceWorkers:'block'});
     await otherUser.addInitScript(()=>localStorage.setItem('dako_onboarded','1'));
     await otherUser.goto('http://127.0.0.1:'+server.address().port+'/');
     await otherUser.locator('#splash').waitFor({state:'detached'});
     assert.equal(await otherUser.evaluate(sid=>!!SEANCE[sid],sid),false);
     assert.equal(await otherUser.evaluate(()=>SETTINGS.rest),180);
+    assert.equal(await otherUser.evaluate(()=>BODY.length),0);
     await otherUser.close();
     assert.deepEqual(errors,[]);
     console.log('PASS: prior series, unit compatibility, workout/session/exercise rest precedence, creation/edit/validation/reset, dirty guard, timer/reload, backup schema, user isolation, records, summary, layouts and accessibility.');

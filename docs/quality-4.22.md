@@ -56,10 +56,12 @@ pas un audit manuel complet d'accessibilite ni un essai sur iPhone physique.
 
 ## Points restant a traiter
 
-- Les machines assistees reconnues sont exclues des records et scores generiques
-  depuis 4.41, et leur historique indique l'assistance. Un modele complet
-  devrait encore integrer le poids de corps et les repetitions pour juger
-  automatiquement la performance.
+- Les machines assistees reconnues sont exclues des records de charge generiques
+  depuis 4.41. Depuis 4.45, leur progression tient compte du poids de corps
+  saisi pour chaque seance, de l'assistance et des repetitions. Une seance
+  ancienne sans poids de corps reste visible mais ne produit pas de score
+  automatique ; l'effort estime (poids moins assistance) n'est pas une mesure
+  biomecanique exacte de la machine.
 - Certaines machines generiques ne permettent pas de connaitre leur chargement
   exact sans leur gamme/modele. Les marques presentes varient selon le club.
 - Les conseils techniques et visuels demandent encore une verification par

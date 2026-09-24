@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.44.0';
+const APP_VERSION='4.45.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -388,6 +388,12 @@ function bodySeries(id){return BODY.filter(b=>b.vals[id]!=null).map(b=>({date:b.
 function lastVal(id){const s=bodySeries(id);return s.length?s[s.length-1].v:null}
 function prevVal(id){const s=bodySeries(id);return s.length>1?s[s.length-2].v:null}
 function firstVal(id){const s=bodySeries(id);return s.length?s[0].v:null}
+function recentBodyWeight(date){
+  const measured=bodySeries('poids').filter(b=>b.date<=date).at(-1);
+  if(!measured||!Number.isFinite(measured.v)||measured.v<1||measured.v>1000)return null;
+  const days=(Date.parse(date+'T00:00:00Z')-Date.parse(measured.date+'T00:00:00Z'))/86400000;
+  return days>=0&&days<=14?measured.v:null;
+}
 
 /* ================== BIBLIOTHÈQUE DE MACHINES ================== */
 /* Classées par marque (b) et muscles ciblés (p=principaux, s=secondaires).
@@ -760,7 +766,7 @@ function exHistory(exId){
   for(const w of DB.workouts){
     if(!w.ex||!w.ex[exId])continue;
     const sets=w.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null));
-    if(sets.length)out.push({date:w.date,sets,note:workoutNote(w,exId)});
+    if(sets.length)out.push({date:w.date,sets,note:workoutNote(w,exId),bodyWeightKg:w.bodyWeightKg??null});
   }
   return out;
 }
@@ -789,7 +795,10 @@ function comparisonSummary(current){
       if(!current.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))a.vol=null;
       if(!previous.ex[id].filter(s=>s.done).every(s=>s.w!=null&&s.r!=null))b.vol=null;
       const assisted=isAssistedExercise(now);
-      rows.push({name:now.name,unit:now.unit||'kg',assisted,now:{...a,best:topComparableSet(current.ex[id],assisted)},before:{...b,best:topComparableSet(previous.ex[id],assisted)}});
+      const nowBest=topComparableSet(current.ex[id],assisted),beforeBest=topComparableSet(previous.ex[id],assisted);
+      rows.push({name:now.name,unit:now.unit||'kg',assisted,
+        now:{...a,best:nowBest,effective:assisted?assistedEffective(current,nowBest,now.unit||'kg'):null},
+        before:{...b,best:beforeBest,effective:assisted?assistedEffective(previous,beforeBest,before.unit||'kg'):null}});
     }
   }
   return rows.length?{date:previous.date,rows}:null;
@@ -814,6 +823,10 @@ function lastSessionLine(exId){
 function maxW(sets){const ws=sets.map(s=>s.w).filter(w=>w!=null);return ws.length?Math.max(...ws):null}
 function isAssistedExercise(e){return /(?:assisted pull-up|dips?\s*\(machine assistée\)|tractions? assistées?)/i.test(e?.name||'')}
 function assistanceMin(sets){const ws=sets.filter(s=>s.done&&s.w!=null).map(s=>s.w);return ws.length?Math.min(...ws):null}
+function assistedEffective(w,best,unit='kg'){
+  const weight=w?.bodyWeightKg;
+  return unit==='kg'&&Number.isFinite(weight)&&weight>=1&&weight<=1000&&best?.w!=null&&weight>best.w?weight-best.w:null;
+}
 function bestEver(exId){const h=exHistory(exId);if(isAssistedExercise(historicalExercises()[exId]))return null;let b=null;for(const en of h){const m=maxW(en.sets);if(m!=null&&(b==null||m>b))b=m}return b}
 function workoutStats(w){
   let vol=0,sets=0;
@@ -838,15 +851,17 @@ function workoutProgressMap(){
   for(const {w} of ordered){
     const outcomes=new Map();let compared=0,improved=0;
     for(const [id,sets] of Object.entries(w.ex||{})){
-      const meta=w.exMeta?.[id],best=topComparableSet(sets);
-      if(!meta||!best||isAssistedExercise(meta))continue;
+      const meta=w.exMeta?.[id],assisted=isAssistedExercise(meta),best=topComparableSet(sets,assisted);
+      if(!meta||!best)continue;
+      const effective=assisted?assistedEffective(w,best,meta.unit||'kg'):best.w;
+      if(assisted&&effective==null)continue;
       const prior=previous.get(id),unit=meta.unit||'kg';
-      if(prior&&prior.name===meta.name&&prior.unit===unit&&((best.w==null)===(prior.best.w==null))){
-        const up=best.w==null?best.r>prior.best.r:
-          best.w>=prior.best.w&&best.r>=prior.best.r&&(best.w>prior.best.w||best.r>prior.best.r);
+      if(prior&&prior.name===meta.name&&prior.unit===unit&&prior.assisted===assisted&&((effective==null)===(prior.effective==null))){
+        const up=effective==null?best.r>prior.best.r:
+          effective>=prior.effective&&best.r>=prior.best.r&&(effective>prior.effective||best.r>prior.best.r);
         outcomes.set(id,up);compared++;if(up)improved++;
       }
-      previous.set(id,{name:meta.name,unit,best});
+      previous.set(id,{name:meta.name,unit,best,effective,assisted});
     }
     results.set(w,{compared,improved,outcomes});
   }
@@ -1236,6 +1251,7 @@ function seanceHTML(sid){
      +'<button class="finish" data-act="finish">Terminer</button></div></div>'
      +'<div class="pmeta"><span>Progression</span><span class="num" id="pdone">'+p.done+' / '+p.total+' séries</span></div>'
      +'<div class="pbar"><i id="pfill" style="width:'+(p.total?Math.round(100*p.done/p.total):0)+'%"></i></div>';
+    if(exercises.some(isAssistedExercise))h+='<label class="assist-weight"><span>Poids du jour · kg</span><input id="assistBodyWeight" type="text" inputmode="decimal" placeholder="—" value="'+(active.bodyWeightKg==null?'':fmtN(active.bodyWeightKg))+'" aria-label="Poids de corps pour les exercices assistés"></label>';
   }else{
     h+='<button class="bigbtn" data-act="start">Démarrer la séance</button>';
   }
@@ -1310,7 +1326,7 @@ function progHTML(e){
   const best=bestEver(e.id);
   if(best!=null)out+='<div class="sparkcap">Record : '+fmtN(best)+' kg</div>';
   for(const en of h.slice(-8).reverse()){
-    out+='<div class="hrow"><span class="hdate num">'+(en.date===todayISO()?'Aujourd’hui':fmtDateShort(en.date))+'</span>'
+    out+='<div class="hrow"><span class="hdate num">'+(en.date===todayISO()?'Aujourd’hui':fmtDateShort(en.date))+(assisted&&en.bodyWeightKg?' · '+fmtN(en.bodyWeightKg)+' kg':'')+'</span>'
      +'<span class="hsets num">'+en.sets.map(s=>(s.w!=null?fmtN(s.w):'—')+'×'+(s.r!=null?fmtN(s.r):'—')).join(' · ')+'</span></div>';
     out+=workoutNoteHTML(en.note);
   }
@@ -1344,6 +1360,7 @@ function historyHTML(embed){
   DB.workouts.slice().map((w,i)=>({w,i})).reverse().forEach(({w,i})=>{
     const s=w.session||SEANCE[w.seance];const st=workoutStats(w),pr=progress.get(w);const musHTML=workoutMusclesHTML(w);
     let det='';
+    if(w.bodyWeightKg!=null&&workoutExerciseIds(w).some(id=>isAssistedExercise(workoutExercise(w,id))))det+='<div class="sp">Poids du jour · '+fmtN(w.bodyWeightKg)+' kg</div>';
     for(const exId of workoutExerciseIds(w)){
       const sets=(w.ex[exId]||[]).filter(x=>x.done&&(x.w!=null||x.r!=null));
       const note=workoutNote(w,exId);
@@ -1368,7 +1385,8 @@ function historyHTML(embed){
 }
 function showEditWorkout(i){
   const w=DB.workouts[i];if(!w)return;
-  let body='';
+  let body=workoutExerciseIds(w).some(id=>isAssistedExercise(workoutExercise(w,id)))
+    ?'<div class="efield"><label for="we-bodyweight">Poids de corps ce jour-là (kg)</label><input id="we-bodyweight" type="text" inputmode="decimal" value="'+(w.bodyWeightKg==null?'':fmtN(w.bodyWeightKg))+'"></div>':'';
   for(const exId of workoutExerciseIds(w)){
     body+='<div class="rectitle">'+esc(workoutExercise(w,exId)?.name||exId)+'</div>';
     (w.ex[exId]||[]).forEach((st,j)=>{
@@ -1385,6 +1403,11 @@ function showEditWorkout(i){
   openSheet();
   sheet.querySelectorAll('.wsetdel').forEach(b=>b.addEventListener('click',()=>{b.closest('.wrow').remove()}));
   document.getElementById('wsave').addEventListener('click',()=>{
+    const bodyInput=document.getElementById('we-bodyweight');
+    const bodyWeight=bodyInput?numOrNull(bodyInput.value):null;
+    if(bodyInput&&bodyInput.value.trim()&&(bodyWeight==null||bodyWeight<1||bodyWeight>1000)){
+      bodyInput.setAttribute('aria-invalid','true');bodyInput.focus();toast('Vérifie le poids de corps');return;
+    }
     const invalid=[...sheet.querySelectorAll('.we')].find(input=>{
       if(!input.value.trim())return false;
       const n=numOrNull(input.value);
@@ -1400,7 +1423,8 @@ function showEditWorkout(i){
       (ex[exId]=ex[exId]||[]).push({w:wv,r:rv,done:true});
     });
     w.exNotes=cleanWorkoutNotes(Object.fromEntries([...sheet.querySelectorAll('.we-note')].map(input=>[input.dataset.ex,input.value])));
-    w.ex=ex;persist();closeSheet();render();toast('Séance modifiée');
+    w.ex=ex;if(bodyInput)w.bodyWeightKg=bodyWeight;
+    persist();closeSheet();render();toast('Séance modifiée');
   });
 }
 
@@ -2537,7 +2561,7 @@ function startWorkout(sid){
   }
   stopTimer();
   FOCUS_EX=null;
-  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{},exerciseOrder:SEANCE[sid].ex.map(e=>e.id)});
+  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{},bodyWeightKg:recentBodyWeight(todayISO()),exerciseOrder:SEANCE[sid].ex.map(e=>e.id)});
   persist();render();
 }
 function elapsedStr(){
@@ -2614,7 +2638,7 @@ function finishWorkout({automatic=false}={}){
     if(sets.length)ex[exId]=sets;
   }
   const previousWorkouts=DB.workouts;
-  const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes)});
+  const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes),bodyWeightKg:a.bodyWeightKg??null});
   DB.workouts=[...DB.workouts,saved];
   DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
   DB.active=null;persist();
@@ -2813,6 +2837,13 @@ app.addEventListener('click',ev=>{
 });
 app.addEventListener('input',ev=>{
   if(ev.target.id==='es-rest'){updateEditorRest();return;}
+  if(ev.target.id==='assistBodyWeight'){
+    if(!DB.active)return;
+    const value=numOrNull(ev.target.value),invalid=!!ev.target.value.trim()&&(value==null||value<1||value>1000);
+    ev.target.setAttribute('aria-invalid',String(invalid));
+    DB.active.bodyWeightKg=invalid?null:value;
+    persist();return;
+  }
   if(ev.target.matches('.session-note')){
     const exId=ev.target.dataset.ex;
     if(!DB.active||!Object.hasOwn(DB.active.ex,exId))return;
@@ -2986,7 +3017,7 @@ function showSummary(o){
     if(entries.length)recs+='<div class="recwrap"><div class="rectitle">'+(first?'Premières références':'Records de charge')+'</div>'
       +entries.map(r=>'<div class="recline"><b>'+fmtN(r.w)+' kg</b> · '+esc(r.name)+(r.prev!=null?' (préc. '+fmtN(r.prev)+')':'')+'</div>').join('')+'</div>';
   }
-  const metric=(value,unit,assisted)=>value.sets+' série'+(value.sets>1?'s':'')+(value.best?' · '+(value.best.w==null?'':fmtN(value.best.w)+' '+esc(unit)+(assisted?' d’assistance':'')+' × ')+fmtN(value.best.r)+' reps':'');
+  const metric=(value,unit,assisted)=>value.sets+' série'+(value.sets>1?'s':'')+(value.best?' · '+(value.best.w==null?'':fmtN(value.best.w)+' '+esc(unit)+(assisted?' d’assistance':'')+' × ')+fmtN(value.best.r)+' reps'+(assisted&&value.effective!=null?' · poids - assistance ≈ '+fmtN(value.effective)+' kg':''):'');
   const comparison=o.comparison?'<section class="summary-comparison"><h3>Par rapport au '+esc(fmtDateShort(o.comparison.date))+'</h3><p>Exercices communs · séries validées</p>'
     +'<table><thead><tr><th scope="col">Exercice</th><th scope="col">Avant</th><th scope="col">Aujourd’hui</th></tr></thead><tbody>'
     +o.comparison.rows.map(r=>'<tr><th scope="row">'+esc(r.name)+'</th><td>'+metric(r.before,r.unit,r.assisted)+'</td><td>'+metric(r.now,r.unit,r.assisted)+'</td></tr>').join('')+'</tbody></table></section>':'';
