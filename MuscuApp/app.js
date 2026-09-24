@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.52.0';
+const APP_VERSION='4.53.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2540,7 +2540,7 @@ function programsHTML(){
      +'<div class="pname">'+esc(p.name)+(on?'<span class="recobadge">ACTIF</span>':'')+'</div>'
      +'<div class="smeta">'+nS+' séance'+(nS>1?'s':'')+' · '+nE+' exercice'+(nE>1?'s':'')+'</div></div></div>'
      +'<div class="pactions">'
-     +(on?'<span class="pa ghosted">Programme actif</span>':'<button class="pa pri" data-act="pactivate" data-p="'+esc(p.id)+'">Activer</button>')
+     +(on?'':'<button class="pa pri" data-act="pactivate" data-p="'+esc(p.id)+'">Activer</button>')
      +'<button class="pa" data-act="prename" data-p="'+esc(p.id)+'">Renommer</button>'
      +'<button class="pa" data-act="pdup" data-p="'+esc(p.id)+'">Dupliquer</button>'
      +(PROGRAMS.length>1?'<button class="pa danger" data-act="pdel" data-p="'+esc(p.id)+'">Supprimer</button>':'')
@@ -2558,10 +2558,8 @@ function programsHTML(){
        +'<div class="scard-body">'
        +'<div class="srow"><div class="ehl"><span class="grip" title="Glisser pour réordonner">⠿</span><span class="stag">'+esc(s.tab)+'</span></div>'
        +'<div class="ebtns">'
-       +'<button class="ebtn" data-act="seup" data-s="'+esc(s.id)+'" title="Monter">↑</button>'
-       +'<button class="ebtn" data-act="sedown" data-s="'+esc(s.id)+'" title="Descendre">↓</button>'
-       +'<button class="ebtn" data-act="editseance" data-s="'+esc(s.id)+'" title="Modifier">✎</button>'
-       +'<button class="ebtn" data-act="sdelseance" data-s="'+esc(s.id)+'" title="Supprimer">✕</button>'
+       +'<button class="icon-button" data-act="editseance" data-s="'+esc(s.id)+'" aria-label="Modifier : '+esc(s.title)+'" data-tooltip="Modifier">'+uiIcon('notebook-pen')+'</button>'
+       +'<button class="icon-button" data-act="sessionactions" data-s="'+esc(s.id)+'" aria-label="Actions : '+esc(s.title)+'" data-tooltip="Actions" aria-haspopup="dialog">'+uiIcon('settings-2')+'</button>'
        +'</div></div>'
        +'<div class="sname">'+esc(s.title)+'</div>'
        +'<div class="smeta">'+(s.ex?s.ex.length:0)+' exercice'+((s.ex&&s.ex.length>1)?'s':'')+(s.sub?' · '+esc(s.sub):'')+'</div>'
@@ -2573,6 +2571,28 @@ function programsHTML(){
   }
   h+='<button class="bigbtn ghost" data-act="saddseance">+ Nouvelle séance</button>';
   return h;
+}
+function showSessionActions(sid){
+  const sessions=activeProgram()?.seances||[],index=sessions.findIndex(s=>s.id===sid);
+  if(index<0)return;
+  const s=sessions[index];
+  sheet.innerHTML='<h2>'+esc(s.title)+'</h2><p class="sp">'+esc(s.tab)+' · '+(index+1)+' / '+sessions.length+'</p>'
+    +'<div class="session-actions">'
+    +'<button class="sbtn" data-session-move="-1"'+(index===0?' disabled':'')+'>'+uiIcon('arrow-up')+'Monter la séance</button>'
+    +'<button class="sbtn" data-session-move="1"'+(index===sessions.length-1?' disabled':'')+'>'+uiIcon('arrow-down')+'Descendre la séance</button>'
+    +'<button class="sbtn session-delete" id="sessionDelete">'+uiIcon('trash-2')+'Supprimer la séance</button></div>';
+  openSheet();
+  const restoreFocus=()=>[...app.querySelectorAll('[data-act="sessionactions"]')].find(b=>b.dataset.s===sid)?.focus({preventScroll:true});
+  sheet.querySelectorAll('[data-session-move]').forEach(button=>button.addEventListener('click',()=>{
+    moveSeance(sid,+button.dataset.sessionMove);closeSheet();render();restoreFocus();toast('Ordre des séances modifié');
+  }));
+  document.getElementById('sessionDelete').addEventListener('click',()=>{
+    if(!window.confirm('Supprimer cette séance du programme ? L’historique des séances réalisées est conservé.'))return;
+    deleteSeance(sid);closeSheet();render();
+    const next=app.querySelectorAll('[data-act="sessionactions"]');
+    (next[Math.min(index,next.length-1)]||app.querySelector('[data-act="saddseance"]'))?.focus({preventScroll:true});
+    toast('Séance supprimée du programme');
+  });
 }
 function showNewProgram(){
   sheet.innerHTML='<h2>Nouveau programme</h2>'
@@ -2781,6 +2801,7 @@ app.addEventListener('click',ev=>{
   else if(act==='pdup'){duplicateProgram(actEl.dataset.p);toast('Programme dupliqué');render();}
   else if(act==='pdel'){if(window.confirm('Supprimer ce programme ? (l’historique de séances déjà réalisées est conservé)')){if(deleteProgram(actEl.dataset.p))render();}}
   else if(act==='editseance')go('edit',actEl.dataset.s);
+  else if(act==='sessionactions')showSessionActions(actEl.dataset.s);
   else if(act==='saddseance'){const sid=addSeance();if(sid)go('edit',sid);}
   else if(act==='sdelseance'){if(window.confirm('Supprimer cette séance du programme ?')){deleteSeance(actEl.dataset.s);render();}}
   else if(act==='seup'){moveSeance(actEl.dataset.s,-1);render();}
