@@ -1,7 +1,8 @@
 /* Service worker — cache hors ligne.
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.53.0');
+importScripts('./exercise-media.js');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.54.0');
 const ASSETS=[
   './',
   './index.html',
@@ -9,6 +10,8 @@ const ASSETS=[
   './app.overrides.css',
   './app.js',
   './exercise-catalog.js',
+  './exercise-media.js',
+  ...EXERCISE_PHOTOS.flatMap(p=>[0,1].map(frame=>'./images/exercises/'+p.id+'/'+frame+'.jpg')),
   './data-integrity.js',
   './supabase-config.js',
   './cloud-sync.js',
@@ -42,7 +45,7 @@ self.addEventListener('fetch',e=>{
   // Never persist OAuth callback URLs containing single-use authorization codes.
   if(url.searchParams.has('code')||url.searchParams.has('error'))return;
   const p=url.pathname;
-  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/exercise-catalog.js')||p.endsWith('/data-integrity.js')||p.endsWith('/supabase-config.js')||p.endsWith('/cloud-sync.js')||p.endsWith('/cloud-ui.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
+  const shell=p.endsWith('/')||p.endsWith('/index.html')||p.endsWith('/app.js')||p.endsWith('/exercise-catalog.js')||p.endsWith('/exercise-media.js')||p.endsWith('/data-integrity.js')||p.endsWith('/supabase-config.js')||p.endsWith('/cloud-sync.js')||p.endsWith('/cloud-ui.js')||p.endsWith('/app.css')||p.endsWith('/app.overrides.css');
   if(shell||/\/coach(?:-sync|-ui)?\.(js|css)$/.test(p)){
     /* réseau d'abord : la dernière version s'affiche dès qu'on est en ligne (repli cache hors-ligne) */
     e.respondWith(

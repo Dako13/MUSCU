@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.53.0';
+const APP_VERSION='4.54.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -894,70 +894,25 @@ function sessionProgress(a){
   return{done,total};
 }
 function ytURL(e){return 'https://www.youtube.com/results?search_query='+encodeURIComponent(e.yt||e.name+' technique')}
-/* Photos reelles des exercices — source free-exercise-db (Unlicense, domaine public), via CDN jsDelivr. Mapping fait main FR vers base. */
-const EXIMG_BASE='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/';
+/* Exact aliases only: a movement photo must not stand in for another variant. */
+const EXIMG_BASE='./images/exercises/';
 function exImgKey(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
-const EXIMG={
- 'row appui poitrine unilateral neutre':'Seated_Cable_Rows/0.jpg',
- 'tirage triangle serre':'Seated_Cable_Rows/0.jpg',
- 'diverging seated row unilateral':'Seated_Cable_Rows/0.jpg',
- 'seated row':'Seated_Cable_Rows/0.jpg',
- 'tirage horizontal':'Seated_Cable_Rows/0.jpg',
- 'face pull corde':'Face_Pull/0.jpg',
- 'face pull poulie corde':'Face_Pull/0.jpg',
- 'rear delt fly cable poulies croisees':'Reverse_Machine_Flyes/0.jpg',
- 'rear delt fly halteres penche':'Seated_Bent-Over_Rear_Delt_Raise/0.jpg',
- 'oiseau reverse fly halteres':'Seated_Bent-Over_Rear_Delt_Raise/0.jpg',
- 'developpe couche halteres':'Dumbbell_Bench_Press/0.jpg',
- 'press matrix':'Leverage_Chest_Press/0.jpg',
- 'chest press':'Leverage_Chest_Press/0.jpg',
- 'iso lateral bench press':'Leverage_Chest_Press/0.jpg',
- 'press incline machine':'Leverage_Incline_Chest_Press/0.jpg',
- 'iso lateral incline press':'Leverage_Incline_Chest_Press/0.jpg',
- 'developpe incline halteres':'Incline_Dumbbell_Press/0.jpg',
- 'pec fly cable allonge sur banc':'Cable_Crossover/0.jpg',
- 'cable croise poulie haute':'Cable_Crossover/0.jpg',
- 'cable crossover technogym':'Cable_Crossover/0.jpg',
- 'ecarte incline halteres':'Cable_Crossover/0.jpg',
- 'pec fly':'Cable_Crossover/0.jpg',
- 'elevation laterale unilaterale cable poulie bassin':'Side_Lateral_Raise/0.jpg',
- 'elevation laterale haltere lean away':'Side_Lateral_Raise/0.jpg',
- 'elevation laterale cable':'Side_Lateral_Raise/0.jpg',
- 'elevations laterales halteres':'Side_Lateral_Raise/0.jpg',
- 'elevations laterales poulie':'Side_Lateral_Raise/0.jpg',
- 'press epaules machine':'Machine_Shoulder_Military_Press/0.jpg',
- 'developpe militaire halteres':'Seated_Dumbbell_Press/0.jpg',
- 'pushdown barre':'Triceps_Pushdown/0.jpg',
- 'extension triceps corde poulie':'Triceps_Pushdown/0.jpg',
- 'overhead triceps corde':'Cable_Rope_Overhead_Triceps_Extension/0.jpg',
- 'overhead triceps':'Standing_Dumbbell_Triceps_Extension/0.jpg',
- 'tirage vertical barre pronation':'Wide-Grip_Lat_Pulldown/0.jpg',
- 'tirage vertical unilateral cable banc assis':'Wide-Grip_Lat_Pulldown/0.jpg',
- 'lat pulldown':'Wide-Grip_Lat_Pulldown/0.jpg',
- 'pull over cable finisher':'Straight-Arm_Pulldown/0.jpg',
- 'curl alterne haltere':'Dumbbell_Alternate_Bicep_Curl/0.jpg',
- 'curl pupitre matrix unilateral':'Preacher_Curl/0.jpg',
- 'curl pupitre larry scott machine':'Preacher_Curl/0.jpg',
- 'curl marteau halteres':'Hammer_Curls/0.jpg',
- 'curl incline halteres':'Dumbbell_Bicep_Curl/0.jpg',
- 'dips machine matrix':'Dips_-_Triceps_Version/0.jpg',
- 'presse a cuisses':'Leg_Press/0.jpg',
- 'leg extension':'Leg_Extensions/0.jpg',
- 'leg curl':'Lying_Leg_Curls/0.jpg',
- 'hack squat':'Hack_Squat/0.jpg',
- 'souleve de terre roumain barre':'Romanian_Deadlift/0.jpg',
- 'hip thrust barre':'Barbell_Hip_Thrust/0.jpg',
- 'hip thrust machine':'Barbell_Hip_Thrust/0.jpg',
- 'rowing buste penche barre':'Reverse_Grip_Bent-Over_Rows/0.jpg',
- 'rowing unilateral haltere banc':'Bent_Over_Two-Dumbbell_Row/0.jpg',
- 'mollets machine squat guide':'Standing_Calf_Raises/0.jpg',
- 'mollets debout standing calf':'Standing_Calf_Raises/0.jpg',
- 'abdominal crunch machine':'Cable_Crunch/0.jpg',
- 'crunch poulie haute corde':'Cable_Crunch/0.jpg'
-};
-function exImage(name){const k=exImgKey(name);return EXIMG[k]?EXIMG_BASE+EXIMG[k]:null;}
-function exPhotoHTML(name){const u=exImage(name);return u?'<div class="exphoto"><img src="'+u+'" alt="" loading="lazy" decoding="async"></div>':'';}
-function bindExPhoto(){sheet.querySelectorAll('.exphoto img').forEach(im=>{const w=im.closest('.exphoto');const ok=()=>{if(w)w.classList.add('loaded')};if(im.complete&&im.naturalWidth)ok();im.addEventListener('load',ok,{once:true});im.addEventListener('error',()=>{if(w)w.remove();},{once:true});});}
+const EXIMG=new Map((typeof EXERCISE_PHOTOS==='undefined'?[]:EXERCISE_PHOTOS).flatMap(p=>p.names.map(name=>[name,p.id])));
+function exImage(name,frame=0){const id=EXIMG.get(exImgKey(name).replace(/ (generique|charge libre)$/,''));return id?EXIMG_BASE+id+'/'+frame+'.jpg':null;}
+function exPhotoHTML(name){
+  if(!exImage(name))return '';
+  return '<div class="movement-photos">'+[0,1].map(frame=>'<figure><img src="'+exImage(name,frame)+'" alt="'+esc(name)+' · position '+(frame+1)+'" loading="lazy" decoding="async"><figcaption>Position '+(frame+1)+'</figcaption></figure>').join('')+'</div>';
+}
+function exercisePreviewHTML(m){
+  const u=exImage(m.n);
+  return '<span class="exercise-preview" aria-hidden="true">'+uiIcon('dumbbell')+(u?'<img src="'+u+'" alt="" width="64" height="64" loading="lazy" decoding="async">':'')+'</span>';
+}
+function bindExPhoto(root=sheet){
+  root.querySelectorAll('.movement-photos img,.exercise-preview img').forEach(im=>{
+    const fail=()=>{const figure=im.closest('figure');if(figure)figure.remove();else im.remove();};
+    if(im.complete&&!im.naturalWidth)fail();else im.addEventListener('error',fail,{once:true});
+  });
+}
 function weekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x}
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 
@@ -1138,6 +1093,7 @@ function render(){
   else if(route.view==='coach')app.innerHTML=window.DKOCoachUI?.html()||'';
   else app.innerHTML=homeHTML();
   labelFields(app);
+  bindExPhoto(app);
   syncExerciseFocus();
   window.DKOCloudUI?.refreshBadge?.();
   if(route.view==='coach')window.DKOCoachUI?.mount();
@@ -1374,6 +1330,13 @@ function workoutMusclesHTML(w){
 
 /* ---------- historique ---------- */
 function suiviHTML(){
+  if(!DB.workouts.length){
+    const resume=DB.active&&SEANCE[DB.active.seance];
+    return '<div class="top"><h1>Suivi</h1><button class="hbtn" data-act="data">Données</button></div>'
+      +'<section class="followup-empty">'+uiIcon('chart-no-axes-combined')+'<h2>Ta progression commence ici</h2>'
+      +'<p>Ta première séance terminée apparaîtra ici.</p>'
+      +'<button class="bigbtn" data-act="'+(resume?'open':'home')+'"'+(resume?' data-s="'+esc(DB.active.seance)+'"':'')+'>'+uiIcon(resume?'play':'arrow-right')+'<span>'+(resume?'Reprendre ma séance':'Choisir ma séance')+'</span></button></section>'+bilanHTML();
+  }
   let h='<div class="top"><h1>Suivi</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>'
    +(SUIVI==='stats'?'':suiviSummaryHTML())
    +'<div class="seg suiviseg">'
@@ -2387,6 +2350,7 @@ function machinesHTML(){
     if(ids&&!all.some(x=>ids.includes(x)))return;
     const searchStr=machineSearch(m),visible=matchesSearch(searchStr,q);if(visible)n++;
     h+='<button class="mrow"'+(visible?'':' hidden')+' data-act="personalexercise" data-key="'+esc(m.key)+'" data-search="'+esc(searchStr)+'">'
+     +exercisePreviewHTML(m)
      +'<span class="mrow-main"><span class="mrow-n">'+esc(m.n)+'</span><span class="mrow-mu">'+esc((m.p||[]).map(mLabel).join(', '))+'</span></span>'
      +'<span class="mrow-b">Personnel</span></button>';
   });
@@ -2400,6 +2364,7 @@ function machinesHTML(){
     const searchStr=machineSearch(m);
     const visible=matchesSearch(searchStr,q);if(visible)n++;
     h+='<button class="mrow"'+(visible?'':' hidden')+' data-act="machine" data-m="'+i+'" data-search="'+esc(searchStr)+'">'
+     +exercisePreviewHTML(m)
      +'<div class="mrow-main"><div class="mrow-n">'+esc(m.n)+'</div><div class="mrow-mu">'+esc(mus)+' · '+esc(LOAD_SHORT[machineLoad(m)])+'</div></div>'
      +'<span class="mrow-b">'+esc(m.b)+'</span></button>';
   });
@@ -2410,7 +2375,7 @@ function machinesHTML(){
 function machineInfoHTML(m){
   if(m.personal){
     const e=m.exercise;
-    return '<div class="sp">Exercice personnel · '+esc((e.musP||[]).map(mLabel).join(', ')||'Muscles non renseignés')+'</div>'
+    return '<div class="sp">Exercice personnel · '+esc((e.musP||[]).map(mLabel).join(', ')||'Muscles non renseignés')+'</div>'+exPhotoHTML(e.name)
       +(e.notes?'<div class="rectitle">Consignes techniques</div><div class="notes">'+esc(e.notes)+'</div>':'');
   }
   const chips=(m.p||[]).map(x=>'<span class="mchip pri">'+esc(mLabel(x))+'</span>').join('')
@@ -2448,10 +2413,10 @@ function addMachineToSeance(i,sid){
 function showPersonalExercise(key){
   const entry=libraryCatalog().find(m=>m.personal&&m.key===key);if(!entry)return;
   const e=entry.exercise;
-  sheet.innerHTML='<h2>'+esc(e.name)+'</h2><p class="sp">'+esc((e.musP||[]).map(mLabel).join(', '))+'</p><div class="notes">'+esc(e.notes||'')+'</div>'
+  sheet.innerHTML='<h2>'+esc(e.name)+'</h2><p class="sp">'+esc((e.musP||[]).map(mLabel).join(', '))+'</p>'+exPhotoHTML(e.name)+'<div class="notes">'+esc(e.notes||'')+'</div>'
     +'<div class="rectitle">Ajouter à une séance</div><div class="machadd">'+(activeProgram()?.seances||[]).map(s=>'<button class="sbtn" data-personalsession="'+esc(s.id)+'">'+esc(s.title)+'</button>').join('')+'</div>'
     +((SETTINGS.exerciseLibrary||[]).some(x=>libraryKey(x)===key)?'<button class="sbtn danger" id="removePersonal">Retirer de ma bibliothèque</button>':'');
-  openSheet();
+  openSheet();bindExPhoto();
   sheet.querySelectorAll('[data-personalsession]').forEach(button=>button.addEventListener('click',()=>{
     const s=SEANCE[button.dataset.personalsession];if(!s)return;
     if(DB.active?.seance===s.id){toast('Termine la séance en cours avant de la modifier');return;}
