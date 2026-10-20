@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.0';
+const APP_VERSION='4.54.1';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -322,7 +322,18 @@ function deleteProgram(pid){
 }
 function renameProgram(pid,name){const p=PROGRAMS.find(x=>x.id===pid);if(p&&name){p.name=name;savePrograms()}}
 function addSeance(){const act=activeProgram();if(!act)return null;const s=blankSeance();act.seances.push(s);savePrograms();return s.id;}
-function deleteSeance(sid){if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la supprimer');return;}const act=activeProgram();if(!act)return;act.seances=act.seances.filter(s=>s.id!==sid);savePrograms();}
+function deleteSeance(sid){
+  if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la supprimer');return false;}
+  const act=activeProgram();
+  if(!STORAGE_READY||!act||!act.seances.some(s=>s.id===sid))return false;
+  const seances=act.seances.filter(s=>s.id!==sid);
+  // Commit storage before changing the in-memory program or its cloud mirror.
+  try{
+    const programs=PROGRAMS.map(p=>p===act?{...p,seances}:p);
+    writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId:ACTIVE_PID})});
+  }catch(e){if(!STORAGE_CONFLICT)storeFailed();return false;}
+  act.seances=seances;buildMaps();mirrorSoon();return true;
+}
 function moveSeance(sid,dir){const act=activeProgram();if(!act)return;const a=act.seances;const i=a.findIndex(s=>s.id===sid);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;const t=a[i];a[i]=a[j];a[j]=t;savePrograms();}
 
 /* ================== RÉGLAGES ================== */
@@ -2540,12 +2551,13 @@ function programsHTML(){
 function showSessionActions(sid){
   const sessions=activeProgram()?.seances||[],index=sessions.findIndex(s=>s.id===sid);
   if(index<0)return;
-  const s=sessions[index];
+  const s=sessions[index],inProgress=DB.active?.seance===sid;
   sheet.innerHTML='<h2>'+esc(s.title)+'</h2><p class="sp">'+esc(s.tab)+' · '+(index+1)+' / '+sessions.length+'</p>'
     +'<div class="session-actions">'
     +'<button class="sbtn" data-session-move="-1"'+(index===0?' disabled':'')+'>'+uiIcon('arrow-up')+'Monter la séance</button>'
     +'<button class="sbtn" data-session-move="1"'+(index===sessions.length-1?' disabled':'')+'>'+uiIcon('arrow-down')+'Descendre la séance</button>'
-    +'<button class="sbtn session-delete" id="sessionDelete">'+uiIcon('trash-2')+'Supprimer la séance</button></div>';
+    +'<button class="sbtn session-delete" id="sessionDelete"'+(inProgress?' disabled aria-describedby="sessionDeleteReason"':'')+'>'+uiIcon('trash-2')+'Supprimer la séance</button></div>'
+    +(inProgress?'<p class="sp" id="sessionDeleteReason">Termine la séance en cours avant de la supprimer du programme.</p>':'');
   openSheet();
   const restoreFocus=()=>[...app.querySelectorAll('[data-act="sessionactions"]')].find(b=>b.dataset.s===sid)?.focus({preventScroll:true});
   sheet.querySelectorAll('[data-session-move]').forEach(button=>button.addEventListener('click',()=>{
@@ -2553,7 +2565,8 @@ function showSessionActions(sid){
   }));
   document.getElementById('sessionDelete').addEventListener('click',()=>{
     if(!window.confirm('Supprimer cette séance du programme ? L’historique des séances réalisées est conservé.'))return;
-    deleteSeance(sid);closeSheet();render();
+    if(!deleteSeance(sid))return;
+    closeSheet();render();
     const next=app.querySelectorAll('[data-act="sessionactions"]');
     (next[Math.min(index,next.length-1)]||app.querySelector('[data-act="saddseance"]'))?.focus({preventScroll:true});
     toast('Séance supprimée du programme');
@@ -2768,7 +2781,7 @@ app.addEventListener('click',ev=>{
   else if(act==='editseance')go('edit',actEl.dataset.s);
   else if(act==='sessionactions')showSessionActions(actEl.dataset.s);
   else if(act==='saddseance'){const sid=addSeance();if(sid)go('edit',sid);}
-  else if(act==='sdelseance'){if(window.confirm('Supprimer cette séance du programme ?')){deleteSeance(actEl.dataset.s);render();}}
+  else if(act==='sdelseance'){if(window.confirm('Supprimer cette séance du programme ?')&&deleteSeance(actEl.dataset.s))render();}
   else if(act==='seup'){moveSeance(actEl.dataset.s,-1);render();}
   else if(act==='sedown'){moveSeance(actEl.dataset.s,1);render();}
   else if(act==='edit')go('edit',route.seance);
