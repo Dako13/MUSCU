@@ -31,6 +31,16 @@ const server=http.createServer(async(req,res)=>{
       return {programs:JSON.stringify(PROGRAMS),history:JSON.stringify(DB.workouts),settings:JSON.stringify(SETTINGS),ids:PROGRAM.map(s=>s.id)};
     });
     const action=sid=>p.locator('[data-act=sessionactions][data-s="'+sid+'"]');
+    const dragFirstBelowSecond=async(cancel=false)=>{
+      const cards=p.locator('[data-dragsort=seance] > [data-dragitem]');
+      await cards.nth(1).scrollIntoViewIfNeeded();
+      const grip=await cards.first().locator('.grip').boundingBox(),target=await cards.nth(1).boundingBox();
+      await p.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2);await p.mouse.down();
+      await p.mouse.move(target.x+target.width/2,target.y+target.height*.8);
+      assert.equal(await cards.first().getAttribute('data-sid'),fixture.ids[1],'drag must visually move the card before release');
+      if(cancel)await p.locator('.dragging').dispatchEvent('pointercancel');
+      await p.mouse.up();
+    };
     for(const width of [320,390,1280]){
       await p.setViewportSize({width,height:844});
       await p.evaluate(()=>go('programs'));
@@ -66,6 +76,18 @@ const server=http.createServer(async(req,res)=>{
     assert.deepEqual(await p.evaluate(()=>PROGRAM.slice(0,2).map(s=>s.id)),[fixture.ids[1],fixture.ids[0]]);
     await action(fixture.ids[0]).click();await p.locator('[data-session-move="-1"]').click();
     assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs);
+    assert.deepEqual(await p.evaluate(()=>{
+      const ids=PROGRAM.map(s=>s.id);
+      return [reorderSeances(ids.slice(1)),reorderSeances(ids.map(()=>ids[0])),reorderSeances(ids.map((id,i)=>i===0?'missing':id)),moveSeance(ids[0],0)];
+    }),[false,false,false,false]);
+    await dragFirstBelowSecond(true);
+    assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs,'cancelled drag must preserve the program');
+    assert.equal(await p.locator('[data-dragsort=seance] > [data-dragitem]').first().getAttribute('data-sid'),fixture.ids[0]);
+    await dragFirstBelowSecond();
+    await p.reload();await p.locator('#splash').waitFor({state:'detached'});await p.evaluate(()=>go('programs'));
+    assert.deepEqual(await p.evaluate(()=>PROGRAM.slice(0,2).map(s=>s.id)),[fixture.ids[1],fixture.ids[0]],'drag order must survive reload');
+    await action(fixture.ids[0]).click();await p.locator('[data-session-move="-1"]').click();
+    assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs);
     await action(fixture.ids.at(-1)).click();
     assert(await p.locator('[data-session-move="1"]').isDisabled());
     await p.keyboard.press('Escape');
@@ -86,6 +108,17 @@ const server=http.createServer(async(req,res)=>{
       window.originalSetItem=Storage.prototype.setItem;
       Storage.prototype.setItem=function(key,value){if(key===KEY_PROGRAMS)throw new DOMException('Test quota','QuotaExceededError');return window.originalSetItem.call(this,key,value);};
     });
+    await p.locator('[data-session-move="1"]').click();
+    assert(await p.locator('[data-session-move="1"]').isVisible(),'failed reorder must keep the menu open');
+    assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs);
+    assert.equal(await p.evaluate(()=>localStorage.getItem(KEY_PROGRAMS)),storedBefore);
+    assert.match(await p.locator('#toast').textContent(),/Sauvegarde impossible/);
+    await p.keyboard.press('Escape');
+    await dragFirstBelowSecond();
+    assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs,'failed drag must preserve memory');
+    assert.equal(await p.evaluate(()=>localStorage.getItem(KEY_PROGRAMS)),storedBefore);
+    assert.equal(await p.locator('[data-dragsort=seance] > [data-dragitem]').first().getAttribute('data-sid'),fixture.ids[0],'failed drag must restore the displayed order');
+    await action(fixture.ids[0]).click();
     p.once('dialog',d=>d.accept());await p.locator('#sessionDelete').click();
     assert(await p.locator('#sessionDelete').isVisible(),'failed deletion must keep the menu open');
     assert.equal(await p.evaluate(()=>JSON.stringify(PROGRAMS)),fixture.programs);
@@ -106,6 +139,6 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(await p.evaluate(()=>JSON.stringify(DB.workouts)),fixture.history);
     assert.equal(await p.evaluate(()=>JSON.stringify(SETTINGS)),fixture.settings);
     assert.deepEqual(errors,[]);
-    console.log('PASS: responsive library rows, session actions, keyboard focus, reorder persistence, deletion cancellation and history preservation. Screenshots: '+out);
+    console.log('PASS: responsive library rows, session actions, keyboard focus, atomic button/drag reorder, cancelled drag, deletion cancellation and history preservation. Screenshots: '+out);
   }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

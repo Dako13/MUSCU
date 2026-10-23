@@ -23,12 +23,16 @@ const server=http.createServer(async(req,res)=>{
     const base='http://127.0.0.1:'+server.address().port+'/';
     const first=await context.newPage();await first.goto(base);await first.waitForFunction(()=>typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
     await first.locator('#obGo').click();
+    await first.evaluate(()=>{addSeance();addSeance();});
     const second=await context.newPage();await second.goto(base);await second.waitForFunction(()=>typeof STORAGE_READY!=='undefined'&&STORAGE_READY);
     assert.equal(await second.evaluate(()=>STORAGE_CONFLICT),false);
     const before=await second.evaluate(()=>localStorage.getItem(KEY));
     await first.evaluate(()=>{PROGRAMS[0].name='Programme modifié dans le premier onglet';savePrograms();});
     await second.locator('#storageConflict').waitFor();
     assert.deepEqual(await second.evaluate(()=>[STORAGE_CONFLICT,STORAGE_WRITABLE]),[true,false]);
+    const stalePrograms=await second.evaluate(()=>JSON.stringify(PROGRAMS));
+    assert.equal(await second.evaluate(()=>moveSeance(PROGRAM[0].id,1)),false,'stale tab cannot reorder sessions');
+    assert.equal(await second.evaluate(()=>JSON.stringify(PROGRAMS)),stalePrograms,'conflicting reorder must preserve in-memory programs');
     await second.evaluate(()=>{PROGRAMS[0].name='Ancienne copie modifiée';savePrograms();DB.workouts.push({id:'stale',date:todayISO(),seance:'stale',dur:0,ex:{}});persist();});
     assert.equal(await second.evaluate(()=>JSON.parse(localStorage.getItem(KEY_PROGRAMS)).programs[0].name),'Programme modifié dans le premier onglet');
     assert.equal(await second.evaluate(()=>localStorage.getItem(KEY)),before);

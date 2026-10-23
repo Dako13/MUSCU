@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.1';
+const APP_VERSION='4.54.2';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -334,7 +334,27 @@ function deleteSeance(sid){
   }catch(e){if(!STORAGE_CONFLICT)storeFailed();return false;}
   act.seances=seances;buildMaps();mirrorSoon();return true;
 }
-function moveSeance(sid,dir){const act=activeProgram();if(!act)return;const a=act.seances;const i=a.findIndex(s=>s.id===sid);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;const t=a[i];a[i]=a[j];a[j]=t;savePrograms();}
+function reorderSeances(ids){
+  const act=activeProgram();
+  if(!STORAGE_READY||!act||!Array.isArray(ids)||ids.length!==act.seances.length)return false;
+  const byId=new Map(act.seances.map(s=>[s.id,s]));
+  if(new Set(ids).size!==ids.length||ids.some(id=>!byId.has(id)))return false;
+  if(ids.every((id,i)=>id===act.seances[i].id))return false;
+  const seances=ids.map(id=>byId.get(id));
+  // Persist the new order before updating memory or scheduling a cloud mirror.
+  try{
+    const programs=PROGRAMS.map(p=>p===act?{...p,seances}:p);
+    writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId:ACTIVE_PID})});
+  }catch(e){if(!STORAGE_CONFLICT)storeFailed();return false;}
+  act.seances=seances;buildMaps();mirrorSoon();return true;
+}
+function moveSeance(sid,dir){
+  const act=activeProgram();if(!act||![1,-1].includes(dir))return false;
+  const ids=act.seances.map(s=>s.id),i=ids.indexOf(sid),j=i+dir;
+  if(i<0||j<0||j>=ids.length)return false;
+  [ids[i],ids[j]]=[ids[j],ids[i]];
+  return reorderSeances(ids);
+}
 
 /* ================== RÉGLAGES ================== */
 const KEY_SETTINGS='muscu_settings';
@@ -2561,7 +2581,8 @@ function showSessionActions(sid){
   openSheet();
   const restoreFocus=()=>[...app.querySelectorAll('[data-act="sessionactions"]')].find(b=>b.dataset.s===sid)?.focus({preventScroll:true});
   sheet.querySelectorAll('[data-session-move]').forEach(button=>button.addEventListener('click',()=>{
-    moveSeance(sid,+button.dataset.sessionMove);closeSheet();render();restoreFocus();toast('Ordre des séances modifié');
+    if(!moveSeance(sid,+button.dataset.sessionMove))return;
+    closeSheet();render();restoreFocus();toast('Ordre des séances modifié');
   }));
   document.getElementById('sessionDelete').addEventListener('click',()=>{
     if(!window.confirm('Supprimer cette séance du programme ? L’historique des séances réalisées est conservé.'))return;
@@ -3619,12 +3640,16 @@ function initDragSort(){
     const r=over.getBoundingClientRect();
     cont.insertBefore(drag,((e.clientY-r.top)>r.height/2)?over.nextSibling:over);
   };
-  const onUp=()=>{
+  const onUp=e=>{
     if(!drag)return;const d=drag,k=kind,c=cont;
     d.classList.remove('dragging');try{d.releasePointerCapture(pid)}catch(_){}
     d.style.pointerEvents='';drag=null;pid=null;kind=null;cont=null;
     if(k==='ex'){c.querySelectorAll('.ecard .en').forEach((el,i)=>{el.textContent='EXERCICE '+(i+1)});if(navigator.vibrate)navigator.vibrate(8);}
-    else if(k==='seance'){const ids=[...c.querySelectorAll('[data-dragitem]')].map(el=>el.dataset.sid);const ap=activeProgram();if(ap){ap.seances.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));savePrograms();}if(navigator.vibrate)navigator.vibrate(8);render();}
+    else if(k==='seance'){
+      const ids=[...c.querySelectorAll('[data-dragitem]')].map(el=>el.dataset.sid);
+      if(e.type!=='pointercancel'&&reorderSeances(ids)&&navigator.vibrate)navigator.vibrate(8);
+      render();
+    }
   };
   app.addEventListener('pointerdown',onDown,{passive:false});
   app.addEventListener('pointermove',onMove,{passive:false});
