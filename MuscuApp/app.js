@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.2';
+const APP_VERSION='4.54.3';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2284,6 +2284,9 @@ function editHTML(sid){
 }
 function collectEdit(sid){
   const s=SEANCE[sid];
+  const owner=PROGRAMS.find(p=>p.seances.includes(s));
+  if(!STORAGE_READY||!s||!owner)return false;
+  if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la modifier');return false;}
   for(const input of app.querySelectorAll('.e-increment')){
     const value=numOrNull(input.value),invalid=!!input.value.trim()&&(value==null||value<0.0001||value>100);
     input.setAttribute('aria-invalid',String(invalid));
@@ -2332,8 +2335,16 @@ function collectEdit(sid){
     ex.push(e);
   });
   if(!ex.length){toast('Au moins un exercice requis');return false}
-  s.title=title||s.title;s.tab=tab||s.tab;s.sub=sub;s.warn=warn;s.rest=sessionRest;s.ex=ex;
-  saveProgram();
+  const updated={...s,title:title||s.title,tab:tab||s.tab,sub,warn,rest:sessionRest,ex};
+  // Keep the saved program and the editor draft separate until storage succeeds.
+  try{
+    const programs=PROGRAMS.map(p=>p===owner?{...p,seances:p.seances.map(item=>item===s?updated:item)}:p);
+    writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId:ACTIVE_PID})});
+  }catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Enregistrement impossible. Ta saisie reste ouverte ; réessaie avant de quitter.');}
+    return false;
+  }
+  Object.assign(s,updated);buildMaps();mirrorSoon();
   editBaseline=editorState();
   return true;
 }
