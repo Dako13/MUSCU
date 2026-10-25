@@ -2,7 +2,7 @@
    La version est transmise via l'URL d'enregistrement (?v=X.Y.Z).
    Changer APP_VERSION dans app.js suffit à invalider le cache. */
 importScripts('./exercise-media.js');
-const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.54.3');
+const CACHE='dako-'+(new URL(location.href).searchParams.get('v')||'4.54.4');
 const ASSETS=[
   './',
   './index.html',

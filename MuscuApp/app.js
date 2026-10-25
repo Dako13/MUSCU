@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.3';
+const APP_VERSION='4.54.4';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2448,9 +2448,27 @@ function showMachine(i){
 }
 function addMachineToSeance(i,sid){
   const m=MACHINES[i],s=SEANCE[sid];if(!m||!s)return;
-  if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la modifier');return;}
-  s.ex.push({...machineAsExercise(m),id:uid('e_'),sets:3,reps:'8–10'});
-  savePrograms();closeSheet();toast('Ajouté à '+s.tab);
+  if(!addLibraryExerciseToSeance(sid,{...machineAsExercise(m),sets:3,reps:'8–10'}))return;
+  closeSheet();toast('Ajouté à '+s.tab);
+}
+function addLibraryExerciseToSeance(sid,exercise,remember=false){
+  const s=SEANCE[sid],owner=PROGRAMS.find(p=>p.seances.includes(s));
+  if(!STORAGE_READY||!s||!owner||!exercise)return false;
+  if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la modifier');return false;}
+  const ex=[...s.ex,{...structuredClone(exercise),id:uid('e_')}];
+  const settings=remember?{...SETTINGS,exerciseRecent:[...new Set([libraryKey(exercise),...(SETTINGS.exerciseRecent||[])])].slice(0,30)}:null;
+  // The exercise and optional recent-library entry must be saved together.
+  try{
+    const programs=PROGRAMS.map(p=>p===owner?{...p,seances:p.seances.map(item=>item===s?{...s,ex}:item)}:p);
+    const updates={[KEY_PROGRAMS]:JSON.stringify({programs,activeId:ACTIVE_PID})};
+    if(settings)updates[KEY_SETTINGS]=JSON.stringify(settings);
+    writeLocalBatch(updates);
+  }catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Ajout non enregistré. Réessaie avant de quitter cette fiche.');}
+    return false;
+  }
+  s.ex=ex;if(settings)SETTINGS.exerciseRecent=settings.exerciseRecent;
+  buildMaps();mirrorSoon();return true;
 }
 function showPersonalExercise(key){
   const entry=libraryCatalog().find(m=>m.personal&&m.key===key);if(!entry)return;
@@ -2461,8 +2479,8 @@ function showPersonalExercise(key){
   openSheet();bindExPhoto();
   sheet.querySelectorAll('[data-personalsession]').forEach(button=>button.addEventListener('click',()=>{
     const s=SEANCE[button.dataset.personalsession];if(!s)return;
-    if(DB.active?.seance===s.id){toast('Termine la séance en cours avant de la modifier');return;}
-    s.ex.push({...structuredClone(e),id:uid('e_')});savePrograms();rememberLibraryExercises([e]);closeSheet();toast('Exercice ajouté');
+    if(!addLibraryExerciseToSeance(s.id,e,true))return;
+    closeSheet();toast('Exercice ajouté');
   }));
   document.getElementById('removePersonal')?.addEventListener('click',()=>{
     if(!window.confirm('Retirer cet exercice de la bibliothèque personnelle ? Les copies dans tes programmes sont conservées.'))return;
