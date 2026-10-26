@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.4';
+const APP_VERSION='4.54.5';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -277,12 +277,21 @@ function buildMaps(){
 }
 function savePrograms(){if(STORAGE_READY){try{writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs:PROGRAMS,activeId:ACTIVE_PID})});mirrorSoon()}catch(e){if(!STORAGE_CONFLICT)storeFailed()}}buildMaps()}
 const saveProgram=savePrograms; /* compat : édition de séance */
+function commitProgramChanges(programs,activeId){
+  if(!STORAGE_READY||!programs.some(p=>p.id===activeId))return false;
+  // Destructive operations only replace live state after durable local storage.
+  try{writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId})});}
+  catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Modification non enregistrée. Le programme est conservé ; réessaie.');}
+    return false;
+  }
+  PROGRAMS=programs;ACTIVE_PID=activeId;buildMaps();mirrorSoon();return true;
+}
 function resetProgram(){ /* réinitialise le programme ACTIF au modèle par défaut */
   const act=activeProgram();if(!act)return false;
   if(DB.active&&act.seances.some(s=>s.id===DB.active.seance)){toast('Termine la séance en cours avant de réinitialiser');return false;}
-  act.seances=SETTINGS.programOrigin==='neutral'?[]:regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
-  normalizePrograms();savePrograms();
-  return true;
+  const seances=SETTINGS.programOrigin==='neutral'?[]:regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)));
+  return commitProgramChanges(PROGRAMS.map(p=>p===act?{...p,seances}:p),ACTIVE_PID);
 }
 /* ---- gestion des programmes ---- */
 function regenIds(seances,keepDefault){
@@ -314,11 +323,11 @@ function duplicateProgram(pid){
   PROGRAMS.push(copy);ACTIVE_PID=copy.id;normalizePrograms();savePrograms();
 }
 function deleteProgram(pid){
+  if(!PROGRAMS.some(p=>p.id===pid))return false;
   if(DB.active&&(PROGRAMS.find(p=>p.id===pid)?.seances||[]).some(s=>s.id===DB.active.seance)){toast('Termine la séance en cours avant de supprimer ce programme');return false;}
   if(PROGRAMS.length<=1){toast('Au moins un programme requis');return false}
-  PROGRAMS=PROGRAMS.filter(p=>p.id!==pid);
-  if(ACTIVE_PID===pid)ACTIVE_PID=PROGRAMS[0].id;
-  savePrograms();return true;
+  const programs=PROGRAMS.filter(p=>p.id!==pid);
+  return commitProgramChanges(programs,ACTIVE_PID===pid?programs[0].id:ACTIVE_PID);
 }
 function renameProgram(pid,name){const p=PROGRAMS.find(x=>x.id===pid);if(p&&name){p.name=name;savePrograms()}}
 function addSeance(){const act=activeProgram();if(!act)return null;const s=blankSeance();act.seances.push(s);savePrograms();return s.id;}
