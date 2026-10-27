@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.5';
+const APP_VERSION='4.54.6';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -279,7 +279,7 @@ function savePrograms(){if(STORAGE_READY){try{writeLocalBatch({[KEY_PROGRAMS]:JS
 const saveProgram=savePrograms; /* compat : édition de séance */
 function commitProgramChanges(programs,activeId){
   if(!STORAGE_READY||!programs.some(p=>p.id===activeId))return false;
-  // Destructive operations only replace live state after durable local storage.
+  // Replace live state only after the proposed program changes are saved.
   try{writeLocalBatch({[KEY_PROGRAMS]:JSON.stringify({programs,activeId})});}
   catch(e){
     if(!STORAGE_CONFLICT){storeFailed();toast('Modification non enregistrée. Le programme est conservé ; réessaie.');}
@@ -310,17 +310,16 @@ function starterSessions(){
     {id:uid('s_'),tab:'C',title:'Full body C',sub:'Tout le corps',warn:'',ex:[ex('Squat guidé Smith',['quadriceps'],['fessiers']),ex('Développé incliné haltères',['pecs'],['triceps']),ex('Rowing machine',['dos'],['biceps']),ex('Soulevé de terre roumain haltères',['ischios'],['fessiers']),ex('Extension triceps poulie',['triceps'])]}
   ];
 }
-function setActiveProgram(pid){if(PROGRAMS.some(p=>p.id===pid)){ACTIVE_PID=pid;savePrograms()}}
+function setActiveProgram(pid){return PROGRAMS.some(p=>p.id===pid)&&commitProgramChanges(PROGRAMS,pid);}
 function createProgram(name,fromDefault){
   const pid=uid('p_');
   const seances=fromDefault?(SETTINGS.programOrigin==='neutral'?starterSessions():regenIds(JSON.parse(JSON.stringify(DEFAULT_PROGRAM)))):[blankSeance()];
-  PROGRAMS.push({id:pid,name:name||'Nouveau programme',seances});
-  ACTIVE_PID=pid;normalizePrograms();savePrograms();return pid;
+  return commitProgramChanges([...PROGRAMS,{id:pid,name:name||'Nouveau programme',seances}],pid)?pid:null;
 }
 function duplicateProgram(pid){
-  const src=PROGRAMS.find(p=>p.id===pid);if(!src)return;
+  const src=PROGRAMS.find(p=>p.id===pid);if(!src)return null;
   const copy={id:uid('p_'),name:src.name+' (copie)',seances:regenIds(JSON.parse(JSON.stringify(src.seances)))};
-  PROGRAMS.push(copy);ACTIVE_PID=copy.id;normalizePrograms();savePrograms();
+  return commitProgramChanges([...PROGRAMS,copy],copy.id)?copy.id:null;
 }
 function deleteProgram(pid){
   if(!PROGRAMS.some(p=>p.id===pid))return false;
@@ -329,8 +328,14 @@ function deleteProgram(pid){
   const programs=PROGRAMS.filter(p=>p.id!==pid);
   return commitProgramChanges(programs,ACTIVE_PID===pid?programs[0].id:ACTIVE_PID);
 }
-function renameProgram(pid,name){const p=PROGRAMS.find(x=>x.id===pid);if(p&&name){p.name=name;savePrograms()}}
-function addSeance(){const act=activeProgram();if(!act)return null;const s=blankSeance();act.seances.push(s);savePrograms();return s.id;}
+function renameProgram(pid,name){
+  if(!name||!PROGRAMS.some(p=>p.id===pid))return false;
+  return commitProgramChanges(PROGRAMS.map(p=>p.id===pid?{...p,name}:p),ACTIVE_PID);
+}
+function addSeance(){
+  const act=activeProgram();if(!act)return null;const s=blankSeance();
+  return commitProgramChanges(PROGRAMS.map(p=>p===act?{...p,seances:[...p.seances,s]}:p),ACTIVE_PID)?s.id:null;
+}
 function deleteSeance(sid){
   if(DB.active?.seance===sid){toast('Termine la séance en cours avant de la supprimer');return false;}
   const act=activeProgram();
@@ -2637,7 +2642,7 @@ function showNewProgram(){
    +'<div class="efield"><label>Nom</label><input id="npName" placeholder="ex : Prise de masse" value="Nouveau programme"></div>'
    +'<div class="sbtns"><button class="sbtn pri" id="npBlank">Vierge</button><button class="sbtn" id="npDefault">Depuis le modèle</button></div>';
   openSheet();
-  const mk=(fromDefault)=>{const name=(document.getElementById('npName').value||'').trim()||'Nouveau programme';createProgram(name,fromDefault);closeSheet();go('programs');toast('Programme créé');};
+  const mk=(fromDefault)=>{const name=(document.getElementById('npName').value||'').trim()||'Nouveau programme';if(!createProgram(name,fromDefault))return;closeSheet();go('programs');toast('Programme créé');};
   document.getElementById('npBlank').addEventListener('click',()=>mk(false));
   document.getElementById('npDefault').addEventListener('click',()=>mk(true));
 }
@@ -2647,7 +2652,7 @@ function showRenameProgram(pid){
    +'<div class="efield"><label>Nom du programme</label><input id="rnName" value="'+esc(p.name)+'"></div>'
    +'<div class="sbtns"><button class="sbtn pri" id="rnOk">Enregistrer</button></div>';
   openSheet();
-  document.getElementById('rnOk').addEventListener('click',()=>{const v=(document.getElementById('rnName').value||'').trim();if(v)renameProgram(pid,v);closeSheet();render();});
+  document.getElementById('rnOk').addEventListener('click',()=>{const v=(document.getElementById('rnName').value||'').trim();if(v&&!renameProgram(pid,v))return;closeSheet();render();});
 }
 
 /* ================== SÉANCE ACTIVE ================== */
@@ -2832,10 +2837,10 @@ app.addEventListener('click',ev=>{
   else if(act==='mfreset'){MFILTER={g:null,b:null,c:null,l:null,q:'',open:true};render();}
   else if(act==='machadd')addMachineToSeance(+actEl.dataset.m,actEl.dataset.s);
   else if(act==='programs')go('programs');
-  else if(act==='pactivate'){setActiveProgram(actEl.dataset.p);toast('Programme activé');go('home');}
+  else if(act==='pactivate'){if(setActiveProgram(actEl.dataset.p)){toast('Programme activé');go('home');}}
   else if(act==='pnew')showNewProgram();
   else if(act==='prename')showRenameProgram(actEl.dataset.p);
-  else if(act==='pdup'){duplicateProgram(actEl.dataset.p);toast('Programme dupliqué');render();}
+  else if(act==='pdup'){if(duplicateProgram(actEl.dataset.p)){toast('Programme dupliqué');render();}}
   else if(act==='pdel'){if(window.confirm('Supprimer ce programme ? (l’historique de séances déjà réalisées est conservé)')){if(deleteProgram(actEl.dataset.p))render();}}
   else if(act==='editseance')go('edit',actEl.dataset.s);
   else if(act==='sessionactions')showSessionActions(actEl.dataset.s);

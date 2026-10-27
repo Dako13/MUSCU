@@ -32,11 +32,16 @@ const server=http.createServer(async(req,res)=>{
     });
     const action=sid=>p.locator('[data-act=sessionactions][data-s="'+sid+'"]');
     const dragFirstBelowSecond=async(cancel=false)=>{
+      // Raw mouse coordinates need stable cards after the menu/render animation.
+      await p.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
       const cards=p.locator('[data-dragsort=seance] > [data-dragitem]');
       await cards.nth(1).scrollIntoViewIfNeeded();
-      const grip=await cards.first().locator('.grip').boundingBox(),target=await cards.nth(1).boundingBox();
-      await p.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2);await p.mouse.down();
+      await cards.first().locator('.grip').hover();
+      const target=await cards.nth(1).boundingBox();
+      await p.mouse.down();
+      await p.locator('.dragging').waitFor({state:'visible'});
       await p.mouse.move(target.x+target.width/2,target.y+target.height*.8);
+      await p.waitForFunction(id=>document.querySelector('[data-dragsort=seance] > [data-dragitem]')?.dataset.sid===id,fixture.ids[1]);
       assert.equal(await cards.first().getAttribute('data-sid'),fixture.ids[1],'drag must visually move the card before release');
       if(cancel)await p.locator('.dragging').dispatchEvent('pointercancel');
       await p.mouse.up();
