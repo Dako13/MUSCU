@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.6';
+const APP_VERSION='4.54.7';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -1422,6 +1422,20 @@ function historyHTML(embed){
   });
   return h;
 }
+function commitWorkoutHistory(workouts){
+  if(!STORAGE_READY)return false;
+  // Keep the running workout and saved history unchanged until the write succeeds.
+  try{writeLocalBatch({[KEY]:JSON.stringify({...DB,workouts})});}
+  catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Modification non enregistrée. L’historique est conservé ; réessaie.');}
+    return false;
+  }
+  DB.workouts=workouts;mirrorSoon();return true;
+}
+function deleteWorkout(i){
+  if(!Number.isInteger(i)||i<0||i>=DB.workouts.length)return false;
+  return commitWorkoutHistory(DB.workouts.filter((w,index)=>index!==i));
+}
 function showEditWorkout(i){
   const w=DB.workouts[i];if(!w)return;
   let body=workoutExerciseIds(w).some(id=>isAssistedExercise(workoutExercise(w,id)))
@@ -1442,6 +1456,7 @@ function showEditWorkout(i){
   openSheet();
   sheet.querySelectorAll('.wsetdel').forEach(b=>b.addEventListener('click',()=>{b.closest('.wrow').remove()}));
   document.getElementById('wsave').addEventListener('click',()=>{
+    if(!DB.workouts.includes(w)){toast('Cette séance a changé. Rouvre-la depuis l’historique.');return;}
     const bodyInput=document.getElementById('we-bodyweight');
     const bodyWeight=bodyInput?numOrNull(bodyInput.value):null;
     if(bodyInput&&bodyInput.value.trim()&&(bodyWeight==null||bodyWeight<1||bodyWeight>1000)){
@@ -1462,10 +1477,11 @@ function showEditWorkout(i){
       (ex[exId]=ex[exId]||[]).push({w:wv,r:rv,done:true});
     });
     const setsChanged=JSON.stringify(ex)!==JSON.stringify(w.ex);
-    w.exNotes=cleanWorkoutNotes(Object.fromEntries([...sheet.querySelectorAll('.we-note')].map(input=>[input.dataset.ex,input.value])));
-    w.ex=ex;if(setsChanged)delete w.endedAt;
-    if(bodyInput)w.bodyWeightKg=bodyWeight;
-    persist();closeSheet();render();toast('Séance modifiée');
+    const updated={...w,ex,exNotes:cleanWorkoutNotes(Object.fromEntries([...sheet.querySelectorAll('.we-note')].map(input=>[input.dataset.ex,input.value])))};
+    if(setsChanged)delete updated.endedAt;
+    if(bodyInput)updated.bodyWeightKg=bodyWeight;
+    if(!commitWorkoutHistory(DB.workouts.map(item=>item===w?updated:item)))return;
+    closeSheet();render();toast('Séance modifiée');
   });
 }
 
@@ -2826,7 +2842,7 @@ app.addEventListener('click',ev=>{
   else if(act==='replaceex')showReplaceExercise(actEl.dataset.ex);
   else if(act==='bilan')showBodyEntry();
   else if(act==='wedit')showEditWorkout(+actEl.dataset.w);
-  else if(act==='wdel'){if(window.confirm('Supprimer définitivement cette séance de l’historique ?')){DB.workouts.splice(+actEl.dataset.w,1);persist();render();toast('Séance supprimée');}}
+  else if(act==='wdel'){if(window.confirm('Supprimer définitivement cette séance de l’historique ?')&&deleteWorkout(+actEl.dataset.w)){render();toast('Séance supprimée');}}
   else if(act==='machines')go('machines');
   else if(act==='machine')showMachine(+actEl.dataset.m);
   else if(act==='personalexercise')showPersonalExercise(actEl.dataset.key);
