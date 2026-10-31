@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.7';
+const APP_VERSION='4.54.8';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2744,6 +2744,7 @@ function refreshWorkoutCoach(card,exId){
   if(old&&DB.active&&e&&DB.active.ex[exId])old.outerHTML=workoutCoachHTML(e,DB.active.ex[exId]);
 }
 function finishWorkout({automatic=false}={}){
+  if(!STORAGE_READY)return false;
   const a=DB.active;if(!a)return;
   const stats=workoutStats(a);
   if(!stats.sets){toast('Aucune série validée');return}
@@ -2765,12 +2766,15 @@ function finishWorkout({automatic=false}={}){
     const sets=a.ex[exId].filter(s=>s.done&&(s.w!=null||s.r!=null)).map(s=>({w:s.w,r:s.r,done:true}));
     if(sets.length)ex[exId]=sets;
   }
-  const previousWorkouts=DB.workouts;
   const saved=snapshotWorkout({id:a.id,session:a.session,exMeta:a.exMeta,date:a.date,seance:a.seance,dur,ex,exNotes:cleanWorkoutNotes(a.exNotes),bodyWeightKg:a.bodyWeightKg??null,...(endedAt==null?{}:{endedAt})});
-  DB.workouts=[...DB.workouts,saved];
-  DB.workouts.sort((x,y)=>x.date<y.date?-1:1);
-  DB.active=null;persist();
-  if(!STORAGE_WRITABLE){DB.workouts=previousWorkouts;DB.active=a;return false;}
+  const workouts=[...DB.workouts,saved].sort((x,y)=>x.date<y.date?-1:1);
+  // Commit history and active-workout removal together before changing the live session.
+  try{writeLocalBatch({[KEY]:JSON.stringify({...DB,workouts,active:null})});}
+  catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Séance non enregistrée. Elle reste en cours ; réessaie de la terminer.');}
+    return false;
+  }
+  DB.workouts=workouts;DB.active=null;mirrorSoon();
   stopTimer();
   if(automatic){
     if(document.getElementById('exerciseRest'))closeSheet();
