@@ -35,7 +35,7 @@ async function ready(p){
         startWorkout(s.id);go('seance',s.id);
         DB.active.start=Date.now()-60000;
         DB.active.ex[e.id][0]={w:22.5,r:7.5,done:true,doneElapsedMs:30000,doneAt:Date.now()-30000};
-        DB.active.exNotes={[e.id]:'Bonne isolation <test>'};persist();startTimer(180,'Repos test');
+        DB.active.exNotes={[e.id]:'Bonne isolation <test>'};persist();startTimer('Repos test',180);
         return {db:JSON.stringify(DB),stored:localStorage.getItem(KEY),programs:localStorage.getItem(KEY_PROGRAMS),settings:localStorage.getItem(KEY_SETTINGS),id:DB.active.id,eid:e.id,endedAt:DB.active.ex[e.id][0].doneAt,older:JSON.stringify(DB.workouts[0])};
       });
       await p.evaluate(()=>{

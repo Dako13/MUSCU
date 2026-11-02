@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.8';
+const APP_VERSION='4.54.9';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2787,17 +2787,36 @@ function finishWorkout({automatic=false}={}){
   return true;
 }
 function cancelWorkout(){
+  if(!STORAGE_READY)return false;
   const saved=DB.active;
-  if(!saved)return;
-  DB.active=null;persist();stopTimer();go('home');
-  /* toast avec bouton Annuler pendant 5 s */
+  if(!saved)return false;
+  const commit=active=>{
+    if(!STORAGE_READY)return false;
+    try{writeLocalBatch({[KEY]:JSON.stringify({...DB,active})});}
+    catch(e){if(!STORAGE_CONFLICT)storeFailed();return false;}
+    DB.active=active;mirrorSoon();return true;
+  };
+  if(!commit(null)){
+    if(!STORAGE_CONFLICT)toast('Abandon non enregistré. Ta séance reste en cours.');
+    return false;
+  }
+  stopTimer();go('home');
   const t=document.getElementById('toast');
-  t.innerHTML='Séance annulée — <button id="_undo" style="background:none;border:none;color:var(--ac);font-weight:700;font-size:inherit;cursor:pointer;padding:0">Annuler</button>';
-  t.classList.add('on');
-  clearTimeout(t._h);
-  const undo=()=>{DB.active=saved;persist();go('seance',saved.seance);t.classList.remove('on')};
-  const btn=document.getElementById('_undo');if(btn)btn.addEventListener('click',undo,{once:true});
-  t._h=setTimeout(()=>{t.classList.remove('on');t.textContent='';},5000);
+  let available=true;
+  const showUndo=failed=>{
+    t.textContent=failed?'Récupération non enregistrée. ':'Séance abandonnée. ';
+    const btn=document.createElement('button');btn.id='_undo';btn.type='button';
+    btn.textContent=failed?'Réessayer':'Récupérer';t.appendChild(btn);t.classList.add('on');
+    clearTimeout(t._h);
+    btn.addEventListener('click',()=>{
+      if(!available)return;
+      if(DB.active){available=false;toast('Une autre séance est en cours. Elle est conservée.');return;}
+      if(!commit(saved)){if(!STORAGE_CONFLICT)showUndo(true);return;}
+      available=false;clearTimeout(t._h);t.classList.remove('on');t.textContent='';go('seance',saved.seance);
+    },{once:true});
+    t._h=setTimeout(()=>{available=false;t.classList.remove('on');t.textContent='';},5000);
+  };
+  showUndo(false);return true;
 }
 
 /* ================== ÉVÉNEMENTS ================== */

@@ -446,6 +446,9 @@ body:has(#timerbar.on) #app{padding-bottom:calc(240px + env(safe-area-inset-bott
 .lib-option>small{font-size:12px;color:var(--dim);font-weight:400}
 .expicklist .sbtn,.machadd .sbtn{width:100%;text-align:left}
 #toast{background:var(--elev);border:1px solid var(--line2);border-radius:8px;box-shadow:none}
+#toast:has(button){width:max-content;white-space:normal;display:flex;align-items:center;gap:12px;padding:6px 12px}
+#toast button{background:none;border:0;color:var(--ac);font:inherit;cursor:pointer;min-height:44px;min-width:44px;flex-shrink:0;padding:0 4px}
+#toast.on button{pointer-events:auto}
 #splash{background:var(--bg)}
 .splogo{box-shadow:none;border-radius:8px}
 .spname,.sptag{padding-left:0}
