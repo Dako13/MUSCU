@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.9';
+const APP_VERSION='4.54.10';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2673,8 +2673,10 @@ function showRenameProgram(pid){
 
 /* ================== SÉANCE ACTIVE ================== */
 function startWorkout(sid){
-  if(DB.active&&DB.active.seance!==sid){
-    if(!window.confirm('Une séance '+(SEANCE[DB.active.seance]?SEANCE[DB.active.seance].tab:'')+' est en cours. L’abandonner ?'))return;
+  if(!STORAGE_READY||!SEANCE[sid]||!localDataCurrent())return false;
+  if(DB.active?.seance===sid)return true;
+  if(DB.active){
+    if(!window.confirm('Une séance '+(SEANCE[DB.active.seance]?SEANCE[DB.active.seance].tab:'')+' est en cours. L’abandonner ?'))return false;
   }
   const ex={};
   for(const e of SEANCE[sid].ex){
@@ -2685,10 +2687,14 @@ function startWorkout(sid){
       ex[e.id].push({w:p&&p.w!=null?p.w:null,r:p&&p.r!=null?p.r:null,done:false});
     }
   }
-  stopTimer();
-  FOCUS_EX=null;
-  DB.active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{},bodyWeightKg:recentBodyWeight(todayISO()),exerciseOrder:SEANCE[sid].ex.map(e=>e.id)});
-  persist();render();
+  const active=snapshotWorkout({seance:sid,date:todayISO(),start:Date.now(),pt:0,ps:null,ex,exNotes:{},bodyWeightKg:recentBodyWeight(todayISO()),exerciseOrder:SEANCE[sid].ex.map(e=>e.id)});
+  // Keep the previous workout and its running rest timer until the replacement is saved.
+  try{writeLocalBatch({[KEY]:JSON.stringify({...DB,active})});}
+  catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Démarrage non enregistré. Réessaie.');}
+    return false;
+  }
+  DB.active=active;stopTimer();FOCUS_EX=null;mirrorSoon();render();return true;
 }
 function elapsedStr(){
   const a=DB.active;if(!a)return '';
