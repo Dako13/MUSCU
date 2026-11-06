@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.10';
+const APP_VERSION='4.54.11';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -2550,22 +2550,29 @@ function replacementExercise(source,candidate){
   return {id:uid('e_'),name:base.name,sets:Math.max(1,Number(source.sets)||3),reps:source.reps||base.reps||'8–10',unit:base.unit||source.unit||'kg',ref:null,notes:base.notes||'',yt:base.yt||'',musP:(base.musP||[]).slice(),musS:(base.musS||[]).slice(),ceiling:base.ceiling,rest:base.rest??source.rest,...(base.increment!=null?{increment:base.increment}:{})};
 }
 function replaceActiveExercise(sourceId,candidate){
+  if(!STORAGE_READY||!localDataCurrent())return false;
   const active=DB.active,source=activeExercise(sourceId);
-  if(!active||!source||!active.ex[sourceId])return;
-  if(active.ex[sourceId].some(set=>set.done)){toast('Remplacement possible avant la première série validée');return;}
+  if(!active||!source||!active.ex[sourceId])return false;
+  if(active.ex[sourceId].some(set=>set.done)){toast('Remplacement possible avant la première série validée');return false;}
   const replacement=replacementExercise(source,candidate);
-  if(active.ex[sourceId].some(set=>set.w!=null||set.r!=null)&&!window.confirm('Remplacer cet exercice ? Les valeurs non validées seront effacées ; la note sera conservée.'))return;
+  if(active.ex[sourceId].some(set=>set.w!=null||set.r!=null)&&!window.confirm('Remplacer cet exercice ? Les valeurs non validées seront effacées ; la note sera conservée.'))return false;
   replacement.sets=active.ex[sourceId].length;
   const order=(active.exerciseOrder||SEANCE[active.seance]?.ex.map(e=>e.id)||[]).slice();
-  const at=order.indexOf(sourceId);if(at<0)return;
-  active.ex[replacement.id]=Array.from({length:replacement.sets},()=>({w:null,r:null,done:false}));
-  active.exMeta={...(active.exMeta||{}),[replacement.id]:replacement};
-  delete active.ex[sourceId];delete active.exMeta[sourceId];
-  if(active.exNotes?.[sourceId]){active.exNotes[replacement.id]=active.exNotes[sourceId];delete active.exNotes[sourceId];}
-  if(active.restByEx?.[sourceId]!=null){active.restByEx[replacement.id]=active.restByEx[sourceId];delete active.restByEx[sourceId];}
-  order[at]=replacement.id;active.exerciseOrder=order;
-  FOCUS_EX=replacement.id;persist();closeSheet();render();
-  toast('Exercice remplacé pour cette séance');
+  const at=order.indexOf(sourceId);if(at<0)return false;
+  // Build the replacement without changing any objects held by the running workout.
+  const next={...active,ex:{...active.ex,[replacement.id]:Array.from({length:replacement.sets},()=>({w:null,r:null,done:false}))},exMeta:{...(active.exMeta||{}),[replacement.id]:replacement},exerciseOrder:order};
+  delete next.ex[sourceId];delete next.exMeta[sourceId];
+  for(const key of ['exNotes','restByEx'])if(active[key]&&Object.hasOwn(active[key],sourceId)){
+    next[key]={...active[key],[replacement.id]:active[key][sourceId]};delete next[key][sourceId];
+  }
+  order[at]=replacement.id;
+  try{writeLocalBatch({[KEY]:JSON.stringify({...DB,active:next})});}
+  catch(e){
+    if(!STORAGE_CONFLICT){storeFailed();toast('Remplacement non enregistré. Réessaie.');}
+    return false;
+  }
+  DB.active=next;FOCUS_EX=replacement.id;mirrorSoon();closeSheet();render();
+  toast('Exercice remplacé pour cette séance');return true;
 }
 function showReplaceExercise(sourceId){
   const active=DB.active,source=activeExercise(sourceId);
