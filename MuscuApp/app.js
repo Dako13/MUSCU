@@ -7,7 +7,7 @@
    v3.4.0 : bibliothèque de machines (marque + muscle).
    v3.3.0 : Bilan Forme. v3.2.0 : démos animées.
    ===================================================== */
-const APP_VERSION='4.54.11';
+const APP_VERSION='4.55.0';
 const AUTO_FINISH_MS=3*60*60*1000;
 let STORAGE_READY=false;
 let STORAGE_WRITABLE=true;
@@ -1107,6 +1107,7 @@ let LIBSELECT=new Map(),LIBDRAFT=null,LIBSCOPE='all';
 let STATSRANGE='week';   /* sélecteur Stats : 'week' | 'month' */
 let STATEX=null;         /* exercice sélectionné pour la courbe de progression */
 let SUIVI='history';     /* onglet Suivi fusionné : 'history' | 'stats' */
+let HISTORY_QUERY='';
 let editBaseline=null;
 function editorState(){return JSON.stringify([...app.querySelectorAll('#es-title,#es-tab,#es-sub,#es-warn,#es-rest,#exlist .ecard')].map(el=>el.matches('.ecard')?[el.dataset.exid,...[...el.querySelectorAll('input,textarea,select')].map(input=>input.value)]:el.value));}
 function editorDirty(){return route.view==='edit'&&editBaseline!==null&&editorState()!==editBaseline;}
@@ -1389,14 +1390,32 @@ function suiviHTML(){
    +'<button class="segb'+(SUIVI==='stats'?' on':'')+'" data-act="suivitab" data-t="stats">Stats</button></div>';
   return h+(SUIVI==='stats'?statsHTML(true):historyHTML(true));
 }
+function historySearchText(w){
+  const s=w.session||SEANCE[w.seance];
+  return searchKey([s?.title,s?.tab,w.date,fmtDateShort(w.date),new Date(w.date+'T12:00:00').toLocaleDateString('fr-FR'),...workoutExerciseIds(w).flatMap(id=>[workoutExercise(w,id)?.name,workoutNote(w,id)])].filter(Boolean).join(' '));
+}
+function historyCountText(count,total){
+  return count===total?total+' séance'+(total>1?'s':'')+' enregistrée'+(total>1?'s':''):count+' / '+total+' séances';
+}
+function filterHistoryRows(){
+  const rows=[...app.querySelectorAll('#historyList .hcard')];let count=0;
+  rows.forEach(row=>{row.hidden=!matchesSearch(row.dataset.search,HISTORY_QUERY);if(!row.hidden)count++;});
+  const counter=document.getElementById('historyCount'),empty=document.getElementById('historyEmpty'),clear=document.getElementById('historyClear');
+  if(counter)counter.textContent=historyCountText(count,rows.length);
+  if(empty)empty.hidden=count>0;
+  if(clear)clear.disabled=!HISTORY_QUERY;
+}
 function historyHTML(embed){
   let h=embed?'':'<div class="top"><h1>Historique</h1><div class="hbtns"><button class="hbtn" data-act="data">Données</button></div></div>';
   const arr=DB.workouts.slice().reverse();
   if(!arr.length)return h+'<div class="empty">Aucune séance terminée.<br>Démarre une séance dans l’onglet Entraîner.</div>';
-  const tot=arr.length;
-  h+='<div class="subdate">'+tot+' séance'+(tot>1?'s':'')+' enregistrée'+(tot>1?'s':'')+'</div>';
+  const entries=DB.workouts.map((w,i)=>({w,i,search:historySearchText(w)})).reverse();
+  const visible=entries.filter(entry=>matchesSearch(entry.search,HISTORY_QUERY)).length;
+  h+='<div class="search-field history-search">'+uiIcon('search')+'<input id="historyQuery" class="msearch" type="search" aria-label="Rechercher dans l’historique" placeholder="Séance, exercice ou note…" value="'+esc(HISTORY_QUERY)+'"><button id="historyClear" class="icon-button" data-act="historyclear" aria-label="Effacer la recherche" title="Effacer la recherche"'+(!HISTORY_QUERY?' disabled':'')+'>'+uiIcon('x')+'</button></div>'
+    +'<div id="historyCount" class="subdate" role="status" aria-live="polite">'+historyCountText(visible,entries.length)+'</div>'
+    +'<div id="historyEmpty" class="hempty"'+(visible?' hidden':'')+'>Aucune séance trouvée.</div><div id="historyList">';
   const progress=workoutProgressMap();
-  DB.workouts.slice().map((w,i)=>({w,i})).reverse().forEach(({w,i})=>{
+  entries.forEach(({w,i,search})=>{
     const s=w.session||SEANCE[w.seance];const st=workoutStats(w),pr=progress.get(w);const musHTML=workoutMusclesHTML(w);
     let det='';
     if(w.bodyWeightKg!=null&&workoutExerciseIds(w).some(id=>isAssistedExercise(workoutExercise(w,id))))det+='<div class="sp">Poids du jour · '+fmtN(w.bodyWeightKg)+' kg</div>';
@@ -1410,7 +1429,7 @@ function historyHTML(embed){
     }
     det+='<div class="sbtns" style="margin-top:12px"><button class="sbtn" data-act="wedit" data-w="'+i+'">Modifier</button>'
       +'<button class="sbtn danger" data-act="wdel" data-w="'+i+'">Supprimer</button></div>';
-    h+='<div class="hcard"><details><summary><div style="width:100%">'
+    h+='<div class="hcard" data-search="'+esc(search)+'"'+(!matchesSearch(search,HISTORY_QUERY)?' hidden':'')+'><details><summary><div style="width:100%">'
      +'<div class="htop"><span class="htag">'+esc(s?s.tab:'')+'</span><span class="hwdate">'+fmtDateShort(w.date)+'</span></div>'
      +'<div class="hname">'+esc(s?s.title:w.seance)+'</div>'
      +musHTML
@@ -1420,7 +1439,7 @@ function historyHTML(embed){
      +'<div class="hstat"><div class="v num">'+st.sets+'</div><div class="l">Séries</div></div>'
      +'</div></div></summary><div class="hdetail">'+det+'</div></details></div>';
   });
-  return h;
+  return h+'</div>';
 }
 function commitWorkoutHistory(workouts){
   if(!STORAGE_READY)return false;
@@ -2872,6 +2891,7 @@ app.addEventListener('click',ev=>{
   else if(act==='backup')downloadBackup();
   else if(act==='srange'){STATSRANGE=actEl.dataset.r;render();}
   else if(act==='suivitab'){SUIVI=actEl.dataset.t;render();}
+  else if(act==='historyclear'){HISTORY_QUERY='';const input=document.getElementById('historyQuery');if(input){input.value='';filterHistoryRows();input.focus();}}
   else if(act==='expick')showExPicker();
   else if(act==='settings')showSettings();
   else if(act==='exinfo')showExercise(actEl.dataset.ex);
@@ -3002,6 +3022,7 @@ app.addEventListener('click',ev=>{
   }
 });
 app.addEventListener('input',ev=>{
+  if(ev.target.id==='historyQuery'){HISTORY_QUERY=ev.target.value;filterHistoryRows();return;}
   if(ev.target.id==='es-rest'){updateEditorRest();return;}
   if(ev.target.id==='assistBodyWeight'){
     if(!DB.active)return;

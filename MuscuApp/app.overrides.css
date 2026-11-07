@@ -329,6 +329,10 @@ summary{font-size:13px;min-height:44px}
 .search-field{position:relative}
 .search-field>.ui-icon{position:absolute;left:14px;top:22px;color:var(--dim);pointer-events:none}
 .search-field .msearch{padding-left:44px}
+.history-search .msearch{padding-right:52px}
+.history-search .msearch::-webkit-search-cancel-button{display:none}
+.history-search .icon-button{position:absolute;right:4px;top:10px;border:0;background:none}
+.history-search .icon-button:disabled{opacity:.35;cursor:default}
 .efield input,.efield textarea,.efield select,.wrow .we,#sheet textarea.io{background:var(--input);border:1px solid var(--line2);border-radius:6px}
 .efield label{font-size:12px;text-transform:none;color:var(--dim)}
 .efield{margin-bottom:14px}
